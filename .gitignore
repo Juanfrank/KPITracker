@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+coverage/
+Data/
+*.duckdb
+*.duckdb.wal
+.vite/
+playwright-report/
+test-results/
+*.log
+.DS_Store

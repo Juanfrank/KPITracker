@@ -1,0 +1,44 @@
+{
+  "name": "kpitracker",
+  "version": "0.1.0",
+  "description": "Aplicación local (offline-first) para configuración, recolección y seguimiento de indicadores institucionales",
+  "main": "out/main/index.js",
+  "type": "module",
+  "author": "KPITracker",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src tests --max-warnings 0",
+    "test": "vitest run --exclude 'tests/acceptance/**'",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test tests/acceptance",
+    "package": "electron-vite build && electron-builder --dir"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.4.5-r.1",
+    "date-fns": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-vite": "^2.3.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
