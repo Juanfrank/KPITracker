@@ -42,7 +42,7 @@ async function crearVentana(): Promise<void> {
     autoHideMenuBar: true,
     title: 'KPITracker',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
@@ -58,7 +58,7 @@ async function crearVentana(): Promise<void> {
   if (process.env.ELECTRON_RENDERER_URL) {
     await ventana.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    await ventana.loadFile(join(__dirname, '../renderer/index.html'));
+    await ventana.loadFile(join(import.meta.dirname, '../renderer/index.html'));
   }
 }
 
