@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Atributo, Indicador, Lista, Meta } from '@domain/index';
-import { Periodicidad } from '@domain/index';
+import type {
+  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, ReglaNegocio, Responsable, ValorAtributo
+} from '@domain/index';
+import { Periodicidad, construirContextoIndicador } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
+import { tipos, validadorAtributos } from '../../dominio';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
+import { CampoAtributo } from '../../componentes/CampoAtributo';
 import { Icono } from '../../componentes/Icono';
 
 function indicadorVacio(): Indicador {
@@ -25,18 +29,56 @@ function indicadorVacio(): Indicador {
   };
 }
 
-const PERIODICIDADES = Object.values(Periodicidad).filter((p) => p !== Periodicidad.Personalizada);
+/** Convierte el valor crudo (texto de la UI) al valor tipado y a la columna EAV correcta, según el TypeRegistry. */
+function construirValorEntidad(atributo: Atributo, crudo: string, entidadId: string): ValorAtributoEntidad {
+  const descriptor = tipos.obtener(atributo.tipoDato);
+  const parseado = descriptor.parse(crudo);
+  const valor = parseado.ok ? parseado.valor : null;
+  const base: ValorAtributoEntidad = {
+    atributoId: atributo.id,
+    entidadTipo: 'Indicador',
+    entidadId,
+    valorTexto: null,
+    valorNumero: null,
+    valorFecha: null,
+    valorBooleano: null
+  };
+  switch (descriptor.columnaEav) {
+    case 'numero':
+      base.valorNumero = typeof valor === 'number' ? valor : null;
+      break;
+    case 'fecha':
+      base.valorFecha = typeof valor === 'string' ? valor : null;
+      break;
+    case 'booleano':
+      base.valorBooleano = typeof valor === 'boolean' ? valor : null;
+      break;
+    default:
+      base.valorTexto = valor == null ? null : Array.isArray(valor) ? valor.join('; ') : String(valor);
+  }
+  return base;
+}
+
+const PERIODICIDADES_INDICADOR = Object.values(Periodicidad);
+const PERIODICIDADES_META = Object.values(Periodicidad).filter((p) => p !== Periodicidad.Personalizada);
 const METODOS_CALCULO: Meta['metodoCalculo'][] = ['Promedio', 'Sumatoria', 'UltimoValor', 'Maximo', 'Minimo'];
 
 /**
  * Configuración de Indicadores: atributos mínimos obligatorios, selección
- * de desagregaciones con checkboxes, metas por desagregación y atributos
- * dinámicos definidos por el usuario.
+ * de desagregaciones con checkboxes, metas por desagregación, periodicidad
+ * personalizada, responsable/categoría, y atributos dinámicos con
+ * visibilidad/obligatoriedad/validación en vivo (motor de reglas del
+ * dominio, ejecutado en el propio renderer).
  */
 export function IndicadoresPage(): React.JSX.Element {
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
-  const [listas, setListas] = useState<Lista[]>([]);
+  const [listas, setListas] = useState<{ id: string; nombre: string; estado: string }[]>([]);
   const [atributos, setAtributos] = useState<Atributo[]>([]);
+  const [reglas, setReglas] = useState<ReglaNegocio[]>([]);
+  const [elementosPorLista, setElementosPorLista] = useState<Map<string, ElementoLista[]>>(new Map());
+  const [periodicidades, setPeriodicidades] = useState<DefinicionPeriodicidad[]>([]);
+  const [responsables, setResponsables] = useState<Responsable[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [editando, setEditando] = useState<Indicador | null>(null);
   const [valoresAttr, setValoresAttr] = useState<Map<string, string>>(new Map());
   const [metas, setMetas] = useState<Meta[]>([]);
@@ -51,7 +93,20 @@ export function IndicadoresPage(): React.JSX.Element {
     void cargar();
     void invocar('listas:listar', undefined).then(setListas);
     void invocar('atributos:listar', { entidad: 'Indicador' }).then(setAtributos);
+    void invocar('reglas:listar', { entidad: 'Indicador' }).then(setReglas);
+    void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
+    void invocar('responsables:listar', undefined).then(setResponsables);
+    void invocar('categorias:listar', undefined).then(setCategorias);
   }, [cargar]);
+
+  useEffect(() => {
+    const idsListas = [...new Set(atributos.filter((a) => a.listaId).map((a) => a.listaId as string))];
+    const pendientes = idsListas.filter((id) => !elementosPorLista.has(id));
+    if (pendientes.length === 0) return;
+    void Promise.all(pendientes.map((id) => invocar('listas:elementos', { listaId: id }).then((els) => [id, els] as const))).then(
+      (pares) => setElementosPorLista((previo) => new Map([...previo, ...pares]))
+    );
+  }, [atributos, elementosPorLista]);
 
   const abrirEditor = async (indicador: Indicador): Promise<void> => {
     setErrores([]);
@@ -75,32 +130,11 @@ export function IndicadoresPage(): React.JSX.Element {
 
   const guardar = async (): Promise<void> => {
     if (!editando) return;
+    const valores = atributos
+      .filter((a) => valoresAttr.has(a.id))
+      .map((a) => construirValorEntidad(a, valoresAttr.get(a.id) ?? '', editando.id));
     try {
-      const guardado = await invocar('indicadores:guardar', editando);
-      // Persiste los valores de atributos dinámicos (EAV).
-      for (const atributo of atributos) {
-        const crudo = valoresAttr.get(atributo.id);
-        if (crudo === undefined) continue;
-        const valor: ValorAtributoEntidad = {
-          atributoId: atributo.id,
-          entidadTipo: 'Indicador',
-          entidadId: guardado.id,
-          valorTexto: null,
-          valorNumero: null,
-          valorFecha: null,
-          valorBooleano: null
-        };
-        if (['Int16', 'Int32', 'Int64', 'Decimal', 'Double', 'Percentage', 'Currency', 'Duration'].includes(atributo.tipoDato)) {
-          valor.valorNumero = crudo === '' ? null : Number(crudo);
-        } else if (['Date', 'DateTime', 'Time'].includes(atributo.tipoDato)) {
-          valor.valorFecha = crudo || null;
-        } else if (atributo.tipoDato === 'Boolean') {
-          valor.valorBooleano = crudo === '' ? null : crudo === 'Sí';
-        } else {
-          valor.valorTexto = crudo || null;
-        }
-        await invocar('atributos:guardarValor', valor);
-      }
+      await invocar('indicadores:guardar', { indicador: editando, valores });
       setEditando(null);
       await cargar();
     } catch (error) {
@@ -131,6 +165,20 @@ export function IndicadoresPage(): React.JSX.Element {
   };
 
   const filtrados = indicadores.filter((i) => i.nombre.toLowerCase().includes(filtro.toLowerCase()));
+
+  // Validación en vivo de atributos dinámicos: mismas reglas que evaluará el backend al guardar.
+  const base = editando ?? indicadorVacio();
+  const valoresMap = new Map<string, ValorAtributo>(
+    atributos.map((a) => {
+      const parseado = tipos.obtener(a.tipoDato).parse(valoresAttr.get(a.id) ?? '');
+      return [a.id, parseado.ok ? parseado.valor : null] as const;
+    })
+  );
+  const contexto = construirContextoIndicador(base, atributos, valoresMap);
+  const erroresAtributo = new Map(
+    validadorAtributos.validar(atributos, valoresMap, contexto, reglas).map((r) => [r.atributoId, r.errores[0]?.mensaje ?? 'Valor inválido.'])
+  );
+  const atributosVisibles = atributos.filter((a) => a.activo && validadorAtributos.esVisible(a, contexto, reglas));
 
   return (
     <>
@@ -226,10 +274,17 @@ export function IndicadoresPage(): React.JSX.Element {
             <Campo etiqueta="Periodicidad" obligatorio>
               <select
                 value={editando.periodicidad}
-                onChange={(e) => setEditando({ ...editando, periodicidad: e.target.value as Periodicidad })}
+                onChange={(e) => {
+                  const periodicidad = e.target.value as Periodicidad;
+                  setEditando({
+                    ...editando,
+                    periodicidad,
+                    periodicidadPersonalizadaId: periodicidad === Periodicidad.Personalizada ? editando.periodicidadPersonalizadaId : null
+                  });
+                }}
                 data-testid="indicador-periodicidad"
               >
-                {PERIODICIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
+                {PERIODICIDADES_INDICADOR.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Campo>
             <Campo etiqueta="Estado">
@@ -240,6 +295,21 @@ export function IndicadoresPage(): React.JSX.Element {
               </select>
             </Campo>
           </div>
+          {editando.periodicidad === Periodicidad.Personalizada && (
+            <Campo etiqueta="Definición de periodicidad personalizada" obligatorio>
+              <select
+                value={editando.periodicidadPersonalizadaId ?? ''}
+                onChange={(e) => setEditando({ ...editando, periodicidadPersonalizadaId: e.target.value || null })}
+                data-testid="indicador-periodicidad-personalizada"
+              >
+                <option value="">— seleccionar —</option>
+                {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+              {periodicidades.length === 0 && (
+                <span className="texto-suave">No hay definiciones; créelas en Configuración General.</span>
+              )}
+            </Campo>
+          )}
           <div className="fila-form c3">
             <Campo etiqueta="Línea base">
               <input
@@ -259,6 +329,20 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
             <Campo etiqueta="Unidad de medida">
               <input type="text" value={editando.unidadMedida ?? ''} placeholder="%, casos…" onChange={(e) => setEditando({ ...editando, unidadMedida: e.target.value || null })} />
+            </Campo>
+          </div>
+          <div className="fila-form c2">
+            <Campo etiqueta="Responsable">
+              <select value={editando.responsable ?? ''} onChange={(e) => setEditando({ ...editando, responsable: e.target.value || null })}>
+                <option value="">— sin asignar —</option>
+                {responsables.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+              </select>
+            </Campo>
+            <Campo etiqueta="Categoría">
+              <select value={editando.categoria ?? ''} onChange={(e) => setEditando({ ...editando, categoria: e.target.value || null })}>
+                <option value="">— sin asignar —</option>
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
             </Campo>
           </div>
 
@@ -287,19 +371,19 @@ export function IndicadoresPage(): React.JSX.Element {
           ))}
           {listas.length === 0 && <p className="texto-suave">No hay listas de selección; créelas en el módulo Listas.</p>}
 
-          {atributos.filter((a) => a.activo && a.visible).length > 0 && (
+          {atributosVisibles.length > 0 && (
             <>
               <h4 style={{ margin: '8px 0 0' }}>Atributos adicionales</h4>
-              {atributos.filter((a) => a.activo && a.visible).map((a) => (
-                <Campo key={a.id} etiqueta={a.nombre} obligatorio={a.obligatorio}>
-                  <input
-                    type="text"
-                    value={valoresAttr.get(a.id) ?? a.valorPorDefecto ?? ''}
-                    disabled={!a.editable}
-                    onChange={(e) => setValoresAttr(new Map(valoresAttr).set(a.id, e.target.value))}
-                  />
-                  {a.descripcion && <span className="texto-suave">{a.descripcion}</span>}
-                </Campo>
+              {atributosVisibles.map((a) => (
+                <CampoAtributo
+                  key={a.id}
+                  atributo={a}
+                  valor={valoresAttr.get(a.id) ?? a.valorPorDefecto ?? ''}
+                  obligatorio={validadorAtributos.esObligatorio(a, contexto, reglas)}
+                  error={erroresAtributo.get(a.id)}
+                  opciones={a.listaId ? elementosPorLista.get(a.listaId) : undefined}
+                  onChange={(crudo) => setValoresAttr(new Map(valoresAttr).set(a.id, crudo))}
+                />
               ))}
             </>
           )}
@@ -331,7 +415,7 @@ export function IndicadoresPage(): React.JSX.Element {
                   <div className="fila-form c2">
                     <Campo etiqueta="Periodicidad de medición">
                       <select value={m.periodicidadMedicion} onChange={(e) => void actualizarMeta({ ...m, periodicidadMedicion: e.target.value as Periodicidad })}>
-                        {PERIODICIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
+                        {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
                     </Campo>
                     <Campo etiqueta="Desagregación (clave)">

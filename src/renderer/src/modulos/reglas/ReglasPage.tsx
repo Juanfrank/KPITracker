@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Atributo, Condicion, ReglaNegocio } from '@domain/index';
+import type { Atributo, ReglaNegocio } from '@domain/index';
+import { explicarCondicion } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+import { EditorCondicion } from '../../componentes/EditorCondicion';
+
+const CAMPOS_FIJOS_INDICADOR = ['Nombre', 'Definicion', 'Periodicidad', 'LineaBase', 'MetaGlobal', 'Estado', 'UnidadMedida', 'Responsable', 'Categoria'];
+const CAMPOS_AGREGADOS_CAPTURA = ['General', 'Maximo', 'Minimo', 'Suma', 'Promedio', 'CantidadConValor', 'TotalCombinaciones'];
 
 function reglaVacia(): ReglaNegocio {
   return {
@@ -20,57 +25,13 @@ function reglaVacia(): ReglaNegocio {
   };
 }
 
-const OPERADORES = [
-  { op: 'eq', etiqueta: 'igual a' },
-  { op: 'ne', etiqueta: 'distinto de' },
-  { op: 'gt', etiqueta: 'mayor que' },
-  { op: 'gte', etiqueta: 'mayor o igual que' },
-  { op: 'lt', etiqueta: 'menor que' },
-  { op: 'lte', etiqueta: 'menor o igual que' },
-  { op: 'contains', etiqueta: 'contiene' },
-  { op: 'notEmpty', etiqueta: 'no está vacío' },
-  { op: 'isEmpty', etiqueta: 'está vacío' }
-];
-
-interface CondicionSimple {
-  atributo: string;
-  op: string;
-  valor: string;
-  valorEsAtributo: boolean;
-}
-
-function aCondicionSimple(condicion: Condicion): CondicionSimple | null {
-  if (!OPERADORES.some((o) => o.op === condicion.op)) return null;
-  const [izq, der] = condicion.args;
-  if (!izq || typeof izq !== 'object' || !('attr' in izq)) return null;
-  const base: CondicionSimple = { atributo: izq.attr, op: condicion.op, valor: '', valorEsAtributo: false };
-  if (der && typeof der === 'object') {
-    if ('literal' in der) base.valor = String(der.literal ?? '');
-    else if ('attr' in der) {
-      base.valor = der.attr;
-      base.valorEsAtributo = true;
-    }
-  }
-  return base;
-}
-
-function deCondicionSimple(s: CondicionSimple): Condicion {
-  const args: Condicion['args'] = [{ attr: s.atributo }];
-  if (!['isEmpty', 'notEmpty'].includes(s.op)) {
-    const numero = Number(s.valor);
-    args.push(
-      s.valorEsAtributo
-        ? { attr: s.valor }
-        : { literal: s.valor !== '' && !Number.isNaN(numero) ? numero : s.valor }
-    );
-  }
-  return { op: s.op, args };
-}
-
 /**
- * Reglas de negocio declarativas (motor de reglas): el editor visual cubre
- * condiciones simples (atributo–operador–valor/atributo); el modo avanzado
- * permite editar el AST JSON completo con operadores anidados (and/or/not).
+ * Reglas de negocio declarativas (motor de reglas): constructor visual del
+ * AST (con condiciones anidadas Y/O/NO), y un modo avanzado con edición
+ * directa del JSON como alternativa sincronizada. Cubre reglas sobre
+ * Indicador (visibilidad/obligatoriedad de atributos, validación cruzada
+ * entre campos) y sobre Recoleccion (validación cruzada de agregados del
+ * levantamiento: General, Máximo, Mínimo, Suma, Promedio...).
  */
 export function ReglasPage(): React.JSX.Element {
   const [reglas, setReglas] = useState<ReglaNegocio[]>([]);
@@ -81,7 +42,11 @@ export function ReglasPage(): React.JSX.Element {
   const [errorJson, setErrorJson] = useState<string | null>(null);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setReglas(await invocar('reglas:listar', { entidad: 'Indicador' }));
+    const [reglasIndicador, reglasRecoleccion] = await Promise.all([
+      invocar('reglas:listar', { entidad: 'Indicador' }),
+      invocar('reglas:listar', { entidad: 'Recoleccion' })
+    ]);
+    setReglas([...reglasIndicador, ...reglasRecoleccion]);
   }, []);
 
   useEffect(() => {
@@ -91,8 +56,7 @@ export function ReglasPage(): React.JSX.Element {
 
   const abrir = (regla: ReglaNegocio): void => {
     setEditando(regla);
-    const simple = aCondicionSimple(regla.condicion);
-    setModoAvanzado(simple == null);
+    setModoAvanzado(false);
     setJsonAvanzado(JSON.stringify(regla.condicion, null, 2));
     setErrorJson(null);
   };
@@ -102,7 +66,7 @@ export function ReglasPage(): React.JSX.Element {
     let condicion = editando.condicion;
     if (modoAvanzado) {
       try {
-        condicion = JSON.parse(jsonAvanzado) as Condicion;
+        condicion = JSON.parse(jsonAvanzado) as ReglaNegocio['condicion'];
       } catch {
         setErrorJson('El JSON de la condición no es válido.');
         return;
@@ -113,14 +77,24 @@ export function ReglasPage(): React.JSX.Element {
     await cargar();
   };
 
-  const simple = editando ? aCondicionSimple(editando.condicion) : null;
-  const nombresAtributos = ['Estado', 'Nombre', 'Monto', ...atributos.map((a) => a.nombre)];
+  const cambiarEntidad = (entidad: string): void => {
+    if (!editando) return;
+    setEditando(
+      entidad === 'Recoleccion'
+        ? { ...editando, entidad, tipo: 'ValidacionCruzada', atributoObjetivoId: null }
+        : { ...editando, entidad }
+    );
+  };
+
+  const nombresAtributos = editando?.entidad === 'Recoleccion'
+    ? CAMPOS_AGREGADOS_CAPTURA
+    : [...CAMPOS_FIJOS_INDICADOR, ...atributos.map((a) => a.nombre)];
 
   return (
     <>
       <Encabezado
         titulo="Reglas de Negocio"
-        descripcion="Reglas condicionales declarativas: visibilidad, obligatoriedad y validaciones cruzadas entre atributos. Se evalúan con el motor de reglas, sin lógica codificada."
+        descripcion="Reglas condicionales declarativas: visibilidad, obligatoriedad y validaciones cruzadas. Se evalúan con el motor de reglas, sin lógica codificada."
         acciones={
           <button className="boton primario" onClick={() => abrir(reglaVacia())} data-testid="nueva-regla">
             <Icono nombre="mas" /> Nueva regla
@@ -132,6 +106,7 @@ export function ReglasPage(): React.JSX.Element {
           <thead>
             <tr>
               <th>Nombre</th>
+              <th>Entidad</th>
               <th>Tipo</th>
               <th>Condición</th>
               <th>Activa</th>
@@ -139,20 +114,21 @@ export function ReglasPage(): React.JSX.Element {
           </thead>
           <tbody>
             {reglas.map((r) => (
-              <tr key={r.id} onClick={() => abrir(r)} style={{ cursor: 'pointer' }}>
+              <tr key={r.id} onClick={() => abrir(r)} style={{ cursor: 'pointer' }} data-testid={`regla-${r.nombre}`}>
                 <td><strong>{r.nombre}</strong></td>
+                <td>{r.entidad}</td>
                 <td>{r.tipo}</td>
-                <td className="mono">{JSON.stringify(r.condicion)}</td>
+                <td>{explicarCondicion(r.condicion)}</td>
                 <td>{r.activa ? 'Sí' : 'No'}</td>
               </tr>
             ))}
             {reglas.length === 0 && (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={5}>
                   <Vacio
                     icono="✓"
                     mensaje="Sin reglas condicionales"
-                    detalle='Ejemplos: "Obligatorio si Monto > 5000", "FechaFinal mayor que FechaInicio".'
+                    detalle='Ejemplos: "Obligatorio si Monto es mayor que 5000", "General es menor que Maximo".'
                   />
                 </td>
               </tr>
@@ -182,22 +158,34 @@ export function ReglasPage(): React.JSX.Element {
               )}
               <span style={{ flex: 1 }} />
               <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
-              <button className="boton primario" onClick={() => void guardar()}>Guardar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-regla">Guardar</button>
             </>
           }
         >
           <Campo etiqueta="Nombre" obligatorio>
-            <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus />
+            <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="regla-nombre" />
           </Campo>
           <div className="fila-form c2">
+            <Campo etiqueta="Se aplica sobre">
+              <select value={editando.entidad} onChange={(e) => cambiarEntidad(e.target.value)}>
+                <option value="Indicador">Indicador (atributos del formulario)</option>
+                <option value="Recoleccion">Recolección (agregados del levantamiento)</option>
+              </select>
+            </Campo>
             <Campo etiqueta="Tipo de regla">
-              <select value={editando.tipo} onChange={(e) => setEditando({ ...editando, tipo: e.target.value as ReglaNegocio['tipo'] })}>
+              <select
+                value={editando.tipo}
+                disabled={editando.entidad === 'Recoleccion'}
+                onChange={(e) => setEditando({ ...editando, tipo: e.target.value as ReglaNegocio['tipo'] })}
+              >
                 <option value="Visibilidad">Visibilidad (mostrar si…)</option>
                 <option value="Obligatoriedad">Obligatoriedad (obligatorio si…)</option>
                 <option value="ValidacionCruzada">Validación cruzada (debe cumplirse…)</option>
               </select>
             </Campo>
-            <Campo etiqueta="Atributo objetivo">
+          </div>
+          {editando.entidad === 'Indicador' && editando.tipo !== 'ValidacionCruzada' && (
+            <Campo etiqueta="Atributo objetivo" obligatorio>
               <select
                 value={editando.atributoObjetivoId ?? ''}
                 onChange={(e) => setEditando({ ...editando, atributoObjetivoId: e.target.value || null })}
@@ -206,7 +194,7 @@ export function ReglasPage(): React.JSX.Element {
                 {atributos.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
               </select>
             </Campo>
-          </div>
+          )}
           <Campo etiqueta="Descripción">
             <textarea rows={2} value={editando.descripcion} onChange={(e) => setEditando({ ...editando, descripcion: e.target.value })} />
           </Campo>
@@ -215,60 +203,16 @@ export function ReglasPage(): React.JSX.Element {
             <h4 style={{ margin: 0 }}>Condición</h4>
             <div className="separador" />
             <button className="boton sutil" onClick={() => setModoAvanzado((v) => !v)}>
-              {modoAvanzado ? 'Editor simple' : 'Editor avanzado (JSON)'}
+              {modoAvanzado ? 'Constructor visual' : 'Editor avanzado (JSON)'}
             </button>
           </div>
 
-          {!modoAvanzado && simple ? (
-            <div className="fila-form c3">
-              <Campo etiqueta="Atributo">
-                <input
-                  type="text"
-                  list="atributos-regla"
-                  value={simple.atributo}
-                  onChange={(e) =>
-                    setEditando({ ...editando, condicion: deCondicionSimple({ ...simple, atributo: e.target.value }) })
-                  }
-                />
-                <datalist id="atributos-regla">
-                  {nombresAtributos.map((n) => <option key={n} value={n} />)}
-                </datalist>
-              </Campo>
-              <Campo etiqueta="Operador">
-                <select
-                  value={simple.op}
-                  onChange={(e) => setEditando({ ...editando, condicion: deCondicionSimple({ ...simple, op: e.target.value }) })}
-                >
-                  {OPERADORES.map((o) => <option key={o.op} value={o.op}>{o.etiqueta}</option>)}
-                </select>
-              </Campo>
-              {!['isEmpty', 'notEmpty'].includes(simple.op) && (
-                <Campo etiqueta={simple.valorEsAtributo ? 'Otro atributo' : 'Valor'}>
-                  <input
-                    type="text"
-                    list={simple.valorEsAtributo ? 'atributos-regla' : undefined}
-                    value={simple.valor}
-                    onChange={(e) =>
-                      setEditando({ ...editando, condicion: deCondicionSimple({ ...simple, valor: e.target.value }) })
-                    }
-                  />
-                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }} className="texto-suave">
-                    <input
-                      type="checkbox"
-                      checked={simple.valorEsAtributo}
-                      onChange={(e) =>
-                        setEditando({
-                          ...editando,
-                          condicion: deCondicionSimple({ ...simple, valorEsAtributo: e.target.checked })
-                        })
-                      }
-                      style={{ width: 'auto' }}
-                    />
-                    Comparar contra otro atributo
-                  </label>
-                </Campo>
-              )}
-            </div>
+          {!modoAvanzado ? (
+            <EditorCondicion
+              condicion={editando.condicion}
+              atributosDisponibles={nombresAtributos}
+              alCambiar={(condicion) => setEditando({ ...editando, condicion })}
+            />
           ) : (
             <Campo etiqueta="Condición (AST JSON)" error={errorJson}>
               <textarea

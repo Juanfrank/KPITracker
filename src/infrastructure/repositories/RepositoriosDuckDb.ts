@@ -4,8 +4,7 @@ import type {
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
-  IDefinicionPeriodicidadRepository, IIndicadorRepository,
-  IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository,
+  IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository,
   ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import type { Db } from '../duckdb/Db';
