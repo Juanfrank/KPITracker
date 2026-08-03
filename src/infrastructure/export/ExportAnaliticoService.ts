@@ -1,0 +1,221 @@
+import { join } from 'node:path';
+import type { Db } from '../duckdb/Db';
+import type { RutasDataLake } from '../parquet/RutasDataLake';
+import type { IConfiguracionRepository, IExportService } from '@application/ports/index';
+import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
+import { Periodicidad } from '@domain/value-objects/Periodicidad';
+import { textoAClave } from '@domain/value-objects/ClaveDesagregacion';
+
+function sq(v: string): string {
+  return v.replace(/'/g, "''");
+}
+function lit(v: string | number | null): string {
+  if (v == null) return 'NULL';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+  return `'${sq(v)}'`;
+}
+
+/**
+ * Genera la segunda capa de datos orientada al consumo analítico:
+ * 1. Dimensiones del star schema (/Data/Dimensions/*.parquet).
+ * 2. Tabla completamente desnormalizada ResultadosAnalitico (Parquet y,
+ *    opcionalmente, CSV UTF-8) donde cada fila es un resultado levantado con
+ *    todos los atributos del indicador, las desagregaciones expandidas como
+ *    columnas, fecha de corte, período, año, valor y campos calculados.
+ * Se regenera automáticamente (con debounce) tras cada modificación, de modo
+ * que el archivo plano esté siempre sincronizado con el modelo interno.
+ */
+export class ExportAnaliticoService implements IExportService {
+  private temporizador: ReturnType<typeof setTimeout> | null = null;
+  private regenerando: Promise<void> = Promise.resolve();
+  private readonly generadorPeriodos = new GeneradorPeriodos();
+
+  constructor(
+    private readonly db: Db,
+    private readonly rutas: RutasDataLake,
+    private readonly configuracion: IConfiguracionRepository,
+    private readonly debounceMs = 1000
+  ) {}
+
+  rutaExportacion(): string {
+    return this.rutas.exportacion;
+  }
+
+  solicitarRegeneracion(): void {
+    if (this.temporizador) clearTimeout(this.temporizador);
+    this.temporizador = setTimeout(() => {
+      void this.regenerar().catch((e) => console.error('Error regenerando exportación analítica:', e));
+    }, this.debounceMs);
+  }
+
+  async regenerar(): Promise<void> {
+    if (this.temporizador) {
+      clearTimeout(this.temporizador);
+      this.temporizador = null;
+    }
+    this.regenerando = this.regenerando.then(async () => {
+      await this.generarDimensiones();
+      await this.generarTablaAnalitica();
+    });
+    await this.regenerando;
+  }
+
+  private async generarDimensiones(): Promise<void> {
+    const dim = (nombre: string): string => `'${sq(join(this.rutas.dimensions, nombre))}'`;
+    const config = await this.configuracion.obtener();
+    const anioActual = new Date().getFullYear();
+
+    await this.db.run(
+      `COPY (SELECT row_number() OVER (ORDER BY nombre) AS indicador_key, *
+             FROM indicadores) TO ${dim('DimIndicador.parquet')} (FORMAT PARQUET)`
+    );
+    await this.db.run(
+      `COPY (SELECT row_number() OVER (ORDER BY nombre) AS lista_key, * FROM listas)
+       TO ${dim('DimLista.parquet')} (FORMAT PARQUET)`
+    );
+    await this.db.run(
+      `COPY (SELECT row_number() OVER (ORDER BY lista_id, orden) AS elemento_key, * FROM elementos_lista)
+       TO ${dim('DimElementoLista.parquet')} (FORMAT PARQUET)`
+    );
+    await this.db.run(
+      `COPY (SELECT row_number() OVER (ORDER BY entidad, grupo, orden) AS atributo_key, * FROM atributos)
+       TO ${dim('DimAtributo.parquet')} (FORMAT PARQUET)`
+    );
+    await this.db.run(
+      `COPY (SELECT DISTINCT clave_desagregacion,
+                    CASE WHEN clave_desagregacion = 'GENERAL' THEN 'General' ELSE 'Desagregado' END AS tipo
+             FROM resultados) TO ${dim('DimDesagregacion.parquet')} (FORMAT PARQUET)`
+    );
+
+    // DimPeriodo: todos los períodos de todas las periodicidades desde el año inicial.
+    const filasPeriodo: string[] = [];
+    for (let anio = config.anioInicial; anio <= anioActual + 1; anio++) {
+      for (const p of Object.values(Periodicidad)) {
+        if (p === Periodicidad.Personalizada) continue;
+        for (const periodo of this.generadorPeriodos.periodosDelAnio(anio, p)) {
+          filasPeriodo.push(
+            `(${lit(periodo.id)}, ${lit(periodo.anio)}, ${lit(periodo.periodicidad)}, ${lit(periodo.numero)}, ${lit(periodo.etiqueta)}, ${lit(periodo.fechaInicio)}, ${lit(periodo.fechaFin)})`
+          );
+        }
+      }
+    }
+    await this.db.run(
+      `COPY (SELECT row_number() OVER () AS periodo_key, * FROM (
+         SELECT * FROM (VALUES ${filasPeriodo.join(', ')})
+         AS t(periodo_id, anio, periodicidad, numero, etiqueta, fecha_inicio, fecha_fin)
+       )) TO ${dim('DimPeriodo.parquet')} (FORMAT PARQUET)`
+    );
+
+    // DimFecha: calendario continuo del rango configurado.
+    await this.db.run(
+      `COPY (
+         SELECT CAST(d AS DATE) AS fecha,
+                year(d) AS anio, month(d) AS mes, day(d) AS dia,
+                quarter(d) AS trimestre, isodow(d) AS dia_semana_iso,
+                strftime(d, '%Y-%m') AS anio_mes
+         FROM generate_series(DATE '${config.anioInicial}-01-01', DATE '${anioActual + 1}-12-31', INTERVAL 1 DAY) AS t(d)
+       ) TO ${dim('DimFecha.parquet')} (FORMAT PARQUET)`
+    );
+  }
+
+  private async generarTablaAnalitica(): Promise<void> {
+    const config = await this.configuracion.obtener();
+
+    const listas = await this.db.all<{ id: string; nombre: string }>('SELECT id, nombre FROM listas');
+    const nombrePorLista = new Map(listas.map((l) => [l.id, l.nombre]));
+    const elementos = await this.db.all<{ lista_id: string; codigo: string; descripcion: string }>(
+      'SELECT lista_id, codigo, descripcion FROM elementos_lista'
+    );
+    const descripcionElemento = new Map(elementos.map((e) => [`${e.lista_id}|${e.codigo}`, e.descripcion]));
+
+    const filas = await this.db.all<Record<string, unknown>>(
+      `SELECT r.id AS resultado_id, r.indicador_id, r.periodo_id, r.anio, r.clave_desagregacion,
+              r.valor, r.observacion, r.actualizado_en,
+              i.nombre AS indicador, i.definicion, i.periodicidad, i.linea_base, i.meta_global,
+              i.estado, i.responsable, i.categoria, i.unidad_medida,
+              l.fecha_corte
+       FROM resultados r
+       JOIN indicadores i ON i.id = r.indicador_id
+       LEFT JOIN levantamientos l ON l.indicador_id = r.indicador_id AND l.periodo_id = r.periodo_id
+       ORDER BY i.nombre, r.periodo_id, r.clave_desagregacion`
+    );
+
+    // Columnas de desagregación presentes en los datos, expandidas por lista.
+    const listasUsadas = new Set<string>();
+    for (const f of filas) {
+      const clave = textoAClave(String(f.clave_desagregacion));
+      for (const [listaId] of clave.pares) listasUsadas.add(listaId);
+    }
+    const columnasDesagregacion = [...listasUsadas].sort().map((listaId) => ({
+      listaId,
+      columna: (nombrePorLista.get(listaId) ?? listaId).replace(/[^\p{L}\p{N}_ ]/gu, '').trim() || listaId
+    }));
+
+    const columnasFijas = [
+      'resultado_id', 'indicador_id', 'indicador', 'definicion', 'periodicidad', 'estado',
+      'responsable', 'categoria', 'unidad_medida', 'anio', 'periodo_id', 'periodo',
+      'fecha_corte', 'es_general', 'desagregacion', 'valor', 'linea_base', 'meta',
+      'variacion_linea_base', 'cumplimiento_meta_pct', 'observacion', 'actualizado_en'
+    ];
+
+    const periodoEtiqueta = (periodoId: string): string => {
+      const partes = periodoId.split('-');
+      const anio = Number(partes[0]);
+      const periodicidad = partes[1] as Periodicidad;
+      const numero = Number(partes[2]);
+      try {
+        return this.generadorPeriodos.periodosDelAnio(anio, periodicidad)[numero - 1]?.etiqueta ?? periodoId;
+      } catch {
+        return periodoId;
+      }
+    };
+
+    const valoresFilas: string[] = [];
+    for (const f of filas) {
+      const claveTexto = String(f.clave_desagregacion);
+      const clave = textoAClave(claveTexto);
+      const esGeneral = clave.pares.length === 0;
+      const porLista = new Map(clave.pares);
+      const valor = f.valor == null ? null : Number(f.valor);
+      const lineaBase = f.linea_base == null ? null : Number(f.linea_base);
+      const meta = f.meta_global == null ? null : Number(f.meta_global);
+      const variacion = valor != null && lineaBase != null ? valor - lineaBase : null;
+      const cumplimiento = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
+
+      const celdas = [
+        lit(String(f.resultado_id)), lit(String(f.indicador_id)), lit(String(f.indicador)),
+        lit(String(f.definicion ?? '')), lit(String(f.periodicidad)), lit(String(f.estado)),
+        lit(f.responsable == null ? null : String(f.responsable)),
+        lit(f.categoria == null ? null : String(f.categoria)),
+        lit(f.unidad_medida == null ? null : String(f.unidad_medida)),
+        lit(Number(f.anio)), lit(String(f.periodo_id)), lit(periodoEtiqueta(String(f.periodo_id))),
+        lit(f.fecha_corte == null ? null : String(f.fecha_corte)),
+        esGeneral ? 'TRUE' : 'FALSE',
+        lit(esGeneral ? 'General' : claveTexto),
+        lit(valor), lit(lineaBase), lit(meta), lit(variacion), lit(cumplimiento),
+        lit(f.observacion == null ? null : String(f.observacion)),
+        lit(String(f.actualizado_en))
+      ];
+      for (const cd of columnasDesagregacion) {
+        const codigo = porLista.get(cd.listaId) ?? null;
+        const descripcion = codigo == null ? null : (descripcionElemento.get(`${cd.listaId}|${codigo}`) ?? codigo);
+        celdas.push(lit(esGeneral ? 'Total' : descripcion));
+      }
+      valoresFilas.push(`(${celdas.join(', ')})`);
+    }
+
+    const todasColumnas = [...columnasFijas, ...columnasDesagregacion.map((c) => `"${c.columna}"`)];
+    const rutaParquet = join(this.rutas.exportacion, 'ResultadosAnalitico.parquet');
+    const rutaCsv = join(this.rutas.exportacion, 'ResultadosAnalitico.csv');
+
+    const cuerpo =
+      valoresFilas.length === 0
+        ? `SELECT ${todasColumnas.map((c) => `NULL AS ${c}`).join(', ')} WHERE 1 = 0`
+        : `SELECT * FROM (VALUES ${valoresFilas.join(', ')}) AS t(${todasColumnas.join(', ')})`;
+
+    await this.db.run(`COPY (${cuerpo}) TO '${sq(rutaParquet)}' (FORMAT PARQUET)`);
+    if (config.exportarCsv) {
+      await this.db.run(`COPY (${cuerpo}) TO '${sq(rutaCsv)}' (FORMAT CSV, HEADER, DELIMITER ',')`);
+    }
+  }
+}
