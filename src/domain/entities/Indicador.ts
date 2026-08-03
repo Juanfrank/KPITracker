@@ -12,15 +12,17 @@ export interface Indicador {
   nombre: string;
   definicion: string;
   periodicidad: Periodicidad;
+  /** Id de DefinicionPeriodicidad; requerido cuando periodicidad = Personalizada. */
+  periodicidadPersonalizadaId: string | null;
   lineaBase: number | null;
   /** Meta global simple; las metas detalladas viven en la entidad Meta. */
   metaGlobal: number | null;
   /** Ids de las listas de selección usadas como desagregaciones. */
   desagregaciones: string[];
   estado: EstadoIndicador;
-  /** Preparado en la arquitectura; sin flujo funcional en esta versión. */
+  /** Id de Responsable (catálogo). */
   responsable: string | null;
-  /** Preparado en la arquitectura; sin flujo funcional en esta versión. */
+  /** Id de Categoria (catálogo). */
   categoria: string | null;
   /** Unidad de medida para presentación (%, casos, días...). */
   unidadMedida: string | null;

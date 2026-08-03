@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
-import { NoImplementadoError } from '@domain/errors/errores';
+import type { DefinicionPeriodicidad } from '@domain/entities/DefinicionPeriodicidad';
 
 const generador = new GeneradorPeriodos();
+
+const definicionCuatrimestralEspecial: DefinicionPeriodicidad = {
+  id: 'def-1',
+  nombre: 'Cuatrimestral especial',
+  descripcion: '',
+  cortes: [
+    { numero: 1, etiqueta: 'Corte A', mesInicio: 1, mesFin: 5 },
+    { numero: 2, etiqueta: 'Corte B', mesInicio: 6, mesFin: 8 },
+    { numero: 3, etiqueta: 'Corte C', mesInicio: 9, mesFin: 12 }
+  ],
+  creadoEn: '2025-01-01T00:00:00Z',
+  actualizadoEn: '2025-01-01T00:00:00Z'
+};
 
 describe('GeneradorPeriodos', () => {
   it('genera 12 períodos mensuales con etiquetas de mes', () => {
@@ -37,8 +50,19 @@ describe('GeneradorPeriodos', () => {
     expect(feb?.fechaFin).toBe('2024-02-29');
   });
 
-  it('la periodicidad Personalizada lanza NoImplementadoError', () => {
-    expect(() => generador.periodosDelAnio(2025, Periodicidad.Personalizada)).toThrow(NoImplementadoError);
+  it('la periodicidad Personalizada sin definición lanza un error claro', () => {
+    expect(() => generador.periodosDelAnio(2025, Periodicidad.Personalizada)).toThrow(/definición/);
+  });
+
+  it('la periodicidad Personalizada genera períodos según los cortes de la definición', () => {
+    const periodos = generador.periodosDelAnio(2025, Periodicidad.Personalizada, definicionCuatrimestralEspecial);
+    expect(periodos).toHaveLength(3);
+    expect(periodos[0]?.etiqueta).toBe('Corte A 2025');
+    expect(periodos[0]?.fechaInicio).toBe('2025-01-01');
+    expect(periodos[0]?.fechaFin).toBe('2025-05-31');
+    expect(periodos[1]?.fechaInicio).toBe('2025-06-01');
+    expect(periodos[2]?.fechaFin).toBe('2025-12-31');
+    expect(periodos[0]?.id).toBe('2025-Personalizada-01');
   });
 
   it('periodosDisponibles abarca desde el año inicial y excluye períodos futuros', () => {

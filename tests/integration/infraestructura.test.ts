@@ -16,6 +16,7 @@ function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
     nombre: `Indicador ${id}`,
     definicion: 'Definición de prueba',
     periodicidad: Periodicidad.Trimestral,
+    periodicidadPersonalizadaId: null,
     lineaBase: 50,
     metaGlobal: 100,
     desagregaciones: [],
@@ -221,7 +222,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     const json = await infra.configPortable.exportar();
     const archivo = JSON.parse(json);
     expect(archivo.formato).toBe('kpitracker-config');
-    expect(archivo.schemaVersion).toBe(1);
+    expect(archivo.schemaVersion).toBe(2);
     expect(archivo.indicadores).toHaveLength(1);
 
     // Importa en una instancia limpia.

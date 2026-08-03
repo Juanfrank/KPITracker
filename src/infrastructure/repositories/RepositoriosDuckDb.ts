@@ -1,17 +1,18 @@
 import type {
-  Atributo, ElementoLista, Indicador, Levantamiento, Lista, Meta,
+  Atributo, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Lista, Meta,
   RegistroAuditoria, ReglaNegocio, Resultado
 } from '@domain/index';
 import type {
-  FiltroAuditoria, IAtributoRepository, IAuditoriaRepository, IIndicadorRepository,
+  FiltroAuditoria, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
+  IDefinicionPeriodicidadRepository, IIndicadorRepository,
   IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository,
   ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import type { Db } from '../duckdb/Db';
 import type { ParquetSyncService } from '../parquet/ParquetSyncService';
 import {
-  aAtributo, aAuditoria, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
-  aRegla, aResultado, deAtributo, deElemento, deIndicador, deLista, deMeta, deRegla
+  aAtributo, aAuditoria, aDefinicionPeriodicidad, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
+  aRegla, aResultado, deAtributo, deDefinicionPeriodicidad, deElemento, deIndicador, deLista, deMeta, deRegla
 } from './mapeos';
 
 /**
@@ -40,7 +41,7 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
 
   async guardar(indicador: Indicador): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deIndicador(indicador)
     );
     this.sync.marcarSucia('indicadores');
@@ -306,4 +307,50 @@ export class AuditoriaRepositoryDuckDb extends RepositorioBase implements IAudit
     );
     return filas.map(aAuditoria);
   }
+}
+
+/**
+ * Repositorio genérico de catálogo (id, nombre, ...): usado tanto para
+ * DefinicionPeriodicidad como para Responsable/Categoria. `tabla` y los
+ * mapeadores se fijan en el composition root; nunca provienen de entrada
+ * de usuario.
+ */
+export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends RepositorioBase implements ICatalogoRepository<T> {
+  constructor(
+    db: Db,
+    sync: ParquetSyncService,
+    private readonly tabla: string,
+    private readonly aEntidad: (fila: Record<string, unknown>) => T,
+    private readonly deEntidad: (item: T) => unknown[]
+  ) {
+    super(db, sync);
+  }
+
+  async listar(): Promise<T[]> {
+    return (await this.db.all(`SELECT * FROM ${this.tabla} ORDER BY nombre`)).map(this.aEntidad);
+  }
+
+  async obtener(id: string): Promise<T | null> {
+    const fila = await this.db.uno(`SELECT * FROM ${this.tabla} WHERE id = ?`, [id]);
+    return fila ? this.aEntidad(fila) : null;
+  }
+
+  async guardar(item: T): Promise<void> {
+    const valores = this.deEntidad(item);
+    const marcadores = valores.map(() => '?').join(', ');
+    await this.db.run(`INSERT OR REPLACE INTO ${this.tabla} VALUES (${marcadores})`, valores);
+    this.sync.marcarSucia(this.tabla);
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.db.run(`DELETE FROM ${this.tabla} WHERE id = ?`, [id]);
+    this.sync.marcarSucia(this.tabla);
+  }
+}
+
+export function crearRepositorioDefinicionesPeriodicidad(
+  db: Db,
+  sync: ParquetSyncService
+): CatalogoRepositoryDuckDb<DefinicionPeriodicidad> {
+  return new CatalogoRepositoryDuckDb(db, sync, 'periodicidades_personalizadas', aDefinicionPeriodicidad, deDefinicionPeriodicidad);
 }

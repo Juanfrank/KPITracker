@@ -12,6 +12,7 @@ function indicadorVacio(): Indicador {
     nombre: '',
     definicion: '',
     periodicidad: Periodicidad.Mensual,
+    periodicidadPersonalizadaId: null,
     lineaBase: null,
     metaGlobal: null,
     desagregaciones: [],

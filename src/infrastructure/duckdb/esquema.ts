@@ -20,6 +20,31 @@ const TABLAS: Record<string, string> = {
     responsable VARCHAR,
     categoria VARCHAR,
     unidad_medida VARCHAR,
+    periodicidad_personalizada_id VARCHAR,
+    creado_en VARCHAR NOT NULL,
+    actualizado_en VARCHAR NOT NULL
+  )`,
+  periodicidades_personalizadas: `CREATE TABLE IF NOT EXISTS periodicidades_personalizadas (
+    id VARCHAR PRIMARY KEY,
+    nombre VARCHAR NOT NULL,
+    descripcion VARCHAR NOT NULL DEFAULT '',
+    cortes VARCHAR NOT NULL DEFAULT '[]',
+    creado_en VARCHAR NOT NULL,
+    actualizado_en VARCHAR NOT NULL
+  )`,
+  responsables: `CREATE TABLE IF NOT EXISTS responsables (
+    id VARCHAR PRIMARY KEY,
+    nombre VARCHAR NOT NULL,
+    correo VARCHAR,
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en VARCHAR NOT NULL,
+    actualizado_en VARCHAR NOT NULL
+  )`,
+  categorias: `CREATE TABLE IF NOT EXISTS categorias (
+    id VARCHAR PRIMARY KEY,
+    nombre VARCHAR NOT NULL,
+    descripcion VARCHAR NOT NULL DEFAULT '',
+    activo BOOLEAN NOT NULL DEFAULT true,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -141,14 +166,30 @@ export const PARQUET_POR_TABLA: Record<string, string> = {
   elementos_lista: 'Config/ElementosLista.parquet',
   metas: 'Config/Metas.parquet',
   reglas: 'Config/Reglas.parquet',
+  periodicidades_personalizadas: 'Config/Periodicidades.parquet',
+  responsables: 'Config/Responsables.parquet',
+  categorias: 'Config/Categorias.parquet',
   valores_atributos: 'Facts/FactValoresAtributos.parquet',
   levantamientos: 'Facts/FactSeguimiento.parquet',
   auditoria: 'Logs/Auditoria.parquet'
   // `resultados` se particiona por año: Facts/FactResultados/anio=YYYY/*.parquet
 };
 
+/**
+ * Cambios de esquema aditivos sobre tablas ya existentes (una base de
+ * trabajo creada por una versión anterior de la app). `CREATE TABLE IF NOT
+ * EXISTS` no agrega columnas nuevas a una tabla preexistente; estas
+ * sentencias sí, sin afectar los datos ya almacenados.
+ */
+const MIGRACIONES_ADITIVAS: string[] = [
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR'
+];
+
 export async function crearEsquema(db: Db): Promise<void> {
   for (const sql of Object.values(TABLAS)) {
+    await db.run(sql);
+  }
+  for (const sql of MIGRACIONES_ADITIVAS) {
     await db.run(sql);
   }
 }
@@ -165,7 +206,10 @@ export async function restaurarDesdeParquetSiVacio(db: Db, dataDir: string): Pro
   for (const [tabla, rel] of Object.entries(PARQUET_POR_TABLA)) {
     const ruta = join(dataDir, rel);
     if (existsSync(ruta)) {
-      await db.run(`INSERT OR IGNORE INTO ${tabla} SELECT * FROM read_parquet('${ruta.replace(/'/g, "''")}')`);
+      // BY NAME: tolera Parquet generados por una versión anterior con menos
+      // columnas (p. ej. tras agregar periodicidad_personalizada_id); las
+      // columnas nuevas quedan NULL en lugar de fallar por conteo de columnas.
+      await db.run(`INSERT OR IGNORE INTO ${tabla} BY NAME SELECT * FROM read_parquet('${ruta.replace(/'/g, "''")}')`);
     }
   }
   const dirResultados = join(dataDir, 'Facts', 'FactResultados');

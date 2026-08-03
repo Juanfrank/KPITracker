@@ -1,6 +1,6 @@
 import type {
-  Atributo, ElementoLista, Indicador, Levantamiento, Lista, Meta,
-  RegistroAuditoria, ReglaNegocio, Resultado
+  Atributo, Categoria, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Indicador,
+  Levantamiento, Lista, Meta, RegistroAuditoria, ReglaNegocio, Resultado, Responsable
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -34,6 +34,7 @@ export const aIndicador = (f: Fila): Indicador => ({
   responsable: sn(f.responsable),
   categoria: sn(f.categoria),
   unidadMedida: sn(f.unidad_medida),
+  periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -41,7 +42,7 @@ export const aIndicador = (f: Fila): Indicador => ({
 export const deIndicador = (i: Indicador): unknown[] => [
   i.id, i.nombre, i.definicion, i.periodicidad, i.lineaBase, i.metaGlobal,
   JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
-  i.unidadMedida, i.creadoEn, i.actualizadoEn
+  i.unidadMedida, i.periodicidadPersonalizadaId, i.creadoEn, i.actualizadoEn
 ];
 
 export const aAtributo = (f: Fila): Atributo => ({
@@ -173,3 +174,42 @@ export const aAuditoria = (f: Fila): RegistroAuditoria => ({
   valorAnterior: sn(f.valor_anterior),
   valorNuevo: sn(f.valor_nuevo)
 });
+
+export const aDefinicionPeriodicidad = (f: Fila): DefinicionPeriodicidad => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  descripcion: s(f.descripcion),
+  cortes: json<CortePeriodicidad[]>(f.cortes, []),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deDefinicionPeriodicidad = (d: DefinicionPeriodicidad): unknown[] => [
+  d.id, d.nombre, d.descripcion, JSON.stringify(d.cortes), d.creadoEn, d.actualizadoEn
+];
+
+export const aResponsable = (f: Fila): Responsable => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  correo: sn(f.correo),
+  activo: b(f.activo),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deResponsable = (r: Responsable): unknown[] => [
+  r.id, r.nombre, r.correo, r.activo, r.creadoEn, r.actualizadoEn
+];
+
+export const aCategoria = (f: Fila): Categoria => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  descripcion: s(f.descripcion),
+  activo: b(f.activo),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deCategoria = (c: Categoria): unknown[] => [
+  c.id, c.nombre, c.descripcion, c.activo, c.creadoEn, c.actualizadoEn
+];

@@ -1,11 +1,14 @@
+import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
 import { Db } from './duckdb/Db';
 import { crearEsquema, restaurarDesdeParquetSiVacio } from './duckdb/esquema';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import { ParquetSyncService } from './parquet/ParquetSyncService';
 import {
-  AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, IndicadorRepositoryDuckDb,
-  ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb, ResultadoRepositoryDuckDb
+  AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, CatalogoRepositoryDuckDb, IndicadorRepositoryDuckDb,
+  ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb, ResultadoRepositoryDuckDb,
+  crearRepositorioDefinicionesPeriodicidad
 } from './repositories/RepositoriosDuckDb';
+import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
@@ -23,6 +26,9 @@ export interface Infraestructura {
   listas: ListaRepositoryDuckDb;
   metas: MetaRepositoryDuckDb;
   reglas: ReglaRepositoryDuckDb;
+  periodicidades: CatalogoRepositoryDuckDb<DefinicionPeriodicidad>;
+  responsables: CatalogoRepositoryDuckDb<Responsable>;
+  categorias: CatalogoRepositoryDuckDb<Categoria>;
   resultados: ResultadoRepositoryDuckDb;
   auditoria: AuditoriaRepositoryDuckDb;
   exportacion: ExportAnaliticoService;
@@ -61,9 +67,14 @@ export async function crearInfraestructura(
   const listas = new ListaRepositoryDuckDb(db, sync);
   const metas = new MetaRepositoryDuckDb(db, sync);
   const reglas = new ReglaRepositoryDuckDb(db, sync);
+  const periodicidades = crearRepositorioDefinicionesPeriodicidad(db, sync);
+  const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
+  const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
   const auditoria = new AuditoriaRepositoryDuckDb(db, sync);
-  const configPortable = new ConfigPortableService(configuracion, indicadores, atributos, listas, reglas, metas);
+  const configPortable = new ConfigPortableService(
+    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
+  );
 
   return {
     db,
@@ -77,6 +88,9 @@ export async function crearInfraestructura(
     listas,
     metas,
     reglas,
+    periodicidades,
+    responsables,
+    categorias,
     resultados,
     auditoria,
     exportacion,

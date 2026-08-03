@@ -1,6 +1,8 @@
 import type {
   Atributo,
+  Categoria,
   ConfiguracionGeneral,
+  DefinicionPeriodicidad,
   ElementoLista,
   Indicador,
   Levantamiento,
@@ -8,6 +10,7 @@ import type {
   Meta,
   RegistroAuditoria,
   ReglaNegocio,
+  Responsable,
   Resultado
 } from '@domain/index';
 
@@ -81,6 +84,24 @@ export interface IReglaRepository {
   guardar(regla: ReglaNegocio): Promise<void>;
   eliminar(id: string): Promise<void>;
 }
+
+export interface IDefinicionPeriodicidadRepository {
+  listar(): Promise<DefinicionPeriodicidad[]>;
+  obtener(id: string): Promise<DefinicionPeriodicidad | null>;
+  guardar(definicion: DefinicionPeriodicidad): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Catálogo simple (CRUD homogéneo); implementado por un único repositorio genérico en infraestructura. */
+export interface ICatalogoRepository<T extends { readonly id: string }> {
+  listar(): Promise<T[]>;
+  obtener(id: string): Promise<T | null>;
+  guardar(item: T): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+export type IResponsableRepository = ICatalogoRepository<Responsable>;
+export type ICategoriaRepository = ICatalogoRepository<Categoria>;
 
 /** Resumen por período para el tablero de seguimiento. */
 export interface ResumenPeriodo {

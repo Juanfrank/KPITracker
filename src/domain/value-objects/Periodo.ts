@@ -1,5 +1,5 @@
 import { Periodicidad, infoPeriodicidad, NOMBRES_MES } from './Periodicidad';
-import { NoImplementadoError } from '../errors/errores';
+import type { DefinicionPeriodicidad } from '../entities/DefinicionPeriodicidad';
 
 /**
  * Período concreto de medición: una periodicidad, un año y el número ordinal
@@ -28,11 +28,32 @@ function ultimoDiaDelMes(anio: number, mes: number): number {
   return new Date(Date.UTC(anio, mes, 0)).getUTCDate();
 }
 
-export function crearPeriodo(anio: number, periodicidad: Periodicidad, numero: number): Periodo {
-  const info = infoPeriodicidad(periodicidad);
+export function crearPeriodo(
+  anio: number,
+  periodicidad: Periodicidad,
+  numero: number,
+  definicion?: DefinicionPeriodicidad
+): Periodo {
   if (periodicidad === Periodicidad.Personalizada) {
-    throw new NoImplementadoError('La periodicidad Personalizada aún no está implementada.');
+    if (!definicion) {
+      throw new Error('Se requiere la definición de periodicidad personalizada para generar el período.');
+    }
+    const corte = definicion.cortes.find((c) => c.numero === numero);
+    if (!corte) {
+      throw new RangeError(`La definición "${definicion.nombre}" no tiene un corte número ${numero}.`);
+    }
+    return {
+      anio,
+      periodicidad,
+      numero,
+      etiqueta: `${corte.etiqueta} ${anio}`,
+      fechaInicio: iso(anio, corte.mesInicio, 1),
+      fechaFin: iso(anio, corte.mesFin, ultimoDiaDelMes(anio, corte.mesFin)),
+      id: `${anio}-${periodicidad}-${numero.toString().padStart(2, '0')}`
+    };
   }
+
+  const info = infoPeriodicidad(periodicidad);
   if (numero < 1 || numero > info.periodosPorAnio) {
     throw new RangeError(`Número de período ${numero} fuera de rango para ${periodicidad}.`);
   }
