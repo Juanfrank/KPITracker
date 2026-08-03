@@ -1,10 +1,11 @@
 import { join } from 'node:path';
 import type { Db } from '../duckdb/Db';
 import type { RutasDataLake } from '../parquet/RutasDataLake';
-import type { IConfiguracionRepository, IExportService } from '@application/ports/index';
+import type { ICatalogoRepository, IConfiguracionRepository, IExportService } from '@application/ports/index';
 import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
 import { textoAClave } from '@domain/value-objects/ClaveDesagregacion';
+import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
 
 function sq(v: string): string {
   return v.replace(/'/g, "''");
@@ -34,6 +35,9 @@ export class ExportAnaliticoService implements IExportService {
     private readonly db: Db,
     private readonly rutas: RutasDataLake,
     private readonly configuracion: IConfiguracionRepository,
+    private readonly periodicidades: ICatalogoRepository<DefinicionPeriodicidad>,
+    private readonly responsables: ICatalogoRepository<Responsable>,
+    private readonly categorias: ICatalogoRepository<Categoria>,
     private readonly debounceMs = 1000
   ) {}
 
@@ -87,12 +91,29 @@ export class ExportAnaliticoService implements IExportService {
              FROM resultados) TO ${dim('DimDesagregacion.parquet')} (FORMAT PARQUET)`
     );
 
-    // DimPeriodo: todos los períodos de todas las periodicidades desde el año inicial.
+    // DimPeriodo: todos los períodos de las periodicidades estándar, más los
+    // de cada definición de periodicidad Personalizada efectivamente usada
+    // por algún indicador (una definición sin indicadores no aporta filas).
+    const idsUsados = await this.db.all<{ periodicidad_personalizada_id: string }>(
+      `SELECT DISTINCT periodicidad_personalizada_id FROM indicadores WHERE periodicidad_personalizada_id IS NOT NULL`
+    );
+    const definiciones = await this.periodicidades.listar();
+    const definicionesUsadas = definiciones.filter((d) =>
+      idsUsados.some((u) => u.periodicidad_personalizada_id === d.id)
+    );
+
     const filasPeriodo: string[] = [];
     for (let anio = config.anioInicial; anio <= anioActual + 1; anio++) {
       for (const p of Object.values(Periodicidad)) {
         if (p === Periodicidad.Personalizada) continue;
         for (const periodo of this.generadorPeriodos.periodosDelAnio(anio, p)) {
+          filasPeriodo.push(
+            `(${lit(periodo.id)}, ${lit(periodo.anio)}, ${lit(periodo.periodicidad)}, ${lit(periodo.numero)}, ${lit(periodo.etiqueta)}, ${lit(periodo.fechaInicio)}, ${lit(periodo.fechaFin)})`
+          );
+        }
+      }
+      for (const definicion of definicionesUsadas) {
+        for (const periodo of this.generadorPeriodos.periodosDelAnio(anio, Periodicidad.Personalizada, definicion)) {
           filasPeriodo.push(
             `(${lit(periodo.id)}, ${lit(periodo.anio)}, ${lit(periodo.periodicidad)}, ${lit(periodo.numero)}, ${lit(periodo.etiqueta)}, ${lit(periodo.fechaInicio)}, ${lit(periodo.fechaFin)})`
           );
@@ -127,12 +148,15 @@ export class ExportAnaliticoService implements IExportService {
       'SELECT lista_id, codigo, descripcion FROM elementos_lista'
     );
     const descripcionElemento = new Map(elementos.map((e) => [`${e.lista_id}|${e.codigo}`, e.descripcion]));
+    const definicionesPorId = new Map((await this.periodicidades.listar()).map((d) => [d.id, d]));
+    const nombreResponsable = new Map((await this.responsables.listar()).map((r) => [r.id, r.nombre]));
+    const nombreCategoria = new Map((await this.categorias.listar()).map((c) => [c.id, c.nombre]));
 
     const filas = await this.db.all<Record<string, unknown>>(
       `SELECT r.id AS resultado_id, r.indicador_id, r.periodo_id, r.anio, r.clave_desagregacion,
               r.valor, r.observacion, r.actualizado_en,
               i.nombre AS indicador, i.definicion, i.periodicidad, i.linea_base, i.meta_global,
-              i.estado, i.responsable, i.categoria, i.unidad_medida,
+              i.estado, i.responsable, i.categoria, i.unidad_medida, i.periodicidad_personalizada_id,
               l.fecha_corte
        FROM resultados r
        JOIN indicadores i ON i.id = r.indicador_id
@@ -158,13 +182,13 @@ export class ExportAnaliticoService implements IExportService {
       'variacion_linea_base', 'cumplimiento_meta_pct', 'observacion', 'actualizado_en'
     ];
 
-    const periodoEtiqueta = (periodoId: string): string => {
+    const periodoEtiqueta = (periodoId: string, definicion?: DefinicionPeriodicidad): string => {
       const partes = periodoId.split('-');
       const anio = Number(partes[0]);
       const periodicidad = partes[1] as Periodicidad;
       const numero = Number(partes[2]);
       try {
-        return this.generadorPeriodos.periodosDelAnio(anio, periodicidad)[numero - 1]?.etiqueta ?? periodoId;
+        return this.generadorPeriodos.periodosDelAnio(anio, periodicidad, definicion)[numero - 1]?.etiqueta ?? periodoId;
       } catch {
         return periodoId;
       }
@@ -181,14 +205,19 @@ export class ExportAnaliticoService implements IExportService {
       const meta = f.meta_global == null ? null : Number(f.meta_global);
       const variacion = valor != null && lineaBase != null ? valor - lineaBase : null;
       const cumplimiento = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
+      const definicionIndicador = f.periodicidad_personalizada_id == null
+        ? undefined
+        : definicionesPorId.get(String(f.periodicidad_personalizada_id));
+      const responsableNombre = f.responsable == null ? null : (nombreResponsable.get(String(f.responsable)) ?? String(f.responsable));
+      const categoriaNombre = f.categoria == null ? null : (nombreCategoria.get(String(f.categoria)) ?? String(f.categoria));
 
       const celdas = [
         lit(String(f.resultado_id)), lit(String(f.indicador_id)), lit(String(f.indicador)),
         lit(String(f.definicion ?? '')), lit(String(f.periodicidad)), lit(String(f.estado)),
-        lit(f.responsable == null ? null : String(f.responsable)),
-        lit(f.categoria == null ? null : String(f.categoria)),
+        lit(responsableNombre),
+        lit(categoriaNombre),
         lit(f.unidad_medida == null ? null : String(f.unidad_medida)),
-        lit(Number(f.anio)), lit(String(f.periodo_id)), lit(periodoEtiqueta(String(f.periodo_id))),
+        lit(Number(f.anio)), lit(String(f.periodo_id)), lit(periodoEtiqueta(String(f.periodo_id), definicionIndicador)),
         lit(f.fecha_corte == null ? null : String(f.fecha_corte)),
         esGeneral ? 'TRUE' : 'FALSE',
         lit(esGeneral ? 'General' : claveTexto),

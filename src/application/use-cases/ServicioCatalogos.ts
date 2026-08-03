@@ -1,19 +1,36 @@
 import type {
-  Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio
+  Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
 } from '@domain/index';
-import { ValidacionError } from '@domain/index';
+import { Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador } from '@domain/index';
 import type {
-  IAtributoRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
-  IReglaRepository, ValorAtributoEntidad
+  IAtributoRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository,
+  IMetaRepository, IReglaRepository, ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
+import { mapaValoresDesdeEntidad } from './valoresEav';
 
-/** CRUD de indicadores con validación de mínimos obligatorios y auditoría. */
+export interface GuardarIndicadorInput {
+  indicador: Indicador;
+  /** Valores de atributos dinámicos del indicador (EAV); entidadId se fuerza al id resuelto del indicador. */
+  valores: ValorAtributoEntidad[];
+}
+
+/**
+ * CRUD de indicadores con validación de mínimos obligatorios, atributos
+ * dinámicos (visibilidad/obligatoriedad declarativas) y reglas de negocio
+ * `ValidacionCruzada`. La persistencia del indicador y de sus valores EAV
+ * se hace en un mismo caso de uso para poder validar todo antes de escribir
+ * nada.
+ */
 export class ServicioIndicadores extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
-    private readonly repo: IIndicadorRepository
+    private readonly repo: IIndicadorRepository,
+    private readonly atributosRepo: IAtributoRepository,
+    private readonly reglasRepo: IReglaRepository,
+    private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
+    private readonly tipos: TypeRegistry
   ) {
     super(ctx);
   }
@@ -26,11 +43,19 @@ export class ServicioIndicadores extends ServicioBase {
     return this.repo.obtener(id);
   }
 
-  async guardar(indicador: Indicador): Promise<Indicador> {
+  async guardar(input: GuardarIndicadorInput): Promise<Indicador> {
+    const { indicador, valores } = input;
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
     if (!indicador.definicion.trim()) errores.push('La definición es obligatoria.');
     if (!indicador.periodicidad) errores.push('La periodicidad es obligatoria.');
+    if (indicador.periodicidad === Periodicidad.Personalizada) {
+      if (!indicador.periodicidadPersonalizadaId) {
+        errores.push('Debe seleccionar una definición de periodicidad personalizada.');
+      } else if (!(await this.periodicidadesRepo.obtener(indicador.periodicidadPersonalizadaId))) {
+        errores.push('La definición de periodicidad personalizada seleccionada no existe.');
+      }
+    }
     if (errores.length > 0) throw new ValidacionError('Indicador inválido.', errores);
 
     const anterior = await this.repo.obtener(indicador.id);
@@ -38,11 +63,37 @@ export class ServicioIndicadores extends ServicioBase {
     const guardado: Indicador = anterior
       ? { ...indicador, creadoEn: anterior.creadoEn, actualizadoEn: ahora }
       : { ...indicador, id: indicador.id || this.ctx.ids.nuevoId(), creadoEn: ahora, actualizadoEn: ahora };
+
+    const [atributos, reglas] = await Promise.all([
+      this.atributosRepo.listar('Indicador'),
+      this.reglasRepo.listar('Indicador')
+    ]);
+    const valoresMap = mapaValoresDesdeEntidad(valores);
+    const contexto = construirContextoIndicador(guardado, atributos, valoresMap);
+    const validador = new ValidadorAtributos(this.tipos);
+
+    const erroresAtributos = validador.validar(atributos, valoresMap, contexto, reglas);
+    if (erroresAtributos.length > 0) {
+      throw new ValidacionError(
+        'Hay errores en los atributos del indicador.',
+        erroresAtributos.flatMap((r) => r.errores.map((e) => e.mensaje))
+      );
+    }
+    const incumplidas = validador.validarCruzadas(reglas, 'Indicador', contexto);
+    if (incumplidas.length > 0) {
+      throw new ValidacionError('El indicador no cumple una o más reglas de negocio.', incumplidas);
+    }
+
     await this.repo.guardar(guardado);
     await this.auditar(
       anterior ? 'Modificar' : 'Crear', 'Indicador', guardado.id, null,
       anterior ? JSON.stringify(anterior) : null, JSON.stringify(guardado)
     );
+
+    for (const valor of valores) {
+      await this.atributosRepo.guardarValor({ ...valor, entidadTipo: 'Indicador', entidadId: guardado.id });
+    }
+
     this.sincronizarExport();
     return guardado;
   }

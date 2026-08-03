@@ -26,6 +26,7 @@ export * from './rules/Validaciones';
 export * from './rules/ValidadorAtributos';
 export * from './rules/explicarCondicion';
 export * from './rules/constructorCondicion';
+export * from './rules/contextoIndicador';
 export * from './services/GeneradorPeriodos';
 export * from './services/ProductoCartesiano';
 export * from './services/CalculadoraEstados';

@@ -60,7 +60,6 @@ export async function crearInfraestructura(
   const debounceMs = opciones.debounceMs ?? 500;
   const sync = new ParquetSyncService(db, rutas, debounceMs);
   const configuracion = new ConfiguracionRepositoryJson(rutas);
-  const exportacion = new ExportAnaliticoService(db, rutas, configuracion, debounceMs * 2);
 
   const indicadores = new IndicadorRepositoryDuckDb(db, sync);
   const atributos = new AtributoRepositoryDuckDb(db, sync);
@@ -71,6 +70,7 @@ export async function crearInfraestructura(
   const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
   const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
+  const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);
   const auditoria = new AuditoriaRepositoryDuckDb(db, sync);
   const configPortable = new ConfigPortableService(
     configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias

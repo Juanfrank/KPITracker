@@ -1,11 +1,13 @@
 import {
-  CalculadoraEstados, GeneradorPeriodos, ProductoCartesiano
+  CalculadoraEstados, GeneradorPeriodos, Periodicidad, ProductoCartesiano
 } from '@domain/index';
 import type {
-  DeadlineRuleRegistry, ElementoLista, EstadoPeriodo, EstadoSeguimiento, Periodicidad
+  Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, EstadoPeriodo,
+  EstadoSeguimiento, Indicador, Responsable
 } from '@domain/index';
 import type {
-  IConfiguracionRepository, IIndicadorRepository, IListaRepository, IResultadoRepository
+  ICatalogoRepository, IConfiguracionRepository, IDefinicionPeriodicidadRepository,
+  IIndicadorRepository, IListaRepository, IResultadoRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -19,7 +21,9 @@ export interface FilaTablero {
   fechaLimite: string | null;
   fechaCorte: string | null;
   ultimaActualizacion: string | null;
+  responsableId: string | null;
   responsable: string | null;
+  categoriaId: string | null;
   categoria: string | null;
   totalPeriodos: number;
   periodosCompletos: number;
@@ -47,25 +51,45 @@ export class ServicioSeguimiento extends ServicioBase {
     private readonly listas: IListaRepository,
     private readonly resultados: IResultadoRepository,
     private readonly configuracion: IConfiguracionRepository,
+    private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
+    private readonly responsablesRepo: ICatalogoRepository<Responsable>,
+    private readonly categoriasRepo: ICatalogoRepository<Categoria>,
     reglasFechaLimite: DeadlineRuleRegistry
   ) {
     super(ctx);
     this.calculadora = new CalculadoraEstados(reglasFechaLimite);
   }
 
+  private async definicionPara(
+    indicador: Indicador,
+    definiciones: Map<string, DefinicionPeriodicidad>
+  ): Promise<DefinicionPeriodicidad | undefined> {
+    if (indicador.periodicidad !== Periodicidad.Personalizada || !indicador.periodicidadPersonalizadaId) {
+      return undefined;
+    }
+    return definiciones.get(indicador.periodicidadPersonalizadaId);
+  }
+
   async tablero(): Promise<FilaTablero[]> {
-    const [config, indicadores, resumen, levantamientos] = await Promise.all([
+    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias] = await Promise.all([
       this.configuracion.obtener(),
       this.indicadores.listar(),
       this.resultados.resumenGlobal(),
-      this.resultados.listarLevantamientos()
+      this.resultados.listarLevantamientos(),
+      this.periodicidadesRepo.listar(),
+      this.responsablesRepo.listar(),
+      this.categoriasRepo.listar()
     ]);
+    const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
+    const nombreResponsable = new Map(responsables.map((r) => [r.id, r.nombre]));
+    const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaTablero[] = [];
 
     for (const indicador of indicadores) {
-      const totalCombinaciones = await this.totalCombinaciones(indicador.id, indicador.desagregaciones);
-      const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy);
+      const totalCombinaciones = await this.totalCombinaciones(indicador.desagregaciones);
+      const definicion = await this.definicionPara(indicador, definiciones);
+      const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
       const estados: EstadoPeriodo[] = periodos.map((periodo) => {
         const r = resumen.find((x) => x.indicadorId === indicador.id && x.periodoId === periodo.id);
         const lev = levantamientos.find((x) => x.indicadorId === indicador.id && x.periodoId === periodo.id);
@@ -103,8 +127,10 @@ export class ServicioSeguimiento extends ServicioBase {
         fechaLimite: pendiente?.fechaLimite ?? null,
         fechaCorte: pendiente?.fechaCorte ?? null,
         ultimaActualizacion: ultimas[ultimas.length - 1] ?? null,
-        responsable: indicador.responsable,
-        categoria: indicador.categoria,
+        responsableId: indicador.responsable,
+        responsable: indicador.responsable == null ? null : (nombreResponsable.get(indicador.responsable) ?? indicador.responsable),
+        categoriaId: indicador.categoria,
+        categoria: indicador.categoria == null ? null : (nombreCategoria.get(indicador.categoria) ?? indicador.categoria),
         totalPeriodos: estados.length,
         periodosCompletos: estados.filter((e) => e.estado === 'Completo').length
       });
@@ -118,12 +144,15 @@ export class ServicioSeguimiento extends ServicioBase {
     if (!indicador) return null;
     const config = await this.configuracion.obtener();
     const hoy = this.ctx.reloj.hoyIso();
-    const [resumen, levantamientos] = await Promise.all([
+    const [resumen, levantamientos, definicionesLista] = await Promise.all([
       this.resultados.resumenPorIndicador(indicadorId),
-      this.resultados.listarLevantamientos(indicadorId)
+      this.resultados.listarLevantamientos(indicadorId),
+      this.periodicidadesRepo.listar()
     ]);
-    const totalCombinaciones = await this.totalCombinaciones(indicadorId, indicador.desagregaciones);
-    const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy);
+    const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
+    const definicion = await this.definicionPara(indicador, definiciones);
+    const totalCombinaciones = await this.totalCombinaciones(indicador.desagregaciones);
+    const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
 
     const estados = periodos.map((periodo) => {
       const r = resumen.find((x) => x.periodoId === periodo.id);
@@ -148,7 +177,6 @@ export class ServicioSeguimiento extends ServicioBase {
   }
 
   private async totalCombinaciones(
-    _indicadorId: string,
     desagregaciones: string[]
   ): Promise<{ total: number; conExclusiones: (excluidas: string[]) => number }> {
     const elementosPorLista = new Map<string, ElementoLista[]>();

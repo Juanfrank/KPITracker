@@ -1,10 +1,11 @@
 import {
-  EntidadNoEncontradaError, GeneradorPeriodos, ProductoCartesiano, TipoDato,
-  ValidacionError, claveATexto
+  EntidadNoEncontradaError, GeneradorPeriodos, Periodicidad, ProductoCartesiano, TipoDato,
+  ValidacionError, calcularAgregadosCaptura, claveATexto, evaluarValidacionesCaptura
 } from '@domain/index';
-import type { ElementoLista, Levantamiento, Periodo, TypeRegistry } from '@domain/index';
+import type { DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Periodo, TypeRegistry } from '@domain/index';
 import type {
-  IConfiguracionRepository, IIndicadorRepository, IListaRepository, IResultadoRepository
+  IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
+  IListaRepository, IReglaRepository, IResultadoRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -25,13 +26,18 @@ export interface DatosCaptura {
   fechaCorte: string | null;
   desagregacionesDisponibles: Array<{ listaId: string; nombre: string; excluida: boolean }>;
   filas: FilaCaptura[];
+  /** Advertencias no bloqueantes (validación cruzada del levantamiento). */
+  advertencias: string[];
 }
 
 /**
  * Caso de uso central de la Recolección: arma la grilla de captura
  * (producto cartesiano + fila General + exclusiones temporales), y persiste
  * cada celda de forma automática (sin botón Guardar) con validación y
- * auditoría de valor anterior/nuevo.
+ * auditoría de valor anterior/nuevo. Evalúa además reglas `ValidacionCruzada`
+ * de entidad `Recoleccion` sobre agregados del levantamiento (General,
+ * Máximo, Mínimo, Suma, Promedio...), siempre como advertencias, nunca
+ * bloqueantes.
  */
 export class ServicioRecoleccion extends ServicioBase {
   private readonly generadorPeriodos = new GeneradorPeriodos();
@@ -43,9 +49,19 @@ export class ServicioRecoleccion extends ServicioBase {
     private readonly listas: IListaRepository,
     private readonly resultados: IResultadoRepository,
     private readonly configuracion: IConfiguracionRepository,
+    private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
+    private readonly reglasRepo: IReglaRepository,
     private readonly tipos: TypeRegistry
   ) {
     super(ctx);
+  }
+
+  /** Resuelve la definición de periodicidad personalizada del indicador, si aplica. */
+  private async definicionPara(indicador: Indicador): Promise<DefinicionPeriodicidad | undefined> {
+    if (indicador.periodicidad !== Periodicidad.Personalizada || !indicador.periodicidadPersonalizadaId) {
+      return undefined;
+    }
+    return (await this.periodicidadesRepo.obtener(indicador.periodicidadPersonalizadaId)) ?? undefined;
   }
 
   /** Períodos disponibles según periodicidad del indicador y año inicial global. */
@@ -53,7 +69,8 @@ export class ServicioRecoleccion extends ServicioBase {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
     const config = await this.configuracion.obtener();
-    return this.generadorPeriodos.periodosDisponibles(config.anioInicial, indicador.periodicidad, this.ctx.reloj.hoyIso());
+    const definicion = await this.definicionPara(indicador);
+    return this.generadorPeriodos.periodosDisponibles(config.anioInicial, indicador.periodicidad, this.ctx.reloj.hoyIso(), definicion);
   }
 
   async obtenerCaptura(indicadorId: string, periodoId: string): Promise<DatosCaptura> {
@@ -88,25 +105,31 @@ export class ServicioRecoleccion extends ServicioBase {
       };
     });
 
-    const etiquetaPeriodo = this.etiquetaPeriodo(periodoId);
+    const reglasRecoleccion = await this.reglasRepo.listar('Recoleccion');
+    const agregados = calcularAgregadosCaptura(filas.map((f) => ({ esGeneral: f.esGeneral, valor: f.valor })));
+    const advertencias = evaluarValidacionesCaptura(agregados, reglasRecoleccion);
+
+    const definicion = await this.definicionPara(indicador);
     return {
       indicadorId,
       periodoId,
-      periodoEtiqueta: etiquetaPeriodo,
+      periodoEtiqueta: this.etiquetaPeriodo(periodoId, definicion),
       fechaCorte: levantamiento?.fechaCorte ?? null,
       desagregacionesDisponibles: indicador.desagregaciones.map((listaId) => ({
         listaId,
         nombre: nombresListas.get(listaId) ?? listaId,
         excluida: excluidas.includes(listaId)
       })),
-      filas
+      filas,
+      advertencias
     };
   }
 
   /**
    * Persiste una celda (autoguardado). `valorCrudo` llega como texto de la
    * grilla o del portapapeles (pegado desde Excel) y se parsea con el tipo
-   * Decimal del TypeRegistry.
+   * Decimal del TypeRegistry. Retorna, además del valor persistido, las
+   * advertencias de validación cruzada recalculadas sobre el levantamiento.
    */
   async guardarCelda(
     indicadorId: string,
@@ -114,7 +137,7 @@ export class ServicioRecoleccion extends ServicioBase {
     claveDesagregacion: string,
     valorCrudo: string,
     observacion: string | null = null
-  ): Promise<{ valor: number | null }> {
+  ): Promise<{ valor: number | null; advertencias: string[] }> {
     const parseado = this.tipos.obtener(TipoDato.Decimal).parse(valorCrudo);
     if (!parseado.ok) throw new ValidacionError(parseado.error ?? 'Valor inválido.');
     const valor = parseado.valor as number | null;
@@ -136,7 +159,9 @@ export class ServicioRecoleccion extends ServicioBase {
     await this.auditar('Modificar', 'Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`,
       'valor', anterior?.valor ?? null, valor);
     this.sincronizarExport();
-    return { valor };
+
+    const captura = await this.obtenerCaptura(indicadorId, periodoId);
+    return { valor, advertencias: captura.advertencias };
   }
 
   /** La fecha de corte es única por indicador+período y obligatoria para completar. */
@@ -184,12 +209,12 @@ export class ServicioRecoleccion extends ServicioBase {
     });
   }
 
-  private etiquetaPeriodo(periodoId: string): string {
+  private etiquetaPeriodo(periodoId: string, definicion?: DefinicionPeriodicidad): string {
     const [anio, periodicidad, numero] = periodoId.split('-');
     try {
       return (
-        this.generadorPeriodos.periodosDelAnio(Number(anio), periodicidad as never)[Number(numero) - 1]?.etiqueta ??
-        periodoId
+        this.generadorPeriodos.periodosDelAnio(Number(anio), periodicidad as Periodicidad, definicion)[Number(numero) - 1]
+          ?.etiqueta ?? periodoId
       );
     } catch {
       return periodoId;

@@ -6,6 +6,8 @@ import { ServicioConfiguracion } from '@application/use-cases/ServicioConfigurac
 import {
   ServicioAtributos, ServicioIndicadores, ServicioListas, ServicioMetas, ServicioReglas
 } from '@application/use-cases/ServicioCatalogos';
+import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalogoGenerico';
+import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodicidades';
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import type { CanalesIpc, NombreCanal } from '@shared/ipc';
@@ -34,13 +36,21 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
   };
 
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
-  const indicadores = new ServicioIndicadores(ctx, infra.indicadores);
+  const indicadores = new ServicioIndicadores(ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos);
   const atributos = new ServicioAtributos(ctx, infra.atributos);
   const listas = new ServicioListas(ctx, infra.listas);
   const metas = new ServicioMetas(ctx, infra.metas);
   const reglas = new ServicioReglas(ctx, infra.reglas);
-  const recoleccion = new ServicioRecoleccion(ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, tipos);
-  const seguimiento = new ServicioSeguimiento(ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, reglasFechaLimite);
+  const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
+  const responsables = new ServicioCatalogoGenerico(ctx, infra.responsables, 'Responsable');
+  const categorias = new ServicioCatalogoGenerico(ctx, infra.categorias, 'Categoria');
+  const recoleccion = new ServicioRecoleccion(
+    ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos
+  );
+  const seguimiento = new ServicioSeguimiento(
+    ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
+    infra.periodicidades, infra.responsables, infra.categorias, reglasFechaLimite
+  );
 
   const manejadores: Aplicacion['manejadores'] = {
     'config:obtener': () => configuracion.obtener(),
@@ -49,7 +59,7 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
 
     'indicadores:listar': () => indicadores.listar(),
     'indicadores:obtener': ({ id }) => indicadores.obtener(id),
-    'indicadores:guardar': (indicador) => indicadores.guardar(indicador),
+    'indicadores:guardar': (input) => indicadores.guardar(input),
     'indicadores:eliminar': ({ id }) => indicadores.eliminar(id),
 
     'atributos:listar': (payload) => atributos.listar(payload?.entidad),
@@ -72,6 +82,18 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'reglas:listar': (payload) => reglas.listar(payload?.entidad),
     'reglas:guardar': (regla) => reglas.guardar(regla),
     'reglas:eliminar': ({ id }) => reglas.eliminar(id),
+
+    'periodicidades:listar': () => periodicidades.listar(),
+    'periodicidades:guardar': (definicion) => periodicidades.guardar(definicion),
+    'periodicidades:eliminar': ({ id }) => periodicidades.eliminar(id),
+
+    'responsables:listar': () => responsables.listar(),
+    'responsables:guardar': (responsable) => responsables.guardar(responsable),
+    'responsables:eliminar': ({ id }) => responsables.eliminar(id),
+
+    'categorias:listar': () => categorias.listar(),
+    'categorias:guardar': (categoria) => categorias.guardar(categoria),
+    'categorias:eliminar': ({ id }) => categorias.eliminar(id),
 
     'recoleccion:periodos': ({ indicadorId }) => recoleccion.periodosDisponibles(indicadorId),
     'recoleccion:captura': ({ indicadorId, periodoId }) => recoleccion.obtenerCaptura(indicadorId, periodoId),

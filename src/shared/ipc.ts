@@ -1,9 +1,10 @@
 import type {
-  Atributo, ConfiguracionGeneral, ElementoLista, Indicador, Lista, Meta,
-  Periodo, RegistroAuditoria, ReglaNegocio
+  Atributo, Categoria, ConfiguracionGeneral, DefinicionPeriodicidad, ElementoLista, Indicador, Lista, Meta,
+  Periodo, RegistroAuditoria, ReglaNegocio, Responsable
 } from '@domain/index';
 import type { FiltroAuditoria, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
+import type { GuardarIndicadorInput } from '@application/use-cases/ServicioCatalogos';
 import type { DetalleSeguimiento, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 
@@ -18,7 +19,7 @@ export interface CanalesIpc {
 
   'indicadores:listar': { req: void; res: Indicador[] };
   'indicadores:obtener': { req: { id: string }; res: Indicador | null };
-  'indicadores:guardar': { req: Indicador; res: Indicador };
+  'indicadores:guardar': { req: GuardarIndicadorInput; res: Indicador };
   'indicadores:eliminar': { req: { id: string }; res: void };
 
   'atributos:listar': { req: { entidad?: string } | void; res: Atributo[] };
@@ -42,11 +43,23 @@ export interface CanalesIpc {
   'reglas:guardar': { req: ReglaNegocio; res: ReglaNegocio };
   'reglas:eliminar': { req: { id: string }; res: void };
 
+  'periodicidades:listar': { req: void; res: DefinicionPeriodicidad[] };
+  'periodicidades:guardar': { req: DefinicionPeriodicidad; res: DefinicionPeriodicidad };
+  'periodicidades:eliminar': { req: { id: string }; res: void };
+
+  'responsables:listar': { req: void; res: Responsable[] };
+  'responsables:guardar': { req: Responsable; res: Responsable };
+  'responsables:eliminar': { req: { id: string }; res: void };
+
+  'categorias:listar': { req: void; res: Categoria[] };
+  'categorias:guardar': { req: Categoria; res: Categoria };
+  'categorias:eliminar': { req: { id: string }; res: void };
+
   'recoleccion:periodos': { req: { indicadorId: string }; res: Periodo[] };
   'recoleccion:captura': { req: { indicadorId: string; periodoId: string }; res: DatosCaptura };
   'recoleccion:guardarCelda': {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string; valorCrudo: string; observacion?: string | null };
-    res: { valor: number | null };
+    res: { valor: number | null; advertencias: string[] };
   };
   'recoleccion:fechaCorte': { req: { indicadorId: string; periodoId: string; fechaCorte: string | null }; res: void };
   'recoleccion:exclusion': { req: { indicadorId: string; periodoId: string; listaId: string; excluir: boolean }; res: void };
@@ -74,6 +87,9 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'listas:listar', 'listas:guardar', 'listas:eliminar', 'listas:elementos', 'listas:guardarElemento', 'listas:eliminarElemento',
   'metas:listar', 'metas:guardar', 'metas:eliminar',
   'reglas:listar', 'reglas:guardar', 'reglas:eliminar',
+  'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
+  'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
+  'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
   'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:exclusion',
   'seguimiento:tablero', 'seguimiento:detalle',
   'exportacion:regenerar', 'exportacion:ruta',
