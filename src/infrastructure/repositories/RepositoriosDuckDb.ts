@@ -213,6 +213,13 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
     return fila ? aLevantamiento(fila) : null;
   }
 
+  async listarLevantamientos(indicadorId?: string): Promise<Levantamiento[]> {
+    const filas = indicadorId
+      ? await this.db.all('SELECT * FROM levantamientos WHERE indicador_id = ?', [indicadorId])
+      : await this.db.all('SELECT * FROM levantamientos');
+    return filas.map(aLevantamiento);
+  }
+
   async guardarLevantamiento(levantamiento: Levantamiento): Promise<void> {
     await this.db.run(
       `INSERT INTO levantamientos (id, indicador_id, periodo_id, anio, fecha_corte, desagregaciones_excluidas, creado_en, actualizado_en)

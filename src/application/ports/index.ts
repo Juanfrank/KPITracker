@@ -94,6 +94,7 @@ export interface IResultadoRepository {
   obtenerPorIndicadorPeriodo(indicadorId: string, periodoId: string): Promise<Resultado[]>;
   guardar(resultado: Resultado): Promise<void>;
   obtenerLevantamiento(indicadorId: string, periodoId: string): Promise<Levantamiento | null>;
+  listarLevantamientos(indicadorId?: string): Promise<Levantamiento[]>;
   guardarLevantamiento(levantamiento: Levantamiento): Promise<void>;
   resumenPorIndicador(indicadorId: string): Promise<ResumenPeriodo[]>;
   resumenGlobal(): Promise<ResumenPeriodo[]>;
