@@ -93,12 +93,13 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
 
     marcar('guardando');
     try {
-      const { valor } = await invocar('recoleccion:guardarCelda', {
+      const { valor, advertencias } = await invocar('recoleccion:guardarCelda', {
         indicadorId, periodoId, claveDesagregacion, valorCrudo
       });
       set((s) => ({
         captura: s.captura && {
           ...s.captura,
+          advertencias,
           filas: s.captura.filas.map((f) =>
             f.claveDesagregacion === claveDesagregacion ? { ...f, valor, actualizadoEn: new Date().toISOString() } : f
           )

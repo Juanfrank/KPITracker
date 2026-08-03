@@ -108,6 +108,14 @@ export function RecoleccionPage(): React.JSX.Element {
         )}
       </div>
 
+      {captura && captura.advertencias.length > 0 && (
+        <div className="aviso info" data-testid="advertencias-captura">
+          {captura.advertencias.map((a) => (
+            <div key={a}>⚠ {a}</div>
+          ))}
+        </div>
+      )}
+
       {!captura ? (
         <Vacio icono="▦" mensaje="Seleccione un indicador y un período" detalle="para iniciar la captura de resultados" />
       ) : (
