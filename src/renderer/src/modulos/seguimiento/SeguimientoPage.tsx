@@ -22,6 +22,8 @@ export function SeguimientoPage(): React.JSX.Element {
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroPeriodicidad, setFiltroPeriodicidad] = useState('todas');
+  const [filtroResponsable, setFiltroResponsable] = useState('todos');
+  const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [filtroTexto, setFiltroTexto] = useState('');
   const [detalle, setDetalle] = useState<DetalleSeguimiento | null>(null);
   const { navegar } = useNavegacion();
@@ -33,10 +35,14 @@ export function SeguimientoPage(): React.JSX.Element {
   }, []);
 
   const periodicidades = [...new Set(filas.map((f) => f.periodicidad))];
+  const responsablesUnicos = [...new Map(filas.filter((f) => f.responsableId).map((f) => [f.responsableId as string, f.responsable ?? f.responsableId as string])).entries()];
+  const categoriasUnicas = [...new Map(filas.filter((f) => f.categoriaId).map((f) => [f.categoriaId as string, f.categoria ?? f.categoriaId as string])).entries()];
   const visibles = filas.filter(
     (f) =>
       (filtroEstado === 'todos' || f.estado === filtroEstado) &&
       (filtroPeriodicidad === 'todas' || f.periodicidad === filtroPeriodicidad) &&
+      (filtroResponsable === 'todos' || f.responsableId === filtroResponsable) &&
+      (filtroCategoria === 'todas' || f.categoriaId === filtroCategoria) &&
       f.nombre.toLowerCase().includes(filtroTexto.toLowerCase())
   );
 
@@ -66,6 +72,14 @@ export function SeguimientoPage(): React.JSX.Element {
           <option value="todas">Todas las periodicidades</option>
           {periodicidades.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
+        <select value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)} style={{ width: 'auto' }} data-testid="filtro-responsable">
+          <option value="todos">Todos los responsables</option>
+          {responsablesUnicos.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+        </select>
+        <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ width: 'auto' }} data-testid="filtro-categoria">
+          <option value="todas">Todas las categorías</option>
+          {categoriasUnicas.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+        </select>
         <div className="separador" />
         <input type="search" placeholder="Buscar indicador…" value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
       </div>
@@ -77,6 +91,8 @@ export function SeguimientoPage(): React.JSX.Element {
               <th>Indicador</th>
               <th>Estado</th>
               <th>Periodicidad</th>
+              <th>Responsable</th>
+              <th>Categoría</th>
               <th>Período pendiente</th>
               <th>Fecha límite</th>
               <th>Fecha de corte</th>
@@ -95,6 +111,8 @@ export function SeguimientoPage(): React.JSX.Element {
                 <td><strong>{f.nombre}</strong></td>
                 <td><ChipEstado estado={f.estado} /></td>
                 <td>{f.periodicidad}</td>
+                <td className="texto-suave">{f.responsable ?? '—'}</td>
+                <td className="texto-suave">{f.categoria ?? '—'}</td>
                 <td>{f.periodoPendiente ?? '—'}</td>
                 <td>{f.fechaLimite ?? '—'}</td>
                 <td>{f.fechaCorte ?? '—'}</td>
@@ -106,7 +124,7 @@ export function SeguimientoPage(): React.JSX.Element {
             ))}
             {visibles.length === 0 && (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={10}>
                   {cargando ? (
                     <Vacio mensaje="Cargando…" />
                   ) : (
