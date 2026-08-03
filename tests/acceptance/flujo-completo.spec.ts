@@ -107,9 +107,12 @@ test('la capa analítica Parquet quedó sincronizada en disco', async () => {
   expect(existsSync(join(dataDir, 'Dimensions', 'DimPeriodo.parquet'))).toBe(true);
 });
 
-test('el tema oscuro se puede alternar', async () => {
+test('el tema claro/oscuro se puede alternar', async () => {
+  // El tema persiste en localStorage entre ejecuciones: se parte del estado actual.
+  const inicial = await pagina.locator('html').getAttribute('data-tema');
+  const contrario = inicial === 'claro' ? 'oscuro' : 'claro';
   await pagina.locator('.sidebar .pie .boton').first().click();
-  await expect(pagina.locator('html')).toHaveAttribute('data-tema', 'oscuro');
+  await expect(pagina.locator('html')).toHaveAttribute('data-tema', contrario);
   await pagina.locator('.sidebar .pie .boton').first().click();
-  await expect(pagina.locator('html')).toHaveAttribute('data-tema', 'claro');
+  await expect(pagina.locator('html')).toHaveAttribute('data-tema', inicial ?? 'claro');
 });
