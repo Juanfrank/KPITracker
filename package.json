@@ -67,6 +67,7 @@
     "asarUnpack": [
       "node_modules/@duckdb/**"
     ],
+    "publish": null,
     "toolsets": {
       "wine": "1.0.1"
     },
