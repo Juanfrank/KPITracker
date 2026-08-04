@@ -81,7 +81,7 @@ export async function crearInfraestructura(
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
   const automatizaciones = new AutomatizacionIndicadorRepositoryDuckDb(db, sync);
   const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryDuckDb(db, sync);
-  const conectorOrigen = new ConectorOrigenFactory();
+  const conectorOrigen = new ConectorOrigenFactory((origen) => origenesAutomaticos.guardar(origen));
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
   const adjuntos = new AdjuntoRepositoryDuckDb(db, sync);
   const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);

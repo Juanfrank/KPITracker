@@ -4,6 +4,8 @@ import { URL, URLSearchParams } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 import type { IConectorOrigen, ResultadoPrueba, ResultadoTabular } from '@application/ports/index';
 import type { OrigenAutomatico } from '@domain/index';
+import { obtenerTokenMicrosoftInteractivo } from '../auth/AutenticadorMicrosoft';
+import type { GuardarOrigen } from '../auth/AutenticadorMicrosoft';
 
 const TIEMPO_MS = 15000;
 const NS_XMLA = 'urn:schemas-microsoft-com:xml-analysis';
@@ -115,9 +117,17 @@ async function obtenerTokenOAuth2(origen: OrigenAutomatico): Promise<string> {
   return datos.access_token;
 }
 
-/** Cabecera de autenticación a usar en la petición SOAP: OAuth2 (Bearer) si está configurado, si no Basic, si no ninguna. */
-async function cabeceraAutenticacion(origen: OrigenAutomatico): Promise<Record<string, string>> {
+/**
+ * Cabecera de autenticación a usar en la petición SOAP: Microsoft
+ * (inicio de sesión interactivo, delegado) si está configurado, si no
+ * OAuth2 Client Credentials (app-únicamente), si no Basic, si no ninguna.
+ */
+async function cabeceraAutenticacion(origen: OrigenAutomatico, guardarOrigen?: GuardarOrigen): Promise<Record<string, string>> {
   const cfg = origen.configuracion;
+  if (cfg.autenticacion === 'microsoft') {
+    const token = await obtenerTokenMicrosoftInteractivo(origen, guardarOrigen);
+    return { Authorization: `Bearer ${token}` };
+  }
   if (cfg.autenticacion === 'oauth2') {
     const token = await obtenerTokenOAuth2(origen);
     return { Authorization: `Bearer ${token}` };
@@ -128,9 +138,9 @@ async function cabeceraAutenticacion(origen: OrigenAutomatico): Promise<Record<s
   return {};
 }
 
-async function enviarSoap(origen: OrigenAutomatico, sobreXml: string): Promise<string> {
+async function enviarSoap(origen: OrigenAutomatico, sobreXml: string, guardarOrigen?: GuardarOrigen): Promise<string> {
   const endpoint = origen.configuracion.servidor ?? '';
-  const auth = await cabeceraAutenticacion(origen);
+  const auth = await cabeceraAutenticacion(origen, guardarOrigen);
   const cabeceras: Record<string, string> = {
     'Content-Type': 'text/xml; charset=utf-8',
     SOAPAction: `"${NS_XMLA}:Execute"`,
@@ -167,19 +177,23 @@ function textoFalla(xml: string): string {
 /**
  * Conector de mejor esfuerzo para orígenes XMLA (SSAS): sin ADOMD.NET
  * disponible fuera de Windows, se implementa como cliente SOAP crudo.
- * Soporta autenticación Basic (usuario/contraseña) y OAuth2 vía Client
- * Credentials (tokenUrl/clienteId/clienteSecreto/scope) — esta última es la
- * requerida por Power BI Premium/Fabric XMLA endpoint y Azure Analysis
- * Services, que ya no aceptan Basic. Aplana únicamente el caso común de un
- * dataset multidimensional de 2 ejes (Columns=medidas, Rows=tuplas); MDX
- * con más ejes o resultados vacíos no se soportan y producen un error
- * explícito.
+ * Soporta tres formas de autenticación: Basic (usuario/contraseña), OAuth2
+ * vía Client Credentials (tokenUrl/clienteId/clienteSecreto/scope, para
+ * automatización desatendida app-únicamente) y Microsoft con inicio de
+ * sesión interactivo (tenantId/clienteId/scope, delegado — el usuario
+ * inicia sesión con su propia cuenta en una ventana emergente). Power BI
+ * Premium/Fabric XMLA endpoint y Azure Analysis Services ya no aceptan
+ * Basic. Aplana únicamente el caso común de un dataset multidimensional de
+ * 2 ejes (Columns=medidas, Rows=tuplas); MDX con más ejes o resultados
+ * vacíos no se soportan y producen un error explícito.
  */
 export class ConectorXmla implements Pick<IConectorOrigen, 'probar' | 'ejecutar'> {
+  constructor(private readonly guardarOrigen?: GuardarOrigen) {}
+
   async probar(origen: OrigenAutomatico): Promise<ResultadoPrueba> {
     if (!origen.configuracion.servidor) return { ok: false, mensaje: 'Falta la URL del servidor XMLA.' };
     try {
-      const respuesta = await enviarSoap(origen, SOBRE_DISCOVER);
+      const respuesta = await enviarSoap(origen, SOBRE_DISCOVER, this.guardarOrigen);
       if (/soap:Fault|<Fault/i.test(respuesta)) return { ok: false, mensaje: textoFalla(respuesta) };
       return { ok: true, mensaje: 'Conexión XMLA exitosa (DISCOVER_DATASOURCES).' };
     } catch (error) {
@@ -188,7 +202,7 @@ export class ConectorXmla implements Pick<IConectorOrigen, 'probar' | 'ejecutar'
   }
 
   async ejecutar(origen: OrigenAutomatico, script: string): Promise<ResultadoTabular> {
-    const respuesta = await enviarSoap(origen, sobreExecute(origen.configuracion.catalogo, script));
+    const respuesta = await enviarSoap(origen, sobreExecute(origen.configuracion.catalogo, script), this.guardarOrigen);
     if (/soap:Fault|<Fault/i.test(respuesta)) throw new Error(textoFalla(respuesta));
     return this.aplanar(respuesta);
   }

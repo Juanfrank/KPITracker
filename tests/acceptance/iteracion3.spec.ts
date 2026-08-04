@@ -81,6 +81,28 @@ test('probar la conexión de un origen automático informa el resultado', async 
   await expect(pagina.getByTestId('origen-API institucional')).toBeVisible();
 });
 
+test('un origen XMLA puede configurarse con inicio de sesión interactivo de Microsoft', async () => {
+  // No se hace click en "Probar conexión": abriría una ventana real de login de
+  // Microsoft que nunca se completaría en este entorno. La cobertura del
+  // intercambio/renovación de token real vive en
+  // tests/integration/AutenticadorMicrosoft.test.ts; esta prueba solo verifica
+  // que la UI ofrece el modo y persiste su configuración correctamente.
+  await pagina.getByTestId('nav-admin').click();
+  await pagina.getByTestId('nuevo-origen').click();
+  await pagina.getByTestId('origen-nombre').fill('SSAS corporativo');
+  await pagina.getByTestId('origen-tipo').selectOption('XMLA');
+  await pagina.getByTestId('origen-xmla-autenticacion').selectOption('microsoft');
+  await pagina.getByTestId('origen-campo-tenantId').fill('mi-tenant.onmicrosoft.com');
+  await pagina.getByTestId('origen-campo-clienteId').fill('11111111-2222-3333-4444-555555555555');
+  await pagina.getByTestId('guardar-origen').click();
+  await expect(pagina.getByTestId('origen-SSAS corporativo')).toBeVisible();
+
+  await pagina.getByTestId('origen-SSAS corporativo').click();
+  await expect(pagina.getByTestId('origen-xmla-autenticacion')).toHaveValue('microsoft');
+  await expect(pagina.getByTestId('origen-campo-tenantId')).toHaveValue('mi-tenant.onmicrosoft.com');
+  await pagina.getByLabel('Cerrar panel').click();
+});
+
 test('configurar la obtención automática de un indicador desde el modal habilita el botón en Recolección', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('indicador-Cumplimiento de plazos').click();

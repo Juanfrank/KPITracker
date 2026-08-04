@@ -20,8 +20,10 @@ function origenVacio(): OrigenAutomatico {
   };
 }
 
+type CampoConfig = { clave: string; etiqueta: string; sensible?: boolean };
+
 /** Campos de configuración específicos por tipo de origen (clave dentro de `configuracion`, con máscara para credenciales). */
-const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, Array<{ clave: string; etiqueta: string; sensible?: boolean }>> = {
+const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, CampoConfig[]> = {
   XMLA: [
     { clave: 'servidor', etiqueta: 'URL del servidor XMLA' },
     { clave: 'catalogo', etiqueta: 'Catálogo / cubo' }
@@ -41,20 +43,27 @@ const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, Array<{ clave: string; etiqu
 };
 
 /**
- * XMLA admite dos formas de autenticación (campo `configuracion.autenticacion`):
- * Basic (usuario/contraseña) u OAuth2 vía Client Credentials — esta última
- * requerida por Power BI Premium/Fabric XMLA endpoint y Azure Analysis
- * Services, que ya no aceptan Basic.
+ * XMLA admite tres formas de autenticación (campo `configuracion.autenticacion`):
+ * Basic (usuario/contraseña), OAuth2 vía Client Credentials (app-únicamente,
+ * para automatización desatendida) y Microsoft con inicio de sesión
+ * interactivo (delegado: el usuario se autentica con su propia cuenta al
+ * probar la conexión). Power BI Premium/Fabric XMLA endpoint y Azure
+ * Analysis Services ya no aceptan Basic.
  */
-const CAMPOS_XMLA_BASIC = [
+const CAMPOS_XMLA_BASIC: CampoConfig[] = [
   { clave: 'usuario', etiqueta: 'Usuario' },
   { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
 ];
-const CAMPOS_XMLA_OAUTH2 = [
+const CAMPOS_XMLA_OAUTH2: CampoConfig[] = [
   { clave: 'tokenUrl', etiqueta: 'URL del token (token endpoint)' },
   { clave: 'clienteId', etiqueta: 'Client ID' },
   { clave: 'clienteSecreto', etiqueta: 'Client Secret', sensible: true },
   { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default)' }
+];
+const CAMPOS_XMLA_MICROSOFT: CampoConfig[] = [
+  { clave: 'tenantId', etiqueta: 'Tenant ID (o "organizations")' },
+  { clave: 'clienteId', etiqueta: 'Client ID (app registrada como cliente público)' },
+  { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default offline_access)' }
 ];
 
 const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
@@ -357,7 +366,8 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       </div>
       <p className="texto-suave">
         Conexiones externas (XMLA, SQL, API) para obtener resultados de indicadores sin captura manual. XMLA se soporta de
-        mejor esfuerzo (consultas MDX de 2 ejes, autenticación Basic u OAuth2; sin Windows/NTLM).
+        mejor esfuerzo (consultas MDX de 2 ejes, autenticación Basic, OAuth2 o Microsoft con inicio de sesión; sin
+        Windows/NTLM).
       </p>
       <div className="tabla-envoltura">
         <table className="tabla">
@@ -451,13 +461,21 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                   data-testid="origen-xmla-autenticacion"
                 >
                   <option value="basic">Basic (usuario/contraseña)</option>
-                  <option value="oauth2">OAuth2 (Client Credentials)</option>
+                  <option value="oauth2">OAuth2 (Client Credentials, app-únicamente)</option>
+                  <option value="microsoft">Microsoft (iniciar sesión, delegado)</option>
                 </select>
                 <span className="texto-suave">
-                  Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2; SSAS on-premise clásico suele usar Basic.
+                  Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele
+                  usar Basic. &quot;Microsoft&quot; abre una ventana para iniciar sesión con su propia cuenta al probar la
+                  conexión — útil cuando no hay una app registrada para Client Credentials o se requiere acceso delegado.
                 </span>
               </Campo>
-              {(editando.configuracion.autenticacion === 'oauth2' ? CAMPOS_XMLA_OAUTH2 : CAMPOS_XMLA_BASIC).map((campo) => (
+              {(editando.configuracion.autenticacion === 'microsoft'
+                ? CAMPOS_XMLA_MICROSOFT
+                : editando.configuracion.autenticacion === 'oauth2'
+                  ? CAMPOS_XMLA_OAUTH2
+                  : CAMPOS_XMLA_BASIC
+              ).map((campo) => (
                 <Campo key={campo.clave} etiqueta={campo.etiqueta}>
                   <input
                     type={campo.sensible ? 'password' : 'text'}
@@ -476,6 +494,12 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               {probando ? 'Probando…' : 'Probar conexión'}
             </button>
           </div>
+          {editando.tipo === 'XMLA' && editando.configuracion.autenticacion === 'microsoft' && (
+            <p className="texto-suave" style={{ margin: 0 }}>
+              &quot;Probar conexión&quot; abrirá una ventana para iniciar sesión con Microsoft la primera vez (y cada vez que
+              la sesión guardada haya vencido); las siguientes veces se reutiliza el token en silencio.
+            </p>
+          )}
           {resultadoPrueba && (
             <div className={`aviso ${resultadoPrueba.ok ? 'exito' : 'error'}`} data-testid="origen-resultado-prueba">
               {resultadoPrueba.mensaje}
