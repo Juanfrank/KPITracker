@@ -18,18 +18,39 @@ erDiagram
     INDICADOR ||--o{ VALOR_ATRIBUTO : "atributos dinámicos"
     ATRIBUTO }o--o| LISTA : "tipo SelectionList"
     REGLA_NEGOCIO }o--o| ATRIBUTO : "atributo objetivo"
+    INDICADOR }o--o| DEFINICION_PERIODICIDAD : "si periodicidad = Personalizada"
+    INDICADOR }o--o| RESPONSABLE : asignado
+    INDICADOR }o--o| CATEGORIA : clasificado
 
     INDICADOR {
         string id PK
         string nombre
         string definicion
         string periodicidad
+        string periodicidad_personalizada_id FK "si periodicidad = Personalizada"
         double linea_base
         double meta_global
         json desagregaciones "ids de listas"
         string estado
-        string responsable "preparado, sin flujo"
-        string categoria "preparado, sin flujo"
+        string responsable FK "id de Responsable"
+        string categoria FK "id de Categoria"
+    }
+    DEFINICION_PERIODICIDAD {
+        string id PK
+        string nombre
+        json cortes "numero, etiqueta, mes_inicio, mes_fin — cubre ene-dic sin huecos ni solapes"
+    }
+    RESPONSABLE {
+        string id PK
+        string nombre
+        string correo
+        bool activo
+    }
+    CATEGORIA {
+        string id PK
+        string nombre
+        string descripcion
+        bool activo
     }
     ATRIBUTO {
         string id PK
@@ -96,7 +117,9 @@ erDiagram
     }
     REGLA_NEGOCIO {
         string id PK
+        string entidad "Indicador | Recoleccion"
         string tipo "Visibilidad/Obligatoriedad/ValidacionCruzada"
+        string atributo_objetivo_id FK "solo Visibilidad/Obligatoriedad sobre Indicador"
         json condicion "AST"
         string mensaje_error
     }
@@ -141,7 +164,7 @@ erDiagram
 ```
 
 - **Grano de `FactResultados`**: indicador × período × combinación de desagregación (incluida la fila `GENERAL`).
-- **`DimPeriodo`** se genera para todas las periodicidades desde el año inicial (id estable `AAAA-Periodicidad-NN`).
+- **`DimPeriodo`** se genera para todas las periodicidades estándar desde el año inicial (id estable `AAAA-Periodicidad-NN`), más los períodos de cada `DefinicionPeriodicidad` efectivamente usada por algún indicador (`AAAA-Personalizada-NN`). Nota: dos definiciones distintas podrían producir el mismo `periodo_id` si comparten año y número de corte; no genera ambigüedad en los hechos porque su grano incluye `indicador_id` (ver roadmap para una futura desambiguación si se requiriera una `DimPeriodo` libre de colisiones).
 - **`DimFecha`** es un calendario continuo (día, mes, trimestre, día de semana ISO, año-mes) generado con `generate_series` de DuckDB.
 - Las claves surrogadas (`*_key`) se asignan al materializar las dimensiones; los hechos conservan además las claves naturales para trazabilidad.
 
@@ -156,6 +179,9 @@ erDiagram
     Listas.parquet
     ElementosLista.parquet
     Metas.parquet
+    Periodicidades.parquet       ← definiciones de periodicidad Personalizada (cortes)
+    Responsables.parquet
+    Categorias.parquet
   /Dimensions                    ← regeneradas en cada exportación
     DimIndicador.parquet  DimPeriodo.parquet  DimFecha.parquet
     DimDesagregacion.parquet  DimLista.parquet  DimElementoLista.parquet  DimAtributo.parquet

@@ -9,7 +9,7 @@ Además del modelo normalizado interno, la aplicación mantiene una **segunda ca
 | Grupo | Columnas |
 |---|---|
 | Claves técnicas | `resultado_id`, `indicador_id`, `periodo_id` |
-| Atributos del indicador | `indicador`, `definicion`, `periodicidad`, `estado`, `responsable`, `categoria`, `unidad_medida` |
+| Atributos del indicador | `indicador`, `definicion`, `periodicidad`, `estado`, `responsable`, `categoria`, `unidad_medida` — `responsable`/`categoria` llevan el **nombre** resuelto desde el catálogo (no el id técnico) |
 | Tiempo | `anio`, `periodo` (etiqueta legible), `fecha_corte` |
 | Desagregación | `es_general` (bool), `desagregacion` (clave canónica) y **una columna por lista de desagregación** con la descripción del elemento (`Sexo`, `Provincia`, …); las filas General llevan `Total` |
 | Medidas | `valor`, `linea_base`, `meta` |
@@ -19,6 +19,8 @@ Además del modelo normalizado interno, la aplicación mantiene una **segunda ca
 Formatos: **Parquet siempre** (`/Data/Export/ResultadosAnalitico.parquet`); **CSV UTF-8 opcional**, activable en Configuración General.
 
 Las columnas de desagregación se **expanden dinámicamente**: al agregar una desagregación a cualquier indicador, la próxima regeneración incluye la nueva columna. En Power BI no se requieren relaciones: la tabla se consume tal cual. Para modelos avanzados, las dimensiones del star schema (`/Data/Dimensions`) también están disponibles.
+
+Para indicadores con periodicidad **Personalizada**, el campo `periodo` (etiqueta legible) se resuelve contra la `DefinicionPeriodicidad` del indicador (vía `periodicidad_personalizada_id`, incluido internamente en la consulta), y `DimPeriodo` incorpora los cortes de cada definición efectivamente en uso.
 
 ## 2. Estrategia de sincronización automática
 

@@ -21,9 +21,9 @@ Convenciones globales de UX: navegación por teclado, autoguardado (sin botón G
    clic en fila → panel lateral con el detalle por período → "Ir a la captura"
 ```
 
-- Columnas: Nombre, Estado, Periodicidad, Período pendiente, Fecha límite, Fecha de corte, Progreso (períodos completos/total), Última actualización. `Responsable` está en el modelo (arquitectura preparada) y se añadirá como columna cuando exista el flujo.
+- Columnas: Nombre, Estado, Periodicidad, Responsable, Categoría, Período pendiente, Fecha límite, Fecha de corte, Progreso (períodos completos/total), Última actualización.
 - **Estados** (`Pendiente / En progreso / Completo / Vencido / No aplica`) calculados dinámicamente por `CalculadoraEstados`: fecha actual + regla de fecha límite + periodicidad + resultados registrados + fecha de corte. Nunca un booleano persistido.
-- Filtros: por estado (chips con contador), periodicidad, texto. Por responsable/categoría: arquitectura preparada.
+- Filtros: por estado (chips con contador), periodicidad, **responsable**, **categoría** (ambos como select derivado de los catálogos y de los indicadores presentes en el tablero), texto.
 - Un período está **Completo** solo si todas sus combinaciones tienen valor **y** existe fecha de corte.
 
 ## 2. Recolección
@@ -48,15 +48,19 @@ Convenciones globales de UX: navegación por teclado, autoguardado (sin botón G
 - **Exclusión temporal**: chips de desagregación por levantamiento; al excluir, la grilla se regenera sin esa lista. No modifica el indicador.
 - **Fecha de corte**: única, obligatoria para completar el período, compartida por todas las desagregaciones.
 - Captura: edición rápida en celda; Enter o ↓/↑ confirman y navegan; pegado multi-fila desde Excel (TSV); validación en tiempo real (celda roja + tooltip con el error); indicadores visuales guardando/guardada; deshacer/rehacer con pila de cambios; autoguardado por celda (sin botón Guardar). El historial de cada celda queda en Auditoría.
+- **Advertencias de validación cruzada**: tras cada guardado se recalculan y muestran en un banner no bloqueante (nunca detienen el autoguardado). Incluyen una advertencia integrada por defecto —el resultado General es menor que el máximo de sus desagregaciones— más cualquier regla `ValidacionCruzada` configurada sobre la entidad `Recoleccion` (evaluada sobre agregados: General, Máximo, Mínimo, Suma, Promedio, CantidadConValor, TotalCombinaciones).
 
 ## 3. Configuración de Indicadores
 
 - Tabla con filtro por texto; panel lateral de edición.
 - Atributos mínimos obligatorios: **Nombre, Definición, Periodicidad, Línea base, Meta, Desagregaciones** (+ Estado, Unidad de medida). Validación al guardar con mensajes por campo.
-- Periodicidades: Mensual, Bimestral, Trimestral, Cuatrimestral, Semestral, Anual (Personalizada: preparada en el modelo, sin UI).
+- Periodicidades: Mensual, Bimestral, Trimestral, Cuatrimestral, Semestral, Anual, **Personalizada** (al seleccionarla aparece un selector de la `DefinicionPeriodicidad` a usar, administradas en Configuración General).
+- **Responsable** y **Categoría**: selectores sobre los catálogos administrados en Administración (opcionales).
 - **Desagregaciones por checkbox** sobre las listas activas.
 - **Metas**: alta/edición/baja por indicador; cada meta define valor, año de vigencia, desagregación (clave), periodicidad de medición y método de cálculo (Promedio, Sumatoria, Último valor, Máximo, Mínimo — registro extensible).
-- **Atributos adicionales**: los atributos dinámicos activos y visibles se renderizan en el panel y se persisten vía EAV.
+- **Atributos adicionales**: los atributos dinámicos activos y visibles se renderizan en el panel con el editor adecuado a su tipo de dato (`CampoAtributo`), y se persisten vía EAV como parte del mismo guardado del indicador (transaccional a nivel de caso de uso: si la validación falla, no se escribe nada).
+- **Validación en vivo**: visibilidad, obligatoriedad y validaciones de cada atributo dinámico se evalúan mientras se edita, con el mismo motor de reglas (dominio puro) que ejecutará el backend al guardar — nunca hay sorpresas entre lo que se ve y lo que se valida al enviar.
+- **Reglas `ValidacionCruzada`** (entidad Indicador) se evalúan al guardar; si alguna falla, se muestra su `mensajeError` y no se persiste el indicador ni sus atributos.
 
 ## 4. Configuración de Atributos
 
@@ -70,18 +74,21 @@ Convenciones globales de UX: navegación por teclado, autoguardado (sin botón G
 - Vista maestro-detalle: listas a la izquierda, elementos a la derecha con edición en línea.
 - Lista: nombre, descripción, estado, **versión** (se incrementa automáticamente al modificar), orden, jerárquica.
 - Elemento: código, descripción, orden, **padre** (solo listas jerárquicas), activo.
-- Las listas jerárquicas modelan África multinivel (País → Provincia → Municipio → …) y alimentan las desagregaciones.
+- Las listas jerárquicas modelan estructuras multinivel (País → Provincia → Municipio → …) y alimentan las desagregaciones.
 
 ## 6. Reglas de Negocio
 
-- Editor simple (atributo-operador-valor / comparación entre atributos) y avanzado (AST JSON).
-- Tipos: Visibilidad, Obligatoriedad, Validación cruzada (con mensaje de error configurable).
+- **Constructor visual** (`EditorCondicion`): atributo–operador–valor con toggle "comparar contra otro atributo"; para condiciones compuestas, agrupar cualquier nodo con Y/O, agregar/quitar hijos, negar con NO — sin editar JSON. **Avanzado**: edición directa del AST JSON como alternativa sincronizada.
+- Selector **"Se aplica sobre"**: `Indicador` (atributos del formulario) o `Recoleccion` (agregados del levantamiento); en este último caso el tipo se fija automáticamente en Validación cruzada.
+- Tipos: Visibilidad, Obligatoriedad (ambos con atributo objetivo, solo sobre Indicador), Validación cruzada (con mensaje de error configurable, sobre Indicador o Recoleccion).
+- La tabla de reglas muestra una descripción legible de la condición en vez del JSON crudo.
 
 ## 7. Configuración General
 
 - **Año inicial** (desde cuándo pueden levantarse resultados).
 - **Fecha límite de llenado**: selector de regla + parámetros generados dinámicamente desde los metadatos de la regla (día fijo, N-ésimo día de semana, último día de semana, primer/último día hábil, N días antes del cierre; nuevas reglas se registran sin tocar la UI).
 - Exportar CSV además de Parquet; nombre de la institución. Autoguardado con indicador de estado.
+- **Periodicidades personalizadas**: CRUD de `DefinicionPeriodicidad` — nombre, descripción y una lista de cortes (etiqueta + mes de inicio/fin), con validación en vivo de que cubran el año completo sin huecos ni solapes. Usadas por los indicadores con periodicidad Personalizada.
 
 ## 8. Exportación
 
@@ -95,4 +102,5 @@ Convenciones globales de UX: navegación por teclado, autoguardado (sin botón G
 ## 10. Administración
 
 - **Configuración portable**: exportar (descarga JSON versionado) / importar (con migración automática de versiones antiguas).
-- Nota sobre usuarios/responsables: un único usuario local en esta versión; multiusuario en el roadmap.
+- **Catálogos**: CRUD de Responsables (nombre, correo, activo) y Categorías (nombre, descripción, activo), asignables a indicadores y usados como filtro en Seguimiento.
+- Nota sobre usuarios: un único usuario local en esta versión; multiusuario en el roadmap.
