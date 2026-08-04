@@ -1,6 +1,8 @@
 node_modules/
 out/
 dist/
+release/
+release-packager/
 coverage/
 Data/
 *.duckdb

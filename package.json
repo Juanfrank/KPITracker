@@ -17,7 +17,8 @@
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test tests/acceptance",
-    "package": "electron-vite build && electron-builder --dir"
+    "package": "electron-vite build && electron-builder --dir",
+    "package:win": "electron-vite build && electron-builder --win --x64"
   },
   "dependencies": {
     "@duckdb/node-api": "1.4.5-r.1",
@@ -34,11 +35,48 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
+  },
+  "build": {
+    "appId": "com.kpitracker.desktop",
+    "productName": "KPITracker",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!src/**",
+      "!tests/**",
+      "!docs/**",
+      "!*.md",
+      "!tsconfig*.json",
+      "!vitest.config.ts",
+      "!playwright.config.ts",
+      "!eslint.config.js",
+      "!electron.vite.config.ts"
+    ],
+    "asarUnpack": [
+      "node_modules/@duckdb/**"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
