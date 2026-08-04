@@ -333,13 +333,21 @@ export function IndicadoresPage(): React.JSX.Element {
           </div>
           <div className="fila-form c2">
             <Campo etiqueta="Responsable">
-              <select value={editando.responsable ?? ''} onChange={(e) => setEditando({ ...editando, responsable: e.target.value || null })}>
+              <select
+                value={editando.responsable ?? ''}
+                onChange={(e) => setEditando({ ...editando, responsable: e.target.value || null })}
+                data-testid="indicador-responsable"
+              >
                 <option value="">— sin asignar —</option>
                 {responsables.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
             </Campo>
             <Campo etiqueta="Categoría">
-              <select value={editando.categoria ?? ''} onChange={(e) => setEditando({ ...editando, categoria: e.target.value || null })}>
+              <select
+                value={editando.categoria ?? ''}
+                onChange={(e) => setEditando({ ...editando, categoria: e.target.value || null })}
+                data-testid="indicador-categoria"
+              >
                 <option value="">— sin asignar —</option>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>

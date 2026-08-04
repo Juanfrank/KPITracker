@@ -177,6 +177,7 @@ export function ReglasPage(): React.JSX.Element {
                 value={editando.tipo}
                 disabled={editando.entidad === 'Recoleccion'}
                 onChange={(e) => setEditando({ ...editando, tipo: e.target.value as ReglaNegocio['tipo'] })}
+                data-testid="regla-tipo"
               >
                 <option value="Visibilidad">Visibilidad (mostrar si…)</option>
                 <option value="Obligatoriedad">Obligatoriedad (obligatorio si…)</option>

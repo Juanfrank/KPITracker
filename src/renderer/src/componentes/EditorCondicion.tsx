@@ -146,6 +146,7 @@ function OperandoEditor({
             alCambiar({ literal: texto !== '' && !Number.isNaN(numero) ? numero : texto });
           }
         }}
+        data-testid="condicion-valor"
       />
       <label className="texto-suave" style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer' }}>
         <input
@@ -153,6 +154,7 @@ function OperandoEditor({
           style={{ width: 'auto' }}
           checked={actual.esAtributo}
           onChange={(e) => alCambiar(e.target.checked ? { attr: actual.texto } : { literal: actual.texto })}
+          data-testid="condicion-valor-es-atributo"
         />
         Comparar contra otro atributo
       </label>
@@ -180,10 +182,11 @@ function EditorComparacion({ condicion, alCambiar, alEliminar }: PropsEditorCond
           value={izquierda.texto}
           placeholder="nombre del atributo"
           onChange={(e) => alCambiar(reemplazarHijo(condicion, 0, { attr: e.target.value }))}
+          data-testid="condicion-atributo"
         />
       </Campo>
       <Campo etiqueta="Condición">
-        <select value={condicion.op} onChange={(e) => cambiarOperador(e.target.value)}>
+        <select value={condicion.op} onChange={(e) => cambiarOperador(e.target.value)} data-testid="condicion-operador">
           {OPERADORES_COMPARACION.map((o) => (
             <option key={o.op} value={o.op}>
               {o.etiqueta}
