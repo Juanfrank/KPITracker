@@ -746,3 +746,97 @@ describe('Composition root — orígenes automáticos', () => {
     }
   });
 });
+
+describe('Composition root — XMLA con autenticación OAuth2 (Client Credentials)', () => {
+  it('obtiene un access token real y lo usa como Bearer al probar la conexión', async () => {
+    const TOKEN_VALIDO = 'token-de-prueba-123';
+    const servidor = createServer((req, res) => {
+      if (req.url === '/token') {
+        const trozos: Buffer[] = [];
+        req.on('data', (d) => trozos.push(d));
+        req.on('end', () => {
+          const cuerpo = Buffer.concat(trozos).toString('utf-8');
+          const parametros = new URLSearchParams(cuerpo);
+          const credencialesOk = parametros.get('grant_type') === 'client_credentials'
+            && parametros.get('client_id') === 'cid-valido'
+            && parametros.get('client_secret') === 'secreto-valido';
+          res.setHeader('Content-Type', 'application/json');
+          if (!credencialesOk) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'invalid_client' }));
+            return;
+          }
+          res.end(JSON.stringify({ access_token: TOKEN_VALIDO, expires_in: 3600 }));
+        });
+        return;
+      }
+      if (req.url === '/xmla') {
+        const autorizacion = req.headers.authorization;
+        res.setHeader('Content-Type', 'text/xml; charset=utf-8');
+        if (autorizacion === `Bearer ${TOKEN_VALIDO}`) {
+          res.end('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><DiscoverResponse/></soap:Body></soap:Envelope>');
+        } else {
+          res.statusCode = 500;
+          res.end('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultstring>No autorizado</faultstring></soap:Fault></soap:Body></soap:Envelope>');
+        }
+        return;
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const resultado = await app.manejadores['origenes:probar']({
+        id: 'origen-oauth2', nombre: 'SSAS con OAuth2', tipo: 'XMLA', descripcion: '',
+        configuracion: {
+          servidor: `http://127.0.0.1:${puerto}/xmla`,
+          autenticacion: 'oauth2',
+          tokenUrl: `http://127.0.0.1:${puerto}/token`,
+          clienteId: 'cid-valido',
+          clienteSecreto: 'secreto-valido'
+        },
+        parametrosGenerales: [], activo: true, creadoEn: '', actualizadoEn: ''
+      });
+      expect(resultado.ok).toBe(true);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('credenciales OAuth2 inválidas hacen fallar la prueba con un mensaje claro, sin llegar a XMLA', async () => {
+    const servidor = createServer((req, res) => {
+      if (req.url === '/token') {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'invalid_client', error_description: 'Client secret inválido' }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const resultado = await app.manejadores['origenes:probar']({
+        id: 'origen-oauth2-malo', nombre: 'SSAS con OAuth2 inválido', tipo: 'XMLA', descripcion: '',
+        configuracion: {
+          servidor: `http://127.0.0.1:${puerto}/xmla`,
+          autenticacion: 'oauth2',
+          tokenUrl: `http://127.0.0.1:${puerto}/token`,
+          clienteId: 'cid-malo',
+          clienteSecreto: 'secreto-malo'
+        },
+        parametrosGenerales: [], activo: true, creadoEn: '', actualizadoEn: ''
+      });
+      expect(resultado.ok).toBe(false);
+      expect(resultado.mensaje).toContain('servidor de token');
+    } finally {
+      servidor.close();
+    }
+  });
+});

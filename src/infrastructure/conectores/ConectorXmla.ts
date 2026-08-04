@@ -1,6 +1,6 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { URL } from 'node:url';
+import { URL, URLSearchParams } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 import type { IConectorOrigen, ResultadoPrueba, ResultadoTabular } from '@application/ports/index';
 import type { OrigenAutomatico } from '@domain/index';
@@ -37,39 +37,113 @@ function sobreExecute(catalogo: string | undefined, mdx: string): string {
 </soap:Envelope>`;
 }
 
-function enviarSoap(origen: OrigenAutomatico, sobreXml: string): Promise<string> {
-  const endpoint = origen.configuracion.servidor ?? '';
+/** Petición HTTP(S) cruda mínima (sin dependencias), compartida por el SOAP de XMLA y el token OAuth2. */
+function peticionHttp(
+  urlTexto: string,
+  opciones: { metodo: string; cabeceras: Record<string, string>; cuerpo: string }
+): Promise<{ status: number; cuerpo: string }> {
   return new Promise((resolve, reject) => {
     let url: URL;
     try {
-      url = new URL(endpoint);
+      url = new URL(urlTexto);
     } catch {
-      reject(new Error('El servidor XMLA debe ser una URL válida (http/https).'));
+      reject(new Error(`La URL no es válida: "${urlTexto}".`));
       return;
     }
     const hacer = url.protocol === 'https:' ? httpsRequest : httpRequest;
-    const cabeceras: Record<string, string> = {
-      'Content-Type': 'text/xml; charset=utf-8',
-      SOAPAction: `"${NS_XMLA}:Execute"`,
-      'Content-Length': String(Buffer.byteLength(sobreXml))
-    };
-    if (origen.configuracion.usuario) {
-      cabeceras.Authorization = `Basic ${Buffer.from(`${origen.configuracion.usuario}:${origen.configuracion.contrasena ?? ''}`).toString('base64')}`;
-    }
-    const req = hacer(url, { method: 'POST', headers: cabeceras, timeout: TIEMPO_MS }, (res) => {
+    const req = hacer(url, { method: opciones.metodo, headers: opciones.cabeceras, timeout: TIEMPO_MS }, (res) => {
       const trozos: Buffer[] = [];
       res.on('data', (d) => trozos.push(d));
-      res.on('end', () => {
-        const cuerpo = Buffer.concat(trozos).toString('utf-8');
-        if ((res.statusCode ?? 0) >= 400) reject(new Error(`HTTP ${res.statusCode}: ${cuerpo.slice(0, 300)}`));
-        else resolve(cuerpo);
-      });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, cuerpo: Buffer.concat(trozos).toString('utf-8') }));
     });
     req.on('timeout', () => req.destroy(new Error('Tiempo de espera agotado.')));
     req.on('error', reject);
-    req.write(sobreXml);
+    req.write(opciones.cuerpo);
     req.end();
   });
+}
+
+interface TokenCacheado {
+  token: string;
+  expiraEn: number;
+}
+
+/** Cache de access tokens en memoria por origen, para no pedir uno nuevo en cada llamada. */
+const cacheTokens = new Map<string, TokenCacheado>();
+
+/**
+ * Obtiene (y cachea) un access token OAuth2 vía el flujo Client Credentials
+ * — el usado por Azure AD para Power BI Premium/Fabric XMLA endpoint y
+ * Azure Analysis Services. Campos esperados en `configuracion`: `tokenUrl`,
+ * `clienteId`, `clienteSecreto` y, opcionalmente, `scope` (p. ej.
+ * "https://analysis.windows.net/powerbi/api/.default" para AAD v2, o se
+ * puede usar `resource` en su lugar para endpoints AAD v1 vía `scope`).
+ */
+async function obtenerTokenOAuth2(origen: OrigenAutomatico): Promise<string> {
+  const cfg = origen.configuracion;
+  if (!cfg.tokenUrl) throw new Error('Falta la URL del token (tokenUrl) para autenticación OAuth2.');
+  if (!cfg.clienteId || !cfg.clienteSecreto) throw new Error('Faltan las credenciales OAuth2 (Client ID / Client Secret).');
+
+  const claveCache = origen.id || cfg.tokenUrl;
+  const cacheado = cacheTokens.get(claveCache);
+  if (cacheado && cacheado.expiraEn > Date.now() + 5000) return cacheado.token;
+
+  const parametros = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: cfg.clienteId,
+    client_secret: cfg.clienteSecreto
+  });
+  if (cfg.scope) parametros.set('scope', cfg.scope);
+
+  const cuerpo = parametros.toString();
+  const { status, cuerpo: respuesta } = await peticionHttp(cfg.tokenUrl, {
+    metodo: 'POST',
+    cabeceras: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': String(Buffer.byteLength(cuerpo)) },
+    cuerpo
+  });
+  if (status >= 400) throw new Error(`El servidor de token respondió ${status}: ${respuesta.slice(0, 300)}`);
+
+  let datos: { access_token?: string; expires_in?: number };
+  try {
+    datos = JSON.parse(respuesta) as { access_token?: string; expires_in?: number };
+  } catch {
+    throw new Error('La respuesta del servidor de token no es JSON válido.');
+  }
+  if (!datos.access_token) throw new Error('La respuesta del servidor de token no incluye "access_token".');
+
+  cacheTokens.set(claveCache, { token: datos.access_token, expiraEn: Date.now() + (datos.expires_in ?? 3600) * 1000 });
+  return datos.access_token;
+}
+
+/** Cabecera de autenticación a usar en la petición SOAP: OAuth2 (Bearer) si está configurado, si no Basic, si no ninguna. */
+async function cabeceraAutenticacion(origen: OrigenAutomatico): Promise<Record<string, string>> {
+  const cfg = origen.configuracion;
+  if (cfg.autenticacion === 'oauth2') {
+    const token = await obtenerTokenOAuth2(origen);
+    return { Authorization: `Bearer ${token}` };
+  }
+  if (cfg.usuario) {
+    return { Authorization: `Basic ${Buffer.from(`${cfg.usuario}:${cfg.contrasena ?? ''}`).toString('base64')}` };
+  }
+  return {};
+}
+
+async function enviarSoap(origen: OrigenAutomatico, sobreXml: string): Promise<string> {
+  const endpoint = origen.configuracion.servidor ?? '';
+  const auth = await cabeceraAutenticacion(origen);
+  const cabeceras: Record<string, string> = {
+    'Content-Type': 'text/xml; charset=utf-8',
+    SOAPAction: `"${NS_XMLA}:Execute"`,
+    'Content-Length': String(Buffer.byteLength(sobreXml)),
+    ...auth
+  };
+  const { status, cuerpo } = await peticionHttp(endpoint, { metodo: 'POST', cabeceras, cuerpo: sobreXml });
+  // Un SOAP Fault normalmente viaja con HTTP 500 y un envelope válido en el
+  // cuerpo (p. ej. credenciales inválidas): se deja pasar para que el
+  // llamador lo detecte vía textoFalla(), en vez de tratarlo como error de
+  // transporte genérico y perder el mensaje real del servidor.
+  if (status >= 400 && status !== 500) throw new Error(`HTTP ${status}: ${cuerpo.slice(0, 300)}`);
+  return cuerpo;
 }
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
@@ -92,10 +166,14 @@ function textoFalla(xml: string): string {
 
 /**
  * Conector de mejor esfuerzo para orígenes XMLA (SSAS): sin ADOMD.NET
- * disponible fuera de Windows, se implementa como cliente SOAP crudo con
- * autenticación básica. Aplana únicamente el caso común de un dataset
- * multidimensional de 2 ejes (Columns=medidas, Rows=tuplas); MDX con más
- * ejes o resultados vacíos no se soportan y producen un error explícito.
+ * disponible fuera de Windows, se implementa como cliente SOAP crudo.
+ * Soporta autenticación Basic (usuario/contraseña) y OAuth2 vía Client
+ * Credentials (tokenUrl/clienteId/clienteSecreto/scope) — esta última es la
+ * requerida por Power BI Premium/Fabric XMLA endpoint y Azure Analysis
+ * Services, que ya no aceptan Basic. Aplana únicamente el caso común de un
+ * dataset multidimensional de 2 ejes (Columns=medidas, Rows=tuplas); MDX
+ * con más ejes o resultados vacíos no se soportan y producen un error
+ * explícito.
  */
 export class ConectorXmla implements Pick<IConectorOrigen, 'probar' | 'ejecutar'> {
   async probar(origen: OrigenAutomatico): Promise<ResultadoPrueba> {

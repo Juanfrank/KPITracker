@@ -24,9 +24,7 @@ function origenVacio(): OrigenAutomatico {
 const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, Array<{ clave: string; etiqueta: string; sensible?: boolean }>> = {
   XMLA: [
     { clave: 'servidor', etiqueta: 'URL del servidor XMLA' },
-    { clave: 'catalogo', etiqueta: 'Catálogo / cubo' },
-    { clave: 'usuario', etiqueta: 'Usuario' },
-    { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
+    { clave: 'catalogo', etiqueta: 'Catálogo / cubo' }
   ],
   SQL: [
     { clave: 'servidor', etiqueta: 'Servidor (host[,puerto])' },
@@ -41,6 +39,23 @@ const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, Array<{ clave: string; etiqu
     { clave: 'token', etiqueta: 'Token / API Key', sensible: true }
   ]
 };
+
+/**
+ * XMLA admite dos formas de autenticación (campo `configuracion.autenticacion`):
+ * Basic (usuario/contraseña) u OAuth2 vía Client Credentials — esta última
+ * requerida por Power BI Premium/Fabric XMLA endpoint y Azure Analysis
+ * Services, que ya no aceptan Basic.
+ */
+const CAMPOS_XMLA_BASIC = [
+  { clave: 'usuario', etiqueta: 'Usuario' },
+  { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
+];
+const CAMPOS_XMLA_OAUTH2 = [
+  { clave: 'tokenUrl', etiqueta: 'URL del token (token endpoint)' },
+  { clave: 'clienteId', etiqueta: 'Client ID' },
+  { clave: 'clienteSecreto', etiqueta: 'Client Secret', sensible: true },
+  { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default)' }
+];
 
 const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
   { valor: 'PeriodoId', etiqueta: 'Id del período (p. ej. 2026-Trimestral-03)' },
@@ -342,7 +357,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       </div>
       <p className="texto-suave">
         Conexiones externas (XMLA, SQL, API) para obtener resultados de indicadores sin captura manual. XMLA se soporta de
-        mejor esfuerzo (consultas MDX de 2 ejes; sin autenticación Windows/NTLM).
+        mejor esfuerzo (consultas MDX de 2 ejes, autenticación Basic u OAuth2; sin Windows/NTLM).
       </p>
       <div className="tabla-envoltura">
         <table className="tabla">
@@ -425,6 +440,37 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               />
             </Campo>
           ))}
+          {editando.tipo === 'XMLA' && (
+            <>
+              <Campo etiqueta="Autenticación">
+                <select
+                  value={editando.configuracion.autenticacion || 'basic'}
+                  onChange={(e) =>
+                    setEditando({ ...editando, configuracion: { ...editando.configuracion, autenticacion: e.target.value } })
+                  }
+                  data-testid="origen-xmla-autenticacion"
+                >
+                  <option value="basic">Basic (usuario/contraseña)</option>
+                  <option value="oauth2">OAuth2 (Client Credentials)</option>
+                </select>
+                <span className="texto-suave">
+                  Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2; SSAS on-premise clásico suele usar Basic.
+                </span>
+              </Campo>
+              {(editando.configuracion.autenticacion === 'oauth2' ? CAMPOS_XMLA_OAUTH2 : CAMPOS_XMLA_BASIC).map((campo) => (
+                <Campo key={campo.clave} etiqueta={campo.etiqueta}>
+                  <input
+                    type={campo.sensible ? 'password' : 'text'}
+                    value={editando.configuracion[campo.clave] ?? ''}
+                    onChange={(e) =>
+                      setEditando({ ...editando, configuracion: { ...editando.configuracion, [campo.clave]: e.target.value } })
+                    }
+                    data-testid={`origen-campo-${campo.clave}`}
+                  />
+                </Campo>
+              ))}
+            </>
+          )}
           <div className="toolbar">
             <button className="boton" onClick={() => void probar()} disabled={probando} data-testid="origen-probar">
               {probando ? 'Probando…' : 'Probar conexión'}

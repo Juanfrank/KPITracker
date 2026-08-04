@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AliasDesagregacionOrigen, ElementoLista, Lista, OrigenAutomatico } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
@@ -85,6 +85,10 @@ export function ListasPage(): React.JSX.Element {
   const [elementos, setElementos] = useState<ElementoLista[]>([]);
   const [editando, setEditando] = useState<Lista | null>(null);
   const [filtro, setFiltro] = useState('');
+  // Cola de guardado por fila: evita que dos ediciones casi simultáneas del
+  // mismo elemento (p. ej. código y luego nombre) se pisen entre sí si sus
+  // respuestas de red llegan en un orden distinto al que se dispararon.
+  const colasGuardadoElemento = useRef(new Map<string, Promise<unknown>>());
 
   const cargar = useCallback(async (): Promise<void> => {
     const datos = await invocar('listas:listar', undefined);
@@ -125,8 +129,18 @@ export function ListasPage(): React.JSX.Element {
   };
 
   const actualizarElemento = async (elemento: ElementoLista): Promise<void> => {
-    await invocar('listas:guardarElemento', elemento);
+    // Actualización optimista primero: así, si el usuario edita otro campo de
+    // esta misma fila antes de que termine este guardado, ese cambio parte
+    // del estado ya fusionado (no de una copia vieja capturada al renderizar).
     setElementos((previos) => previos.map((e) => (e.id === elemento.id ? elemento : e)));
+    // Encadenado por fila: las escrituras al mismo elemento se envían en el
+    // orden en que el usuario las disparó, nunca en paralelo, para que una
+    // respuesta más lenta no sobrescriba con datos obsoletos un cambio más
+    // reciente que ya se guardó.
+    const cola = colasGuardadoElemento.current.get(elemento.id) ?? Promise.resolve();
+    const siguiente = cola.then(() => invocar('listas:guardarElemento', elemento));
+    colasGuardadoElemento.current.set(elemento.id, siguiente);
+    await siguiente;
   };
 
   /**
