@@ -38,7 +38,7 @@ export class ProductoCartesiano {
       const siguientes: typeof parciales = [];
       for (const parcial of parciales) {
         for (const elemento of elementos) {
-          siguientes.push([...parcial, { listaId, codigo: elemento.codigo, descripcion: elemento.descripcion }]);
+          siguientes.push([...parcial, { listaId, codigo: elemento.codigo, descripcion: elemento.nombre }]);
         }
       }
       parciales = siguientes;

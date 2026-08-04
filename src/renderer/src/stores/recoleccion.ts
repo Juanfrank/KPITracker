@@ -30,6 +30,7 @@ interface EstadoRecoleccion {
   deshacer(): Promise<void>;
   rehacer(): Promise<void>;
   establecerFechaCorte(fechaCorte: string | null): Promise<void>;
+  establecerComentario(comentario: string | null): Promise<void>;
   alternarExclusion(listaId: string, excluir: boolean): Promise<void>;
   /** Pegado desde Excel: aplica valores TSV a partir de una fila. */
   pegarDesde(filaInicio: number, textoPortapapeles: string): Promise<void>;
@@ -147,6 +148,13 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     if (!indicadorId || !periodoId) return;
     await invocar('recoleccion:fechaCorte', { indicadorId, periodoId, fechaCorte });
     set((s) => ({ captura: s.captura && { ...s.captura, fechaCorte } }));
+  },
+
+  async establecerComentario(comentario) {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return;
+    await invocar('recoleccion:comentario', { indicadorId, periodoId, comentario });
+    set((s) => ({ captura: s.captura && { ...s.captura, comentario } }));
   },
 
   async alternarExclusion(listaId, excluir) {

@@ -49,6 +49,8 @@ export interface Levantamiento {
   fechaCorte: string | null;
   /** Ids de listas de desagregación excluidas temporalmente en este período. */
   desagregacionesExcluidas: string[];
+  /** Comentario opcional del levantamiento (a nivel indicador+período, no por celda). */
+  comentario: string | null;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

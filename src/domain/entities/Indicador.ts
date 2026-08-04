@@ -13,6 +13,8 @@ export interface Indicador {
   codigo: string;
   nombre: string;
   definicion: string;
+  /** Explicación en texto libre de cómo se calcula el indicador; puede incluir notación matemática (opcional). */
+  formaCalculo: string | null;
   periodicidad: Periodicidad;
   /** Id de DefinicionPeriodicidad; requerido cuando periodicidad = Personalizada. */
   periodicidadPersonalizadaId: string | null;

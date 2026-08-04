@@ -155,7 +155,7 @@ function OperandoEditor({
       {!actual.esAtributo && descriptor?.editorHint === 'select' && opciones ? (
         <select value={actual.texto} onChange={(e) => alCambiar({ literal: e.target.value })} data-testid="condicion-valor">
           <option value="">— seleccionar —</option>
-          {opciones.map((o) => <option key={o.codigo} value={o.codigo}>{o.descripcion}</option>)}
+          {opciones.map((o) => <option key={o.codigo} value={o.codigo}>{o.nombre}</option>)}
         </select>
       ) : !actual.esAtributo && descriptor?.editorHint === 'date' ? (
         <input type="date" value={actual.texto} onChange={(e) => alCambiar({ literal: e.target.value })} data-testid="condicion-valor" />

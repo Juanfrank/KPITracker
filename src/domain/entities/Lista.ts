@@ -3,6 +3,8 @@ export interface Lista {
   readonly id: string;
   nombre: string;
   descripcion: string;
+  /** Raíz alfabética en mayúsculas (única entre listas) usada para generar el código de cada elemento nuevo. */
+  prefijo: string;
   estado: 'Activa' | 'Inactiva';
   /** Se incrementa en cada modificación estructural (elementos añadidos/quitados). */
   version: number;
@@ -18,6 +20,9 @@ export interface ElementoLista {
   readonly id: string;
   listaId: string;
   codigo: string;
+  /** Nombre visible del elemento (obligatorio). */
+  nombre: string;
+  /** Descripción adicional opcional. */
   descripcion: string;
   orden: number;
   padreCodigo: string | null;

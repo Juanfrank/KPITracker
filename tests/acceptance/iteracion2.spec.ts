@@ -79,6 +79,7 @@ test('capturar un resultado en el período "Primer semestre" generado por la def
   expect(valorPrimerSemestre).toBeTruthy();
   await selectorPeriodo.selectOption(valorPrimerSemestre!);
 
+  await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-03-31');
   await pagina.getByTestId('celda-GENERAL').fill('55');
   await pagina.getByTestId('celda-GENERAL').blur();
   await pagina.waitForTimeout(500);

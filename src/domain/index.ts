@@ -34,3 +34,4 @@ export * from './services/CalculadoraEstados';
 export * from './services/CalculoMetas';
 export * from './services/ValidacionCaptura';
 export * from './services/EvaluadorFormulas';
+export * from './services/ValidadorTexto';

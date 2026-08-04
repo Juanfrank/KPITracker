@@ -1,10 +1,12 @@
-/** Entidad a la que se adjunta evidencia: un indicador o un resultado puntual. */
-export type EntidadAdjunto = 'Indicador' | 'Resultado';
+/** Entidad a la que se adjunta evidencia: el levantamiento (indicador+período) de la Recolección. */
+export type EntidadAdjunto = 'Levantamiento';
 
 /**
- * Evidencia adjunta (archivo) asociada a un indicador o a un resultado.
- * El archivo físico se copia a Data/Adjuntos; aquí solo se guarda la ruta
- * relativa y metadatos.
+ * Evidencia adjunta (archivo) asociada a un levantamiento (indicador +
+ * período de Recolección) — no a la definición del indicador. A lo sumo un
+ * adjunto por levantamiento, siempre opcional. `entidadId` es la clave
+ * compuesta `"<indicadorId>:<periodoId>"`. El archivo físico se copia a
+ * Data/Adjuntos; aquí solo se guarda la ruta relativa y metadatos.
  */
 export interface Adjunto {
   readonly id: string;

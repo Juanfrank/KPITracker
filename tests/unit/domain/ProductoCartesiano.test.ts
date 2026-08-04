@@ -4,7 +4,7 @@ import type { ElementoLista } from '@domain/entities/Lista';
 import { claveATexto } from '@domain/value-objects/ClaveDesagregacion';
 
 function elemento(listaId: string, codigo: string, orden: number, activo = true): ElementoLista {
-  return { id: `${listaId}-${codigo}`, listaId, codigo, descripcion: codigo, orden, padreCodigo: null, activo };
+  return { id: `${listaId}-${codigo}`, listaId, codigo, nombre: codigo, descripcion: '', orden, padreCodigo: null, activo };
 }
 
 const servicio = new ProductoCartesiano();

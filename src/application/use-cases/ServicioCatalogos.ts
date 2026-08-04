@@ -1,7 +1,10 @@
 import type {
   Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
 } from '@domain/index';
-import { EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador } from '@domain/index';
+import {
+  EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador,
+  signosAgrupacionBalanceados
+} from '@domain/index';
 import type {
   IAtributoRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository,
   IMetaRepository, IReglaRepository, ValorAtributoEntidad
@@ -100,6 +103,9 @@ export class ServicioIndicadores extends ServicioBase {
     if (indicador.codigo.trim()) {
       const duplicado = await this.repo.buscarPorCodigo(indicador.codigo.trim(), indicador.id || undefined);
       if (duplicado) errores.push(`Ya existe un indicador con el código "${indicador.codigo.trim()}".`);
+    }
+    if (indicador.formaCalculo?.trim() && !signosAgrupacionBalanceados(indicador.formaCalculo)) {
+      errores.push('La forma de cálculo tiene signos de agrupación (paréntesis, corchetes o llaves) sin cerrar o desbalanceados.');
     }
     if (errores.length > 0) throw new ValidacionError('Indicador inválido.', errores);
 
@@ -215,6 +221,7 @@ export class ServicioIndicadores extends ServicioBase {
           codigo,
           nombre,
           definicion,
+          formaCalculo: null,
           periodicidad,
           periodicidadPersonalizadaId: null,
           lineaBase: lineaBaseTexto ? Number(lineaBaseTexto) : null,
@@ -301,11 +308,20 @@ export class ServicioListas extends ServicioBase {
 
   async guardar(lista: Lista): Promise<Lista> {
     if (!lista.nombre.trim()) throw new ValidacionError('El nombre de la lista es obligatorio.');
+    const prefijo = lista.prefijo.trim().toUpperCase();
+    if (!prefijo) throw new ValidacionError('El prefijo de la lista es obligatorio.');
+    if (!/^[A-Z]+$/.test(prefijo)) {
+      throw new ValidacionError('El prefijo debe ser alfabético, en mayúsculas, sin espacios ni caracteres especiales.');
+    }
+    const otras = await this.repo.listar();
+    if (otras.some((l) => l.id !== lista.id && l.prefijo.toUpperCase() === prefijo)) {
+      throw new ValidacionError(`Ya existe una lista con el prefijo "${prefijo}".`);
+    }
     const anterior = await this.repo.obtener(lista.id);
     const ahora = this.ctx.reloj.ahoraIso();
     const guardada: Lista = anterior
-      ? { ...lista, creadoEn: anterior.creadoEn, actualizadoEn: ahora, version: anterior.version + 1 }
-      : { ...lista, id: lista.id || this.ctx.ids.nuevoId(), creadoEn: ahora, actualizadoEn: ahora, version: 1 };
+      ? { ...lista, prefijo, creadoEn: anterior.creadoEn, actualizadoEn: ahora, version: anterior.version + 1 }
+      : { ...lista, prefijo, id: lista.id || this.ctx.ids.nuevoId(), creadoEn: ahora, actualizadoEn: ahora, version: 1 };
     await this.repo.guardar(guardada);
     await this.auditar(anterior ? 'Modificar' : 'Crear', 'Lista', guardada.id);
     return guardada;
@@ -322,9 +338,10 @@ export class ServicioListas extends ServicioBase {
 
   async guardarElemento(elemento: ElementoLista): Promise<ElementoLista> {
     if (!elemento.codigo.trim()) throw new ValidacionError('El código del elemento es obligatorio.');
+    if (!elemento.nombre.trim()) throw new ValidacionError('El nombre del elemento es obligatorio.');
     const guardado: ElementoLista = { ...elemento, id: elemento.id || this.ctx.ids.nuevoId() };
     await this.repo.guardarElemento(guardado);
-    await this.auditar('Modificar', 'ElementoLista', guardado.id, null, null, `${guardado.codigo}: ${guardado.descripcion}`);
+    await this.auditar('Modificar', 'ElementoLista', guardado.id, null, null, `${guardado.codigo}: ${guardado.nombre}`);
     return guardado;
   }
 

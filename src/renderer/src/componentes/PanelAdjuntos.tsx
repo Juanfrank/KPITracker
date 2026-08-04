@@ -3,8 +3,20 @@ import type { Adjunto, EntidadAdjunto } from '@domain/index';
 import { invocar } from '../api';
 import { Icono } from './Icono';
 
-/** Evidencias adjuntas de un indicador o resultado: subir, abrir y eliminar archivos. */
-export function PanelAdjuntos({ entidad, entidadId }: { entidad: EntidadAdjunto; entidadId: string }): React.JSX.Element {
+/**
+ * Evidencias adjuntas: subir, abrir y eliminar archivos asociados a una
+ * entidad. `maxArchivos` limita cuántos adjuntos se permiten (p. ej. 1 por
+ * levantamiento indicador+período); al alcanzar el límite se oculta el
+ * botón de subir hasta eliminar alguno.
+ */
+export function PanelAdjuntos({
+  entidad, entidadId, maxArchivos, titulo = 'Evidencias adjuntas'
+}: {
+  entidad: EntidadAdjunto;
+  entidadId: string;
+  maxArchivos?: number;
+  titulo?: string;
+}): React.JSX.Element {
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
   const [subiendo, setSubiendo] = useState(false);
 
@@ -26,14 +38,18 @@ export function PanelAdjuntos({ entidad, entidadId }: { entidad: EntidadAdjunto;
     }
   };
 
+  const alcanzoLimite = maxArchivos != null && adjuntos.length >= maxArchivos;
+
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       <div className="toolbar" style={{ marginTop: 0 }}>
-        <h4 style={{ margin: 0 }}>Evidencias adjuntas</h4>
+        <h4 style={{ margin: 0 }}>{titulo}</h4>
         <div className="separador" />
-        <button className="boton sutil" onClick={() => void subir()} disabled={subiendo} data-testid="subir-adjunto">
-          <Icono nombre="subir" tamano={13} /> {subiendo ? 'Subiendo…' : 'Adjuntar archivo'}
-        </button>
+        {!alcanzoLimite && (
+          <button className="boton sutil" onClick={() => void subir()} disabled={subiendo} data-testid="subir-adjunto">
+            <Icono nombre="subir" tamano={13} /> {subiendo ? 'Subiendo…' : 'Adjuntar archivo'}
+          </button>
+        )}
       </div>
       {adjuntos.length === 0 && <p className="texto-suave" style={{ margin: 0 }}>Sin adjuntos.</p>}
       {adjuntos.map((a) => (

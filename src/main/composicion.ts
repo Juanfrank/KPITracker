@@ -106,6 +106,8 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
       recoleccion.guardarCelda(indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion ?? null),
     'recoleccion:fechaCorte': ({ indicadorId, periodoId, fechaCorte }) =>
       recoleccion.establecerFechaCorte(indicadorId, periodoId, fechaCorte),
+    'recoleccion:comentario': ({ indicadorId, periodoId, comentario }) =>
+      recoleccion.establecerComentario(indicadorId, periodoId, comentario),
     'recoleccion:exclusion': ({ indicadorId, periodoId, listaId, excluir }) =>
       recoleccion.alternarExclusion(indicadorId, periodoId, listaId, excluir),
     'recoleccion:historial': ({ indicadorId, periodoId, claveDesagregacion }) =>

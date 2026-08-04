@@ -48,7 +48,7 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
 
   async guardar(indicador: Indicador): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deIndicador(indicador)
     );
     this.sync.marcarSucia('indicadores');
@@ -126,7 +126,7 @@ export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepo
   }
 
   async guardar(lista: Lista): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO listas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', deLista(lista));
+    await this.db.run('INSERT OR REPLACE INTO listas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', deLista(lista));
     this.sync.marcarSucia('listas');
   }
 
@@ -145,7 +145,7 @@ export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepo
   }
 
   async guardarElemento(elemento: ElementoLista): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO elementos_lista VALUES (?, ?, ?, ?, ?, ?, ?)', deElemento(elemento));
+    await this.db.run('INSERT OR REPLACE INTO elementos_lista VALUES (?, ?, ?, ?, ?, ?, ?, ?)', deElemento(elemento));
     this.sync.marcarSucia('elementos_lista');
   }
 
@@ -230,14 +230,15 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
 
   async guardarLevantamiento(levantamiento: Levantamiento): Promise<void> {
     await this.db.run(
-      `INSERT INTO levantamientos (id, indicador_id, periodo_id, anio, fecha_corte, desagregaciones_excluidas, creado_en, actualizado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO levantamientos (id, indicador_id, periodo_id, anio, fecha_corte, desagregaciones_excluidas, comentario, creado_en, actualizado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (indicador_id, periodo_id)
        DO UPDATE SET fecha_corte = excluded.fecha_corte,
                      desagregaciones_excluidas = excluded.desagregaciones_excluidas,
+                     comentario = excluded.comentario,
                      actualizado_en = excluded.actualizado_en`,
       [levantamiento.id, levantamiento.indicadorId, levantamiento.periodoId, levantamiento.anio,
-       levantamiento.fechaCorte, JSON.stringify(levantamiento.desagregacionesExcluidas),
+       levantamiento.fechaCorte, JSON.stringify(levantamiento.desagregacionesExcluidas), levantamiento.comentario,
        levantamiento.creadoEn, levantamiento.actualizadoEn]
     );
     this.sync.marcarSucia('levantamientos');

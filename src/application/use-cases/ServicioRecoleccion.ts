@@ -26,6 +26,8 @@ export interface DatosCaptura {
   periodoId: string;
   periodoEtiqueta: string;
   fechaCorte: string | null;
+  /** Comentario opcional del levantamiento (indicador+período, no por celda). */
+  comentario: string | null;
   desagregacionesDisponibles: Array<{ listaId: string; nombre: string; excluida: boolean }>;
   filas: FilaCaptura[];
   /** Advertencias no bloqueantes (validación cruzada del levantamiento). */
@@ -88,6 +90,7 @@ export class ServicioRecoleccion extends ServicioBase {
         periodoId,
         periodoEtiqueta: this.etiquetaPeriodo(periodoId, definicion),
         fechaCorte: null,
+        comentario: null,
         desagregacionesDisponibles: [],
         filas: [{
           claveDesagregacion: 'GENERAL',
@@ -139,6 +142,7 @@ export class ServicioRecoleccion extends ServicioBase {
       periodoId,
       periodoEtiqueta: this.etiquetaPeriodo(periodoId, definicion),
       fechaCorte: levantamiento?.fechaCorte ?? null,
+      comentario: levantamiento?.comentario ?? null,
       desagregacionesDisponibles: indicador.desagregaciones.map((listaId) => ({
         listaId,
         nombre: nombresListas.get(listaId) ?? listaId,
@@ -165,6 +169,10 @@ export class ServicioRecoleccion extends ServicioBase {
     const indicadorActual = await this.indicadores.obtener(indicadorId);
     if (indicadorActual?.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene automáticamente de la fórmula y no admite captura manual.');
+    }
+    const levantamientoActual = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
+    if (!levantamientoActual?.fechaCorte) {
+      throw new ValidacionError('Debe establecer la fecha de corte del período antes de capturar resultados.');
     }
     const parseado = this.tipos.obtener(TipoDato.Decimal).parse(valorCrudo);
     if (!parseado.ok) throw new ValidacionError(parseado.error ?? 'Valor inválido.');
@@ -270,11 +278,24 @@ export class ServicioRecoleccion extends ServicioBase {
     const anterior = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     await this.guardarLevantamiento(indicadorId, periodoId, {
       fechaCorte,
-      desagregacionesExcluidas: anterior?.desagregacionesExcluidas ?? []
+      desagregacionesExcluidas: anterior?.desagregacionesExcluidas ?? [],
+      comentario: anterior?.comentario ?? null
     }, anterior);
     await this.auditar('Modificar', 'Levantamiento', `${indicadorId}:${periodoId}`, 'fechaCorte',
       anterior?.fechaCorte ?? null, fechaCorte);
     this.sincronizarExport();
+  }
+
+  /** Comentario opcional del levantamiento (a nivel indicador+período, no por celda). */
+  async establecerComentario(indicadorId: string, periodoId: string, comentario: string | null): Promise<void> {
+    const anterior = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
+    await this.guardarLevantamiento(indicadorId, periodoId, {
+      fechaCorte: anterior?.fechaCorte ?? null,
+      desagregacionesExcluidas: anterior?.desagregacionesExcluidas ?? [],
+      comentario
+    }, anterior);
+    await this.auditar('Modificar', 'Levantamiento', `${indicadorId}:${periodoId}`, 'comentario',
+      anterior?.comentario ?? null, comentario);
   }
 
   /** Exclusión temporal de una desagregación: nunca modifica el indicador. */
@@ -285,7 +306,8 @@ export class ServicioRecoleccion extends ServicioBase {
     else actuales.delete(listaId);
     await this.guardarLevantamiento(indicadorId, periodoId, {
       fechaCorte: anterior?.fechaCorte ?? null,
-      desagregacionesExcluidas: [...actuales]
+      desagregacionesExcluidas: [...actuales],
+      comentario: anterior?.comentario ?? null
     }, anterior);
     await this.auditar('Modificar', 'Levantamiento', `${indicadorId}:${periodoId}`, 'exclusiones',
       JSON.stringify(anterior?.desagregacionesExcluidas ?? []), JSON.stringify([...actuales]));
@@ -294,7 +316,7 @@ export class ServicioRecoleccion extends ServicioBase {
   private async guardarLevantamiento(
     indicadorId: string,
     periodoId: string,
-    datos: Pick<Levantamiento, 'fechaCorte' | 'desagregacionesExcluidas'>,
+    datos: Pick<Levantamiento, 'fechaCorte' | 'desagregacionesExcluidas' | 'comentario'>,
     anterior: Levantamiento | null
   ): Promise<void> {
     const ahora = this.ctx.reloj.ahoraIso();
@@ -305,6 +327,7 @@ export class ServicioRecoleccion extends ServicioBase {
       anio: Number(periodoId.slice(0, 4)),
       fechaCorte: datos.fechaCorte,
       desagregacionesExcluidas: datos.desagregacionesExcluidas,
+      comentario: datos.comentario,
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });

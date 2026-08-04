@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Encabezado, Campo, Vacio } from '../../componentes/basicos';
 import { HistorialCelda } from '../../componentes/HistorialCelda';
+import { PanelAdjuntos } from '../../componentes/PanelAdjuntos';
 import { useRecoleccion } from '../../stores/recoleccion';
 import { useNavegacion } from '../../stores/navegacion';
 
@@ -89,6 +90,27 @@ export function RecoleccionPage(): React.JSX.Element {
             <span className="texto-suave">Única y compartida por todas las desagregaciones del período.</span>
           </Campo>
         </div>
+        {captura && !indicadorSeleccionado?.esCalculado && (
+          <div className="fila-form c1" style={{ marginTop: 10 }}>
+            <Campo etiqueta="Comentario del levantamiento">
+              <ComentarioLevantamiento
+                valorInicial={captura.comentario}
+                alConfirmar={(texto) => void vm.establecerComentario(texto || null)}
+              />
+              <span className="texto-suave">Opcional, uno solo por indicador y período (no por celda).</span>
+            </Campo>
+          </div>
+        )}
+        {captura && !indicadorSeleccionado?.esCalculado && vm.indicadorId && vm.periodoId && (
+          <div style={{ marginTop: 10 }}>
+            <PanelAdjuntos
+              entidad="Levantamiento"
+              entidadId={`${vm.indicadorId}:${vm.periodoId}`}
+              maxArchivos={1}
+              titulo="Evidencia adjunta (opcional)"
+            />
+          </div>
+        )}
         {captura && captura.desagregacionesDisponibles.length > 0 && (
           <div className="toolbar" style={{ marginTop: 10 }}>
             <span className="texto-suave">Desagregaciones de este levantamiento:</span>
@@ -113,6 +135,12 @@ export function RecoleccionPage(): React.JSX.Element {
       {captura && indicadorSeleccionado?.esCalculado && (
         <div className="aviso info">
           Este indicador es calculado a partir de su fórmula ({indicadorSeleccionado.formula}); su valor se obtiene automáticamente y no admite captura manual.
+        </div>
+      )}
+
+      {captura && !indicadorSeleccionado?.esCalculado && !captura.fechaCorte && (
+        <div className="aviso info" data-testid="aviso-fecha-corte-requerida">
+          Establezca la fecha de corte para habilitar la captura de resultados.
         </div>
       )}
 
@@ -161,6 +189,7 @@ export function RecoleccionPage(): React.JSX.Element {
                           clave={fila.claveDesagregacion}
                           valorInicial={fila.valor}
                           invalida={Boolean(error)}
+                          deshabilitada={!captura.fechaCorte}
                           alConfirmar={(texto) => void vm.guardarCelda(fila.claveDesagregacion, texto)}
                           alPegar={(texto) => void vm.pegarDesde(indice, texto)}
                           alMover={(delta) => enfocarFila(indice + delta)}
@@ -198,11 +227,13 @@ export function RecoleccionPage(): React.JSX.Element {
 
 /** Celda editable: estado local mientras se escribe, confirmación al salir o con Enter. */
 function CeldaValor({
-  clave, valorInicial, invalida, alConfirmar, alPegar, alMover
+  clave, valorInicial, invalida, deshabilitada, alConfirmar, alPegar, alMover
 }: {
   clave: string;
   valorInicial: number | null;
   invalida: boolean;
+  /** Deshabilitada mientras no se haya establecido la fecha de corte del período. */
+  deshabilitada?: boolean;
   alConfirmar: (texto: string) => void;
   alPegar: (texto: string) => void;
   alMover: (delta: number) => void;
@@ -220,6 +251,8 @@ function CeldaValor({
       inputMode="decimal"
       value={texto}
       className={invalida ? 'invalido' : ''}
+      disabled={deshabilitada}
+      title={deshabilitada ? 'Establezca la fecha de corte para habilitar la captura.' : undefined}
       data-testid={`celda-${clave}`}
       onFocus={() => setEditando(true)}
       onChange={(e) => setTexto(e.target.value)}
@@ -250,6 +283,36 @@ function CeldaValor({
           (e.target as HTMLInputElement).blur();
         }
       }}
+    />
+  );
+}
+
+/** Comentario de todo el levantamiento (indicador+período): estado local, confirmación al salir del campo. */
+function ComentarioLevantamiento({
+  valorInicial, alConfirmar
+}: {
+  valorInicial: string | null;
+  alConfirmar: (texto: string) => void;
+}): React.JSX.Element {
+  const [texto, setTexto] = useState(valorInicial ?? '');
+  const [editando, setEditando] = useState(false);
+
+  useEffect(() => {
+    if (!editando) setTexto(valorInicial ?? '');
+  }, [valorInicial, editando]);
+
+  return (
+    <textarea
+      rows={2}
+      value={texto}
+      placeholder="Comentario opcional para este indicador y período."
+      onFocus={() => setEditando(true)}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={() => {
+        setEditando(false);
+        alConfirmar(texto);
+      }}
+      data-testid="recoleccion-comentario"
     />
   );
 }

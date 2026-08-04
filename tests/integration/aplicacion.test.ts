@@ -12,7 +12,7 @@ let app: Aplicacion;
 
 function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
-    id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', periodicidad: Periodicidad.Trimestral,
+    id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
     estado: 'Activo', responsable: null, categoria: null, unidadMedida: null, esCalculado: false, formula: null,
     creadoEn: '', actualizadoEn: '',
@@ -146,6 +146,7 @@ describe('Composition root — periodicidad personalizada en Recolección', () =
     const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId: periodos[0]!.id });
     expect(captura.periodoEtiqueta).toContain('Primer semestre');
 
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId: periodos[0]!.id, fechaCorte: '2025-06-30' });
     const resultado = await app.manejadores['recoleccion:guardarCelda']({
       indicadorId: guardado.id, periodoId: periodos[0]!.id, claveDesagregacion: 'GENERAL', valorCrudo: '42'
     });
@@ -156,9 +157,9 @@ describe('Composition root — periodicidad personalizada en Recolección', () =
 describe('Composition root — advertencias de validación cruzada en Recolección', () => {
   it('advierte cuando el resultado General es menor que el máximo de sus desagregaciones', async () => {
     const lista = await app.manejadores['listas:guardar']({
-      id: '', nombre: 'Sexo', descripcion: '', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
     });
-    await app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: 'M', descripcion: 'Masculino', orden: 1, padreCodigo: null, activo: true });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
 
     const guardado = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ desagregaciones: [lista.id] }),
@@ -167,6 +168,7 @@ describe('Composition root — advertencias de validación cruzada en Recolecci�
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
     const periodoId = periodos[periodos.length - 1]!.id;
 
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
     await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '30' });
     const respuesta = await app.manejadores['recoleccion:guardarCelda']({
       indicadorId: guardado.id, periodoId, claveDesagregacion: `${lista.id}=M`, valorCrudo: '80'
@@ -219,6 +221,7 @@ describe('Composition root — exportación analítica resuelve nombres de catá
     });
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
     const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
     await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
 
     await app.infra.exportacion.regenerar();
@@ -355,6 +358,7 @@ describe('Composition root — versionado de resultados y rollback', () => {
     const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
     const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
 
     await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
     await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '20' });
@@ -387,6 +391,7 @@ describe('Composition root — indicadores calculados (fórmulas)', () => {
     });
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: base.id });
     const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: base.id, periodoId, fechaCorte: '2025-01-31' });
     await app.manejadores['recoleccion:guardarCelda']({ indicadorId: base.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
 
     const calculado = await app.manejadores['indicadores:guardar']({
@@ -422,5 +427,102 @@ describe('Composition root — indicadores calculados (fórmulas)', () => {
         indicador: indicador({ codigo: 'Z', esCalculado: true, formula: '[A] +' }), valores: []
       })
     ).rejects.toThrow();
+  });
+});
+
+describe('Composition root — captura bloqueada sin fecha de corte', () => {
+  it('rechaza guardar una celda si el levantamiento no tiene fecha de corte', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await expect(
+      app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' })
+    ).rejects.toThrow(/fecha de corte/);
+  });
+
+  it('permite capturar una vez establecida la fecha de corte', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    const resultado = await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10'
+    });
+    expect(resultado.valor).toBe(10);
+  });
+});
+
+describe('Composition root — comentario del levantamiento', () => {
+  it('guarda y expone el comentario a nivel indicador+período', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:comentario']({ indicadorId: guardado.id, periodoId, comentario: 'Pendiente de validar con el área.' });
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+    expect(captura.comentario).toBe('Pendiente de validar con el área.');
+  });
+});
+
+describe('Composition root — prefijo de lista y nombre de elemento', () => {
+  it('rechaza un prefijo vacío o con caracteres no alfabéticos', async () => {
+    const base = { id: '', nombre: 'Sexo', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: '' };
+    await expect(app.manejadores['listas:guardar']({ ...base, prefijo: '' })).rejects.toThrow(/prefijo/);
+    await expect(app.manejadores['listas:guardar']({ ...base, prefijo: 'SEXO-1' })).rejects.toThrow(/alfabético/);
+    await expect(app.manejadores['listas:guardar']({ ...base, prefijo: 'SEXO 1' })).rejects.toThrow(/alfabético/);
+  });
+
+  it('normaliza un prefijo en minúsculas a mayúsculas', async () => {
+    const guardada = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'sexo', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+    });
+    expect(guardada.prefijo).toBe('SEXO');
+  });
+
+  it('rechaza dos listas con el mismo prefijo', async () => {
+    const base = { id: '', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: '' };
+    await app.manejadores['listas:guardar']({ ...base, nombre: 'Sexo', prefijo: 'SEXO' });
+    await expect(app.manejadores['listas:guardar']({ ...base, nombre: 'Sexo 2', prefijo: 'SEXO' })).rejects.toThrow(/prefijo/);
+  });
+
+  it('autogenera el código del elemento a partir del prefijo y exige nombre', async () => {
+    const lista = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+    });
+    await expect(
+      app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: `${lista.prefijo}-01`, nombre: '', descripcion: '', orden: 1, padreCodigo: null, activo: true })
+    ).rejects.toThrow(/nombre/);
+    const elemento = await app.manejadores['listas:guardarElemento']({
+      id: '', listaId: lista.id, codigo: `${lista.prefijo}-01`, nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true
+    });
+    expect(elemento.codigo).toBe('SEXO-01');
+    expect(elemento.nombre).toBe('Masculino');
+  });
+});
+
+describe('Composition root — forma de cálculo del indicador', () => {
+  it('acepta texto sin notación matemática', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ formaCalculo: 'Se calcula mediante inspección directa del expediente.' }), valores: []
+    });
+    expect(guardado.formaCalculo).toContain('inspección');
+  });
+
+  it('acepta una expresión con signos de agrupación balanceados', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ formaCalculo: '(Casos resueltos / Casos totales) * 100' }), valores: []
+    });
+    expect(guardado.formaCalculo).toContain('100');
+  });
+
+  it('rechaza una expresión con signos de agrupación desbalanceados', async () => {
+    try {
+      await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ formaCalculo: '(Casos resueltos / Casos totales * 100' }), valores: []
+      });
+      throw new Error('no debió llegar aquí');
+    } catch (error) {
+      const detalles = (error as Error & { detalles?: string[] }).detalles;
+      expect(detalles?.some((d) => d.includes('agrupación'))).toBe(true);
+    }
   });
 });

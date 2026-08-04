@@ -13,6 +13,7 @@ const TABLAS: Record<string, string> = {
     codigo VARCHAR NOT NULL DEFAULT '',
     nombre VARCHAR NOT NULL,
     definicion VARCHAR NOT NULL DEFAULT '',
+    forma_calculo VARCHAR,
     periodicidad VARCHAR NOT NULL,
     linea_base DOUBLE,
     linea_base_periodo_id VARCHAR,
@@ -76,6 +77,7 @@ const TABLAS: Record<string, string> = {
     id VARCHAR PRIMARY KEY,
     nombre VARCHAR NOT NULL,
     descripcion VARCHAR NOT NULL DEFAULT '',
+    prefijo VARCHAR NOT NULL DEFAULT '',
     estado VARCHAR NOT NULL DEFAULT 'Activa',
     version INTEGER NOT NULL DEFAULT 1,
     orden INTEGER NOT NULL DEFAULT 0,
@@ -87,7 +89,8 @@ const TABLAS: Record<string, string> = {
     id VARCHAR PRIMARY KEY,
     lista_id VARCHAR NOT NULL,
     codigo VARCHAR NOT NULL,
-    descripcion VARCHAR NOT NULL,
+    nombre VARCHAR NOT NULL DEFAULT '',
+    descripcion VARCHAR NOT NULL DEFAULT '',
     orden INTEGER NOT NULL DEFAULT 0,
     padre_codigo VARCHAR,
     activo BOOLEAN NOT NULL DEFAULT true
@@ -146,6 +149,7 @@ const TABLAS: Record<string, string> = {
     anio INTEGER NOT NULL,
     fecha_corte VARCHAR,
     desagregaciones_excluidas VARCHAR NOT NULL DEFAULT '[]',
+    comentario VARCHAR,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL,
     UNIQUE (indicador_id, periodo_id)
@@ -219,7 +223,16 @@ const MIGRACIONES_ADITIVAS: string[] = [
   'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS linea_base_periodo_id VARCHAR',
   'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS es_calculado BOOLEAN DEFAULT false',
   'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS formula VARCHAR',
-  'ALTER TABLE metas ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR'
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS forma_calculo VARCHAR',
+  'ALTER TABLE metas ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR',
+  "ALTER TABLE listas ADD COLUMN IF NOT EXISTS prefijo VARCHAR DEFAULT ''",
+  "ALTER TABLE elementos_lista ADD COLUMN IF NOT EXISTS nombre VARCHAR DEFAULT ''",
+  'ALTER TABLE levantamientos ADD COLUMN IF NOT EXISTS comentario VARCHAR',
+  // El campo "Descripción" de un elemento funcionaba en realidad como su
+  // nombre visible; al introducir `nombre` como campo separado, se
+  // completa una sola vez desde el valor previo de `descripcion` para no
+  // perder las etiquetas ya cargadas (idempotente: no hace nada una vez migrado).
+  "UPDATE elementos_lista SET nombre = descripcion WHERE (nombre IS NULL OR nombre = '') AND descripcion IS NOT NULL AND descripcion != ''"
 ];
 
 export async function crearEsquema(db: Db): Promise<void> {

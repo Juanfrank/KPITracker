@@ -16,6 +16,7 @@ function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
     codigo: '',
     nombre: `Indicador ${id}`,
     definicion: 'Definición de prueba',
+    formaCalculo: null,
     periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null,
     lineaBase: 50,
@@ -39,6 +40,7 @@ function lista(id: string): Lista {
     id,
     nombre: `Lista ${id}`,
     descripcion: '',
+    prefijo: id.toUpperCase().replace(/[^A-Z]/g, '') || 'LIST',
     estado: 'Activa',
     version: 1,
     orden: 1,
@@ -49,7 +51,7 @@ function lista(id: string): Lista {
 }
 
 function elemento(listaId: string, codigo: string, orden: number): ElementoLista {
-  return { id: `${listaId}-${codigo}`, listaId, codigo, descripcion: `Elem ${codigo}`, orden, padreCodigo: null, activo: true };
+  return { id: `${listaId}-${codigo}`, listaId, codigo, nombre: `Elem ${codigo}`, descripcion: '', orden, padreCodigo: null, activo: true };
 }
 
 function resultado(id: string, indicadorId: string, periodoId: string, clave: string, valor: number | null): Resultado {
@@ -142,6 +144,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
       anio: 2025,
       fechaCorte: '2025-03-31',
       desagregacionesExcluidas: ['tribunal'],
+      comentario: null,
       creadoEn: '2025-04-01T00:00:00Z',
       actualizadoEn: '2025-04-01T00:00:00Z'
     });
@@ -178,7 +181,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     await infra.resultados.guardar(resultado('r3', 'i1', '2025-Trimestral-01', 'sexo=F', 90));
     await infra.resultados.guardarLevantamiento({
       id: 'l1', indicadorId: 'i1', periodoId: '2025-Trimestral-01', anio: 2025,
-      fechaCorte: '2025-03-31', desagregacionesExcluidas: [],
+      fechaCorte: '2025-03-31', desagregacionesExcluidas: [], comentario: null,
       creadoEn: '2025-04-01T00:00:00Z', actualizadoEn: '2025-04-01T00:00:00Z'
     });
 
@@ -255,13 +258,13 @@ describe('Adjuntos (evidencias)', () => {
   it('CRUD de adjuntos por entidad', async () => {
     await infra.indicadores.guardar(indicador('i1'));
     const nuevo = {
-      id: 'a1', entidad: 'Indicador' as const, entidadId: 'i1', nombreArchivo: 'reporte.pdf',
+      id: 'a1', entidad: 'Levantamiento' as const, entidadId: 'i1:2025-Trimestral-01', nombreArchivo: 'reporte.pdf',
       rutaRelativa: 'Adjuntos/a1_reporte.pdf', tamanioBytes: 1024, comentario: null, subidoEn: '2025-01-01T00:00:00Z'
     };
     await infra.adjuntos.guardar(nuevo);
 
-    expect(await infra.adjuntos.listarPorEntidad('Indicador', 'i1')).toHaveLength(1);
-    expect(await infra.adjuntos.listarPorEntidad('Indicador', 'otro')).toHaveLength(0);
+    expect(await infra.adjuntos.listarPorEntidad('Levantamiento', 'i1:2025-Trimestral-01')).toHaveLength(1);
+    expect(await infra.adjuntos.listarPorEntidad('Levantamiento', 'otro')).toHaveLength(0);
     expect((await infra.adjuntos.obtener('a1'))?.nombreArchivo).toBe('reporte.pdf');
 
     await infra.adjuntos.eliminar('a1');

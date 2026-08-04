@@ -9,6 +9,7 @@ function listaVacia(): Lista {
     id: '',
     nombre: '',
     descripcion: '',
+    prefijo: '',
     estado: 'Activa',
     version: 1,
     orden: 0,
@@ -16,6 +17,11 @@ function listaVacia(): Lista {
     creadoEn: '',
     actualizadoEn: ''
   };
+}
+
+/** Código del próximo elemento a partir del prefijo de la lista y el orden secuencial. */
+function generarCodigo(prefijo: string, orden: number): string {
+  return prefijo ? `${prefijo}-${String(orden).padStart(2, '0')}` : `E${orden}`;
 }
 
 /**
@@ -57,7 +63,8 @@ export function ListasPage(): React.JSX.Element {
     const nuevo = await invocar('listas:guardarElemento', {
       id: '',
       listaId: seleccionada.id,
-      codigo: `E${orden}`,
+      codigo: generarCodigo(seleccionada.prefijo, orden),
+      nombre: `Elemento ${orden}`,
       descripcion: '',
       orden,
       padreCodigo: null,
@@ -69,6 +76,50 @@ export function ListasPage(): React.JSX.Element {
   const actualizarElemento = async (elemento: ElementoLista): Promise<void> => {
     await invocar('listas:guardarElemento', elemento);
     setElementos((previos) => previos.map((e) => (e.id === elemento.id ? elemento : e)));
+  };
+
+  /**
+   * Pegado masivo desde Excel: cada línea es [código, nombre] separados por
+   * tabulador. Actualiza filas existentes a partir de `indiceInicio` y crea
+   * elementos nuevos para las líneas que excedan las ya existentes. Si una
+   * fila pegada no trae código, se autogenera desde el prefijo de la lista.
+   */
+  const pegarElementos = async (indiceInicio: number, textoPortapapeles: string): Promise<void> => {
+    if (!seleccionada) return;
+    const filas = textoPortapapeles
+      .replace(/\r/g, '')
+      .split('\n')
+      .filter((linea) => linea.trim() !== '');
+    let ordenSiguiente = elementos.length > 0 ? Math.max(...elementos.map((e) => e.orden)) : 0;
+    const actualizados = [...elementos];
+
+    for (let i = 0; i < filas.length; i++) {
+      const [codigoPegado, nombrePegado] = (filas[i] ?? '').split('\t');
+      const indice = indiceInicio + i;
+      const existente = actualizados[indice];
+      if (existente) {
+        const guardado = await invocar('listas:guardarElemento', {
+          ...existente,
+          codigo: codigoPegado?.trim() || existente.codigo,
+          nombre: nombrePegado?.trim() ?? existente.nombre
+        });
+        actualizados[indice] = guardado;
+      } else {
+        ordenSiguiente += 1;
+        const guardado = await invocar('listas:guardarElemento', {
+          id: '',
+          listaId: seleccionada.id,
+          codigo: codigoPegado?.trim() || generarCodigo(seleccionada.prefijo, ordenSiguiente),
+          nombre: nombrePegado?.trim() || `Elemento ${ordenSiguiente}`,
+          descripcion: '',
+          orden: ordenSiguiente,
+          padreCodigo: null,
+          activo: true
+        });
+        actualizados.push(guardado);
+      }
+    }
+    setElementos(actualizados);
   };
 
   const filtradas = listas.filter((l) => l.nombre.toLowerCase().includes(filtro.toLowerCase()));
@@ -138,11 +189,15 @@ export function ListasPage(): React.JSX.Element {
                 <Icono nombre="mas" /> Elemento
               </button>
             </div>
+            <p className="texto-suave" style={{ marginTop: 0 }}>
+              Puede pegar filas desde Excel (columnas Código y Nombre) en cualquier celda de Código; se crean elementos nuevos si exceden los existentes.
+            </p>
             <div className="tabla-envoltura">
               <table className="tabla">
                 <thead>
                   <tr>
                     <th style={{ width: 110 }}>Código</th>
+                    <th>Nombre</th>
                     <th>Descripción</th>
                     <th style={{ width: 70 }}>Orden</th>
                     {seleccionada.jerarquica && <th style={{ width: 130 }}>Padre</th>}
@@ -151,20 +206,36 @@ export function ListasPage(): React.JSX.Element {
                   </tr>
                 </thead>
                 <tbody>
-                  {elementos.map((el) => (
+                  {elementos.map((el, indice) => (
                     <tr key={el.id}>
                       <td>
                         <input
                           type="text"
                           value={el.codigo}
                           onChange={(e) => void actualizarElemento({ ...el, codigo: e.target.value })}
+                          onPaste={(e) => {
+                            const contenido = e.clipboardData.getData('text');
+                            if (contenido.includes('\n') || contenido.includes('\t')) {
+                              e.preventDefault();
+                              void pegarElementos(indice, contenido);
+                            }
+                          }}
                           data-testid={`elemento-codigo-${el.orden}`}
                         />
                       </td>
                       <td>
                         <input
                           type="text"
+                          value={el.nombre}
+                          onChange={(e) => void actualizarElemento({ ...el, nombre: e.target.value })}
+                          data-testid={`elemento-nombre-${el.orden}`}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
                           value={el.descripcion}
+                          placeholder="Opcional"
                           onChange={(e) => void actualizarElemento({ ...el, descripcion: e.target.value })}
                           data-testid={`elemento-desc-${el.orden}`}
                         />
@@ -187,7 +258,7 @@ export function ListasPage(): React.JSX.Element {
                               .filter((p) => p.id !== el.id)
                               .map((p) => (
                                 <option key={p.id} value={p.codigo}>
-                                  {p.codigo}
+                                  {p.codigo} — {p.nombre}
                                 </option>
                               ))}
                           </select>
@@ -218,7 +289,7 @@ export function ListasPage(): React.JSX.Element {
                   ))}
                   {elementos.length === 0 && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <Vacio mensaje="Lista sin elementos" />
                       </td>
                     </tr>
@@ -255,6 +326,18 @@ export function ListasPage(): React.JSX.Element {
               data-testid="lista-nombre"
               autoFocus
             />
+          </Campo>
+          <Campo etiqueta="Prefijo del código" obligatorio>
+            <input
+              type="text"
+              value={editando.prefijo}
+              placeholder="Ej.: SEXO"
+              onChange={(e) => setEditando({ ...editando, prefijo: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
+              data-testid="lista-prefijo"
+            />
+            <span className="texto-suave">
+              Alfabético, en mayúsculas, sin espacios ni caracteres especiales. Único entre listas; genera el código de cada elemento nuevo.
+            </span>
           </Campo>
           <Campo etiqueta="Descripción">
             <textarea

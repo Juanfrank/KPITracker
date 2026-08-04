@@ -146,10 +146,10 @@ export class ExportAnaliticoService implements IExportService {
 
     const listas = await this.db.all<{ id: string; nombre: string }>('SELECT id, nombre FROM listas');
     const nombrePorLista = new Map(listas.map((l) => [l.id, l.nombre]));
-    const elementos = await this.db.all<{ lista_id: string; codigo: string; descripcion: string }>(
-      'SELECT lista_id, codigo, descripcion FROM elementos_lista'
+    const elementos = await this.db.all<{ lista_id: string; codigo: string; nombre: string }>(
+      'SELECT lista_id, codigo, nombre FROM elementos_lista'
     );
-    const descripcionElemento = new Map(elementos.map((e) => [`${e.lista_id}|${e.codigo}`, e.descripcion]));
+    const descripcionElemento = new Map(elementos.map((e) => [`${e.lista_id}|${e.codigo}`, e.nombre]));
     const definicionesPorId = new Map((await this.periodicidades.listar()).map((d) => [d.id, d]));
     const nombreResponsable = new Map((await this.responsables.listar()).map((r) => [r.id, r.nombre]));
     const nombreCategoria = new Map((await this.categorias.listar()).map((c) => [c.id, c.nombre]));

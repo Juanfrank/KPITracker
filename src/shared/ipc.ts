@@ -72,6 +72,7 @@ export interface CanalesIpc {
     res: { valor: number | null; advertencias: string[] };
   };
   'recoleccion:fechaCorte': { req: { indicadorId: string; periodoId: string; fechaCorte: string | null }; res: void };
+  'recoleccion:comentario': { req: { indicadorId: string; periodoId: string; comentario: string | null }; res: void };
   'recoleccion:exclusion': { req: { indicadorId: string; periodoId: string; listaId: string; excluir: boolean }; res: void };
   'recoleccion:historial': {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string };
@@ -120,8 +121,8 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
-  'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:exclusion',
-  'recoleccion:historial', 'recoleccion:restaurarVersion',
+  'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:comentario',
+  'recoleccion:exclusion', 'recoleccion:historial', 'recoleccion:restaurarVersion',
   'seguimiento:tablero', 'seguimiento:detalle',
   'exportacion:regenerar', 'exportacion:ruta',
   'auditoria:consultar',

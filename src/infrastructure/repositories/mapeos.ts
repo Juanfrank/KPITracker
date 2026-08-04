@@ -27,6 +27,7 @@ export const aIndicador = (f: Fila): Indicador => ({
   codigo: s(f.codigo),
   nombre: s(f.nombre),
   definicion: s(f.definicion),
+  formaCalculo: sn(f.forma_calculo),
   periodicidad: s(f.periodicidad) as Periodicidad,
   lineaBase: nn(f.linea_base),
   lineaBasePeriodoId: sn(f.linea_base_periodo_id),
@@ -50,7 +51,7 @@ export const aIndicador = (f: Fila): Indicador => ({
 // estos campos (ver ConfigPortableService), que llegan como `Record<string,
 // unknown>` sin ellos.
 export const deIndicador = (i: Indicador): unknown[] => [
-  i.id, i.codigo ?? '', i.nombre, i.definicion, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
+  i.id, i.codigo ?? '', i.nombre, i.definicion, i.formaCalculo ?? null, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
   JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
   i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null, i.creadoEn, i.actualizadoEn
 ];
@@ -88,6 +89,7 @@ export const aLista = (f: Fila): Lista => ({
   id: s(f.id),
   nombre: s(f.nombre),
   descripcion: s(f.descripcion),
+  prefijo: s(f.prefijo),
   estado: s(f.estado) as Lista['estado'],
   version: n(f.version),
   orden: n(f.orden),
@@ -97,13 +99,14 @@ export const aLista = (f: Fila): Lista => ({
 });
 
 export const deLista = (l: Lista): unknown[] => [
-  l.id, l.nombre, l.descripcion, l.estado, l.version, l.orden, l.jerarquica, l.creadoEn, l.actualizadoEn
+  l.id, l.nombre, l.descripcion, l.prefijo ?? '', l.estado, l.version, l.orden, l.jerarquica, l.creadoEn, l.actualizadoEn
 ];
 
 export const aElemento = (f: Fila): ElementoLista => ({
   id: s(f.id),
   listaId: s(f.lista_id),
   codigo: s(f.codigo),
+  nombre: s(f.nombre),
   descripcion: s(f.descripcion),
   orden: n(f.orden),
   padreCodigo: sn(f.padre_codigo),
@@ -111,7 +114,7 @@ export const aElemento = (f: Fila): ElementoLista => ({
 });
 
 export const deElemento = (e: ElementoLista): unknown[] => [
-  e.id, e.listaId, e.codigo, e.descripcion, e.orden, e.padreCodigo, e.activo
+  e.id, e.listaId, e.codigo, e.nombre ?? '', e.descripcion, e.orden, e.padreCodigo, e.activo
 ];
 
 export const aMeta = (f: Fila): Meta => ({
@@ -170,6 +173,7 @@ export const aLevantamiento = (f: Fila): Levantamiento => ({
   anio: n(f.anio),
   fechaCorte: sn(f.fecha_corte),
   desagregacionesExcluidas: json<string[]>(f.desagregaciones_excluidas, []),
+  comentario: sn(f.comentario),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });

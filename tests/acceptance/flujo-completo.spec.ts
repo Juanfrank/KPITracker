@@ -45,15 +45,16 @@ test('crear una lista de selección con elementos', async () => {
   await pagina.getByTestId('nav-listas').click();
   await pagina.getByTestId('nueva-lista').click();
   await pagina.getByTestId('lista-nombre').fill('Sexo');
+  await pagina.getByTestId('lista-prefijo').fill('SEXO');
   await pagina.getByTestId('guardar-lista').click();
 
   await expect(pagina.getByTestId('lista-Sexo')).toBeVisible();
   await pagina.getByTestId('agregar-elemento').click();
   await pagina.getByTestId('elemento-codigo-1').fill('M');
-  await pagina.getByTestId('elemento-desc-1').fill('Masculino');
+  await pagina.getByTestId('elemento-nombre-1').fill('Masculino');
   await pagina.getByTestId('agregar-elemento').click();
   await pagina.getByTestId('elemento-codigo-2').fill('F');
-  await pagina.getByTestId('elemento-desc-2').fill('Femenino');
+  await pagina.getByTestId('elemento-nombre-2').fill('Femenino');
 });
 
 test('crear un indicador trimestral con desagregación por sexo', async () => {
@@ -78,6 +79,14 @@ test('capturar resultados con autoguardado y fecha de corte', async () => {
   const filas = pagina.getByTestId('grilla-captura').locator('tbody tr');
   await expect(filas).toHaveCount(3);
 
+  const periodoId = await pagina.getByTestId('recoleccion-periodo').inputValue();
+  expect(periodoId).toContain('Trimestral');
+
+  // La fecha de corte debe establecerse antes de que la captura se habilite.
+  await expect(pagina.getByTestId('celda-GENERAL')).toBeDisabled();
+  await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
+  await expect(pagina.getByTestId('celda-GENERAL')).toBeEnabled();
+
   await pagina.getByTestId('celda-GENERAL').fill('82.5');
   await pagina.getByTestId('celda-GENERAL').press('Enter');
   // La navegación con Enter mueve el foco a la siguiente fila (edición rápida).
@@ -86,10 +95,6 @@ test('capturar resultados con autoguardado y fecha de corte', async () => {
   await pagina.keyboard.type('85');
   await pagina.keyboard.press('Enter');
 
-  const periodoId = await pagina.getByTestId('recoleccion-periodo').inputValue();
-  expect(periodoId).toContain('Trimestral');
-
-  await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
   // Espera a que el autoguardado y la exportación diferida se materialicen.
   await pagina.waitForTimeout(2500);
 });

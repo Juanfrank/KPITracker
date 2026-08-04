@@ -10,7 +10,6 @@ import { tipos, validadorAtributos } from '../../dominio';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { CampoAtributo } from '../../componentes/CampoAtributo';
 import { Icono } from '../../componentes/Icono';
-import { PanelAdjuntos } from '../../componentes/PanelAdjuntos';
 import { ImportarExcelIndicadores } from './ImportarExcelIndicadores';
 
 const generadorPeriodos = new GeneradorPeriodos();
@@ -21,6 +20,7 @@ function indicadorVacio(): Indicador {
     codigo: '',
     nombre: '',
     definicion: '',
+    formaCalculo: null,
     periodicidad: Periodicidad.Mensual,
     periodicidadPersonalizadaId: null,
     lineaBase: null,
@@ -322,6 +322,18 @@ export function IndicadoresPage(): React.JSX.Element {
           <Campo etiqueta="Definición" obligatorio>
             <textarea rows={3} value={editando.definicion} onChange={(e) => setEditando({ ...editando, definicion: e.target.value })} data-testid="indicador-definicion" />
           </Campo>
+          <Campo etiqueta="Forma de cálculo">
+            <textarea
+              rows={3}
+              value={editando.formaCalculo ?? ''}
+              placeholder="Ej.: (Casos resueltos / Casos totales) * 100. También se acepta texto sin notación matemática."
+              onChange={(e) => setEditando({ ...editando, formaCalculo: e.target.value || null })}
+              data-testid="indicador-forma-calculo"
+            />
+            <span className="texto-suave">
+              Opcional. Si incluye notación matemática, los signos de agrupación deben abrir y cerrar correctamente.
+            </span>
+          </Campo>
           <div className="fila-form c2">
             <Campo etiqueta="Periodicidad" obligatorio>
               <select
@@ -488,7 +500,6 @@ export function IndicadoresPage(): React.JSX.Element {
 
           {editando.id && (
             <>
-              <PanelAdjuntos entidad="Indicador" entidadId={editando.id} />
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <h4 style={{ margin: 0 }}>Metas</h4>
                 <div className="separador" />

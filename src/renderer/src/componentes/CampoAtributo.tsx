@@ -41,7 +41,7 @@ export function CampoAtributo({ atributo, valor, obligatorio, error, opciones, o
           <option value="">— seleccionar —</option>
           {opciones?.map((o) => (
             <option key={o.id} value={o.codigo}>
-              {o.descripcion}
+              {o.nombre}
             </option>
           ))}
         </select>
@@ -57,7 +57,7 @@ export function CampoAtributo({ atributo, valor, obligatorio, error, opciones, o
         >
           {opciones?.map((o) => (
             <option key={o.id} value={o.codigo}>
-              {o.descripcion}
+              {o.nombre}
             </option>
           ))}
         </select>
