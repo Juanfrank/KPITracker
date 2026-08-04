@@ -1,16 +1,26 @@
 import {
-  EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, NoImplementadoError, Periodicidad,
-  ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, evaluarValidacionesCaptura
+  CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
+  ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, crearClave,
+  evaluarValidacionesCaptura, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
-  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Periodo, ResultadoHistorial, TypeRegistry
+  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
+  ResultadoHistorial, TypeRegistry
 } from '@domain/index';
 import type {
+  IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IConectorOrigen,
   IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
   IListaRepository, IReglaRepository, IResultadoRepository
 } from '@application/ports/index';
 import { ServicioBase, USUARIO_LOCAL } from './base';
 import type { ContextoAplicacion } from './base';
+
+/** Resumen de una ejecución automática que escribió resultados directamente en la grilla de captura. */
+export interface ResultadoObtencionAutomatica {
+  celdasActualizadas: number;
+  filasConError: number;
+  desagregacionesSinMapear: string[];
+}
 
 export interface FilaCaptura {
   claveDesagregacion: string;
@@ -56,7 +66,11 @@ export class ServicioRecoleccion extends ServicioBase {
     private readonly configuracion: IConfiguracionRepository,
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly reglasRepo: IReglaRepository,
-    private readonly tipos: TypeRegistry
+    private readonly tipos: TypeRegistry,
+    private readonly automatizaciones: IAutomatizacionIndicadorRepository,
+    private readonly origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>,
+    private readonly atributosRepo: IAtributoRepository,
+    private readonly conector: IConectorOrigen
   ) {
     super(ctx);
   }
@@ -159,25 +173,6 @@ export class ServicioRecoleccion extends ServicioBase {
    * Decimal del TypeRegistry. Retorna, además del valor persistido, las
    * advertencias de validación cruzada recalculadas sobre el levantamiento.
    */
-  /**
-   * Punto de entrada para la obtención automática del resultado de un
-   * indicador+período desde su origen configurado (XMLA/SQL/API). La
-   * plataforma de configuración (origen, credenciales, parámetros
-   * dinámicos por indicador) ya existe; la ejecución real de la consulta
-   * contra el origen se implementará en una versión posterior.
-   */
-  async obtenerResultadoAutomatico(indicadorId: string, periodoId: string): Promise<{ valor: number | null }> {
-    const indicador = await this.indicadores.obtener(indicadorId);
-    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
-    if (!indicador.origenAutomaticoId) {
-      throw new ValidacionError('Este indicador no tiene un origen automático configurado.');
-    }
-    void periodoId;
-    throw new NoImplementadoError(
-      'La obtención automática de resultados aún no está implementada. El origen y los parámetros ya quedaron configurados; la ejecución real se habilitará en una próxima versión.'
-    );
-  }
-
   async guardarCelda(
     indicadorId: string,
     periodoId: string,
@@ -197,6 +192,113 @@ export class ServicioRecoleccion extends ServicioBase {
     if (!parseado.ok) throw new ValidacionError(parseado.error ?? 'Valor inválido.');
     const valor = parseado.valor as number | null;
 
+    await this.persistirValorCelda(indicadorId, periodoId, claveDesagregacion, valor, observacion);
+    this.sincronizarExport();
+
+    const captura = await this.obtenerCaptura(indicadorId, periodoId);
+    return { valor, advertencias: captura.advertencias };
+  }
+
+  /**
+   * Obtiene el resultado del período desde el origen configurado para el
+   * indicador y escribe directamente las celdas de la grilla que su mapeo
+   * de columnas permite determinar sin ambigüedad. Si alguna desagregación
+   * del indicador no está mapeada (u omitida explícitamente), esas
+   * combinaciones se saltan y quedan para captura manual — solo la fila
+   * General se completa cuando el resultado trae una fila agregada (todas
+   * las columnas mapeadas en blanco).
+   */
+  async obtenerResultadoAutomatico(indicadorId: string, periodoId: string): Promise<ResultadoObtencionAutomatica> {
+    const indicador = await this.indicadores.obtener(indicadorId);
+    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    if (indicador.esCalculado) {
+      throw new ValidacionError('Este indicador es calculado: su valor se obtiene de la fórmula, no de un origen automático.');
+    }
+    const automatizacion = await this.automatizaciones.obtenerPorIndicador(indicadorId);
+    if (!automatizacion) {
+      throw new ValidacionError('Este indicador no tiene configurada la obtención automática de resultados.');
+    }
+    const origen = await this.origenesAutomaticos.obtener(automatizacion.origenAutomaticoId);
+    if (!origen) throw new ValidacionError('El origen automático configurado ya no existe.');
+    if (!automatizacion.columnaValor) {
+      throw new ValidacionError('Falta configurar la columna del valor en la automatización de este indicador.');
+    }
+    const levantamiento = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
+    if (!levantamiento?.fechaCorte) {
+      throw new ValidacionError('Debe establecer la fecha de corte del período antes de obtener resultados.');
+    }
+
+    const definicion = await this.definicionPara(indicador);
+    const periodo = this.construirPeriodo(periodoId, definicion);
+    const tokens = resolverParametrosGenerales(origen.parametrosGenerales, periodo);
+    const valoresAtributos = await this.atributosRepo.obtenerValores('Indicador', indicadorId);
+    for (const parametro of automatizacion.parametrosDinamicos) {
+      const valor = valoresAtributos.find((v) => v.atributoId === parametro.atributoId);
+      tokens.set(
+        parametro.nombre,
+        valor ? (valor.valorTexto ?? valor.valorNumero?.toString() ?? valor.valorFecha ?? (valor.valorBooleano != null ? String(valor.valorBooleano) : '')) : ''
+      );
+    }
+    const scriptFinal = sustituirTokens(automatizacion.script, tokens);
+
+    let resultado;
+    try {
+      resultado = await this.conector.ejecutar(origen, scriptFinal);
+    } catch (error) {
+      throw new ValidacionError(`No se pudo obtener el resultado del origen: ${(error as Error).message}`);
+    }
+
+    const listasCubiertas = indicador.desagregaciones.filter((listaId) =>
+      automatizacion.mapeoColumnas.some((m) => m.listaId === listaId) && !automatizacion.desagregacionesOmitidas.includes(listaId)
+    );
+    const desagregacionesSinMapear = indicador.desagregaciones.filter((listaId) => !listasCubiertas.includes(listaId));
+    const columnaPorLista = new Map(automatizacion.mapeoColumnas.map((m) => [m.listaId, m.columna]));
+
+    let celdasActualizadas = 0;
+    let filasConError = 0;
+    for (const fila of resultado.filas) {
+      const pares = listasCubiertas.map((listaId) => [listaId, fila[columnaPorLista.get(listaId) as string] ?? ''] as const);
+      const todasVacias = pares.every(([, v]) => !v);
+      const todasLlenas = pares.every(([, v]) => v);
+      let clave: string | null = null;
+      if (todasVacias) clave = claveATexto(CLAVE_GENERAL);
+      else if (todasLlenas && desagregacionesSinMapear.length === 0) clave = claveATexto(crearClave(pares));
+      // Filas con cobertura parcial (algunas listas cubiertas en blanco, otras no) o con
+      // desagregaciones sin mapear fuera de la fila General no pueden determinarse sin ambigüedad: se saltan.
+      if (clave === null) {
+        if (!todasVacias) filasConError += 1;
+        continue;
+      }
+      const parseado = this.tipos.obtener(TipoDato.Decimal).parse(fila[automatizacion.columnaValor] ?? '');
+      if (!parseado.ok) {
+        filasConError += 1;
+        continue;
+      }
+      await this.persistirValorCelda(indicadorId, periodoId, clave, parseado.valor as number | null, null);
+      celdasActualizadas += 1;
+    }
+
+    this.sincronizarExport();
+    return { celdasActualizadas, filasConError, desagregacionesSinMapear };
+  }
+
+  private construirPeriodo(periodoId: string, definicion?: DefinicionPeriodicidad): Periodo {
+    const [anioTexto, periodicidad] = periodoId.split('-');
+    const periodo = this.generadorPeriodos
+      .periodosDelAnio(Number(anioTexto), periodicidad as Periodicidad, definicion)
+      .find((p) => p.id === periodoId);
+    if (!periodo) throw new EntidadNoEncontradaError('Periodo', periodoId);
+    return periodo;
+  }
+
+  /** Guarda el valor vigente de una celda, versionando el anterior si existía. Compartido por captura manual y automática. */
+  private async persistirValorCelda(
+    indicadorId: string,
+    periodoId: string,
+    claveDesagregacion: string,
+    valor: number | null,
+    observacion: string | null
+  ): Promise<void> {
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
     const ahora = this.ctx.reloj.ahoraIso();
@@ -218,10 +320,6 @@ export class ServicioRecoleccion extends ServicioBase {
     });
     await this.auditar('Modificar', 'Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`,
       'valor', anterior?.valor ?? null, valor);
-    this.sincronizarExport();
-
-    const captura = await this.obtenerCaptura(indicadorId, periodoId);
-    return { valor, advertencias: captura.advertencias };
   }
 
   /** Historial de versiones previas de una celda, más reciente primero. */

@@ -7,8 +7,9 @@ import { join } from 'node:path';
 /**
  * Prueba de aceptación de la iteración 3: pestaña Histórico de Seguimiento
  * (períodos como columnas), atributos filtrables, y la plataforma de
- * orígenes automáticos (configuración de punta a punta; la ejecución real
- * de la consulta no está implementada todavía).
+ * orígenes automáticos (configuración de punta a punta vía el modal de
+ * automatización del indicador — la prueba de ejecución real contra un
+ * servidor HTTP real está cubierta en tests/integration/aplicacion.test.ts).
  */
 
 let aplicacion: ElectronApplication;
@@ -69,23 +70,33 @@ test('marcar un atributo como filtrable lo expone como filtro dinámico en Segui
   await expect(pagina.getByTestId('filtro-atributo-Prioridad')).toBeVisible();
 });
 
-test('configurar un origen automático y asociarlo a un indicador habilita el botón de obtención automática en Recolección', async () => {
+test('probar la conexión de un origen automático informa el resultado', async () => {
   await pagina.getByTestId('nav-admin').click();
   await pagina.getByTestId('nuevo-origen').click();
   await pagina.getByTestId('origen-nombre').fill('API institucional');
-  await pagina.getByTestId('origen-campo-url').fill('https://ejemplo.local/api/resultados');
+  await pagina.getByTestId('origen-campo-url').fill('http://127.0.0.1:9/no-existe');
+  await pagina.getByTestId('origen-probar').click();
+  await expect(pagina.getByTestId('origen-resultado-prueba')).toBeVisible();
   await pagina.getByTestId('guardar-origen').click();
   await expect(pagina.getByTestId('origen-API institucional')).toBeVisible();
+});
 
+test('configurar la obtención automática de un indicador desde el modal habilita el botón en Recolección', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('indicador-Cumplimiento de plazos').click();
-  await pagina.getByTestId('indicador-origen-automatico').selectOption({ label: 'API institucional (API)' });
-  await pagina.getByTestId('guardar-indicador').click();
+  await pagina.getByTestId('abrir-automatizacion').click();
+  await pagina.getByTestId('automatizacion-origen').selectOption({ label: 'API institucional (API)' });
+  await pagina.getByTestId('automatizacion-script').fill('/resultados?indicador={anio}');
+  await pagina.getByTestId('automatizacion-guardar').click();
+  await expect(pagina.getByText('Configuración guardada.')).toBeVisible();
+  await pagina.getByTestId('automatizacion-cerrar').click();
+  await pagina.getByTestId('cancelar-indicador').click();
 
   await pagina.getByTestId('nav-recoleccion').click();
   await pagina.getByTestId('recoleccion-indicador').selectOption({ label: 'Cumplimiento de plazos' });
   await expect(pagina.getByTestId('grilla-captura')).toBeVisible();
   await expect(pagina.getByTestId('recoleccion-obtener-automatico')).toBeVisible();
   await pagina.getByTestId('recoleccion-obtener-automatico').click();
-  await expect(pagina.getByTestId('aviso-obtener-automatico')).toContainText('no está implementada');
+  // No se configuró la columna del valor: falla de forma determinística, sin depender de la red.
+  await expect(pagina.getByTestId('aviso-obtener-automatico')).toContainText('columna del valor');
 });

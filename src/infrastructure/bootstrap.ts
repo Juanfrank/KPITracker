@@ -4,7 +4,8 @@ import { crearEsquema, restaurarDesdeParquetSiVacio } from './duckdb/esquema';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import { ParquetSyncService } from './parquet/ParquetSyncService';
 import {
-  AdjuntoRepositoryDuckDb, AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, CatalogoRepositoryDuckDb,
+  AdjuntoRepositoryDuckDb, AliasDesagregacionOrigenRepositoryDuckDb, AtributoRepositoryDuckDb,
+  AuditoriaRepositoryDuckDb, AutomatizacionIndicadorRepositoryDuckDb, CatalogoRepositoryDuckDb,
   IndicadorRepositoryDuckDb, ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb,
   ResultadoRepositoryDuckDb, crearRepositorioDefinicionesPeriodicidad, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosDuckDb';
@@ -14,6 +15,7 @@ import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
 import { GeneradorUuid, RelojSistema } from './soporte/servicios';
 import { ArchivoService } from './soporte/ArchivoService';
+import { ConectorOrigenFactory } from './conectores/ConectorOrigenFactory';
 
 export interface Infraestructura {
   db: Db;
@@ -31,6 +33,9 @@ export interface Infraestructura {
   responsables: CatalogoRepositoryDuckDb<Responsable>;
   categorias: CatalogoRepositoryDuckDb<Categoria>;
   origenesAutomaticos: CatalogoRepositoryDuckDb<OrigenAutomatico>;
+  automatizaciones: AutomatizacionIndicadorRepositoryDuckDb;
+  aliasDesagregacionOrigen: AliasDesagregacionOrigenRepositoryDuckDb;
+  conectorOrigen: ConectorOrigenFactory;
   resultados: ResultadoRepositoryDuckDb;
   adjuntos: AdjuntoRepositoryDuckDb;
   auditoria: AuditoriaRepositoryDuckDb;
@@ -74,6 +79,9 @@ export async function crearInfraestructura(
   const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
   const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
+  const automatizaciones = new AutomatizacionIndicadorRepositoryDuckDb(db, sync);
+  const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryDuckDb(db, sync);
+  const conectorOrigen = new ConectorOrigenFactory();
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
   const adjuntos = new AdjuntoRepositoryDuckDb(db, sync);
   const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);
@@ -99,6 +107,9 @@ export async function crearInfraestructura(
     responsables,
     categorias,
     origenesAutomaticos,
+    automatizaciones,
+    aliasDesagregacionOrigen,
+    conectorOrigen,
     resultados,
     adjuntos,
     auditoria,

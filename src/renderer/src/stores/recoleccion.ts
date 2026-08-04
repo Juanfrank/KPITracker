@@ -24,6 +24,8 @@ interface EstadoRecoleccion {
   pilaRehacer: CambioCelda[];
   /** Mensaje de la última obtención automática intentada (éxito o error), para mostrar en la UI. */
   mensajeAutomatico: string | null;
+  /** Si el indicador seleccionado tiene configurada la obtención automática (muestra el botón en la UI). */
+  automatizacionConfigurada: boolean;
 
   cargarIndicadores(): Promise<void>;
   seleccionarIndicador(indicadorId: string): Promise<void>;
@@ -58,6 +60,7 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   pilaDeshacer: [],
   pilaRehacer: [],
   mensajeAutomatico: null,
+  automatizacionConfigurada: false,
 
   async cargarIndicadores() {
     const indicadores = (await invocar('indicadores:listar', undefined)).filter((i) => i.estado === 'Activo');
@@ -65,8 +68,14 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   },
 
   async seleccionarIndicador(indicadorId) {
-    const periodos = await invocar('recoleccion:periodos', { indicadorId });
-    set({ indicadorId, periodos, periodoId: null, captura: null, pilaDeshacer: [], pilaRehacer: [] });
+    const [periodos, automatizacion] = await Promise.all([
+      invocar('recoleccion:periodos', { indicadorId }),
+      invocar('automatizacion:obtener', { indicadorId })
+    ]);
+    set({
+      indicadorId, periodos, periodoId: null, captura: null, pilaDeshacer: [], pilaRehacer: [],
+      mensajeAutomatico: null, automatizacionConfigurada: automatizacion != null
+    });
     // Selecciona por defecto el último período cerrado (el más reciente a levantar).
     const hoy = new Date().toISOString().slice(0, 10);
     const cerrados = periodos.filter((p) => p.fechaFin < hoy);
@@ -192,7 +201,14 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     if (!indicadorId || !periodoId) return;
     set({ mensajeAutomatico: null });
     try {
-      await invocar('recoleccion:obtenerAutomatico', { indicadorId, periodoId });
+      const { celdasActualizadas, filasConError, desagregacionesSinMapear } = await invocar('recoleccion:obtenerAutomatico', {
+        indicadorId, periodoId
+      });
+      const partes = [`${celdasActualizadas} celda(s) actualizada(s).`];
+      if (filasConError > 0) partes.push(`${filasConError} fila(s) del resultado no se pudieron aplicar.`);
+      if (desagregacionesSinMapear.length > 0) partes.push('Hay desagregaciones sin mapear: complételas manualmente.');
+      set({ mensajeAutomatico: partes.join(' ') });
+      await get().seleccionarPeriodo(periodoId);
     } catch (error) {
       set({ mensajeAutomatico: (error as Error).message });
     }

@@ -101,7 +101,7 @@ export function RecoleccionPage(): React.JSX.Element {
             </Campo>
           </div>
         )}
-        {captura && indicadorSeleccionado?.origenAutomaticoId && (
+        {captura && vm.automatizacionConfigurada && !indicadorSeleccionado?.esCalculado && (
           <div className="toolbar" style={{ marginTop: 10 }}>
             <button className="boton" onClick={() => void vm.obtenerAutomatico()} data-testid="recoleccion-obtener-automatico">
               Obtener automáticamente

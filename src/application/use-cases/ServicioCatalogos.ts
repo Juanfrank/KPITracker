@@ -1,13 +1,13 @@
 import type {
-  Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
+  AliasDesagregacionOrigen, Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
 } from '@domain/index';
 import {
   EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador,
   signosAgrupacionBalanceados
 } from '@domain/index';
 import type {
-  IAtributoRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository,
-  IMetaRepository, IReglaRepository, ValorAtributoEntidad
+  IAliasDesagregacionOrigenRepository, IAtributoRepository, IDefinicionPeriodicidadRepository,
+  IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository, ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -222,8 +222,6 @@ export class ServicioIndicadores extends ServicioBase {
           nombre,
           definicion,
           formaCalculo: null,
-          origenAutomaticoId: null,
-          parametrosOrigen: null,
           periodicidad,
           periodicidadPersonalizadaId: null,
           lineaBase: lineaBaseTexto ? Number(lineaBaseTexto) : null,
@@ -299,7 +297,8 @@ export class ServicioAtributos extends ServicioBase {
 export class ServicioListas extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
-    private readonly repo: IListaRepository
+    private readonly repo: IListaRepository,
+    private readonly aliasRepo: IAliasDesagregacionOrigenRepository
   ) {
     super(ctx);
   }
@@ -350,6 +349,28 @@ export class ServicioListas extends ServicioBase {
   async eliminarElemento(id: string): Promise<void> {
     await this.repo.eliminarElemento(id);
     await this.auditar('Eliminar', 'ElementoLista', id);
+  }
+
+  /** Alias con el que esta lista se identifica en los datos de cada origen automático (reutilizable entre indicadores). */
+  listarAliasOrigen(listaId: string): Promise<AliasDesagregacionOrigen[]> {
+    return this.aliasRepo.listarPorLista(listaId);
+  }
+
+  async guardarAliasOrigen(alias: AliasDesagregacionOrigen): Promise<AliasDesagregacionOrigen> {
+    if (!alias.alias.trim()) throw new ValidacionError('El alias no puede estar vacío.');
+    const anterior = await this.aliasRepo.obtener(alias.listaId, alias.origenAutomaticoId);
+    const ahora = this.ctx.reloj.ahoraIso();
+    const guardado: AliasDesagregacionOrigen = anterior
+      ? { ...alias, id: anterior.id, creadoEn: anterior.creadoEn, actualizadoEn: ahora }
+      : { ...alias, id: alias.id || this.ctx.ids.nuevoId(), creadoEn: ahora, actualizadoEn: ahora };
+    await this.aliasRepo.guardar(guardado);
+    await this.auditar(anterior ? 'Modificar' : 'Crear', 'AliasDesagregacionOrigen', guardado.id, null, null, guardado.alias);
+    return guardado;
+  }
+
+  async eliminarAliasOrigen(id: string): Promise<void> {
+    await this.aliasRepo.eliminar(id);
+    await this.auditar('Eliminar', 'AliasDesagregacionOrigen', id);
   }
 }
 

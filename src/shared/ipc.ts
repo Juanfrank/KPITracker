@@ -1,14 +1,16 @@
 import type {
-  Adjunto, Atributo, Categoria, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista, EntidadAdjunto,
-  Indicador, Lista, Meta, OrigenAutomatico, Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, DefinicionPeriodicidad,
+  ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
+  Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
 } from '@domain/index';
-import type { FiltroAuditoria, ValorAtributoEntidad } from '@application/ports/index';
-import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
+import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
+import type { DatosCaptura, ResultadoObtencionAutomatica } from '@application/use-cases/ServicioRecoleccion';
 import type {
   GuardarIndicadorInput, MapeoImportacionIndicadores, ResultadoImportacionIndicadores
 } from '@application/use-cases/ServicioCatalogos';
 import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
+import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 
 /**
  * Contrato IPC tipado entre renderer y main. Cada canal define su petición
@@ -68,6 +70,25 @@ export interface CanalesIpc {
   'origenes:listar': { req: void; res: OrigenAutomatico[] };
   'origenes:guardar': { req: OrigenAutomatico; res: OrigenAutomatico };
   'origenes:eliminar': { req: { id: string }; res: void };
+  /** Prueba la conectividad/credenciales del origen (aún no guardado o ya guardado) sin ejecutar ningún script. */
+  'origenes:probar': { req: OrigenAutomatico; res: ResultadoPrueba };
+
+  'listas:aliasOrigen': { req: { listaId: string }; res: AliasDesagregacionOrigen[] };
+  'listas:guardarAliasOrigen': { req: AliasDesagregacionOrigen; res: AliasDesagregacionOrigen };
+  'listas:eliminarAliasOrigen': { req: { id: string }; res: void };
+
+  'automatizacion:obtener': { req: { indicadorId: string }; res: AutomatizacionIndicador | null };
+  'automatizacion:guardar': { req: AutomatizacionIndicador; res: AutomatizacionIndicador };
+  'automatizacion:eliminar': { req: { indicadorId: string }; res: void };
+  'automatizacion:ejecutarPrueba': {
+    req: {
+      indicadorId: string; periodoId: string; origenAutomaticoId: string;
+      parametrosDinamicos: ParametroDinamico[]; script: string;
+    };
+    res: ResultadoTabular;
+  };
+  'automatizacion:validarColumna': { req: { listaId: string; valoresUnicos: string[] }; res: ReporteConciliacion };
+  'automatizacion:agregarElementosFaltantes': { req: { listaId: string; codigos: string[] }; res: ElementoLista[] };
 
   'recoleccion:periodos': { req: { indicadorId: string }; res: Periodo[] };
   'recoleccion:captura': { req: { indicadorId: string; periodoId: string }; res: DatosCaptura };
@@ -86,8 +107,8 @@ export interface CanalesIpc {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string; version: number };
     res: { valor: number | null; advertencias: string[] };
   };
-  /** Siempre rechaza con NoImplementadoError por ahora: la plataforma de orígenes está lista, la ejecución real no. */
-  'recoleccion:obtenerAutomatico': { req: { indicadorId: string; periodoId: string }; res: { valor: number | null } };
+  /** Ejecuta el script del origen configurado y escribe las celdas que su mapeo permite determinar sin ambigüedad. */
+  'recoleccion:obtenerAutomatico': { req: { indicadorId: string; periodoId: string }; res: ResultadoObtencionAutomatica };
 
   'seguimiento:tablero': { req: void; res: FilaTablero[] };
   'seguimiento:detalle': { req: { indicadorId: string }; res: DetalleSeguimiento | null };
@@ -128,7 +149,10 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
-  'origenes:listar', 'origenes:guardar', 'origenes:eliminar',
+  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:probar',
+  'listas:aliasOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
+  'automatizacion:obtener', 'automatizacion:guardar', 'automatizacion:eliminar',
+  'automatizacion:ejecutarPrueba', 'automatizacion:validarColumna', 'automatizacion:agregarElementosFaltantes',
   'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:comentario',
   'recoleccion:exclusion', 'recoleccion:historial', 'recoleccion:restaurarVersion', 'recoleccion:obtenerAutomatico',
   'seguimiento:tablero', 'seguimiento:detalle', 'seguimiento:historico',

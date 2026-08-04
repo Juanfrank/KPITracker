@@ -1,6 +1,8 @@
 import type {
   Adjunto,
+  AliasDesagregacionOrigen,
   Atributo,
+  AutomatizacionIndicador,
   Categoria,
   ConfiguracionGeneral,
   DefinicionPeriodicidad,
@@ -166,6 +168,43 @@ export interface IAdjuntoRepository {
   obtener(id: string): Promise<Adjunto | null>;
   guardar(adjunto: Adjunto): Promise<void>;
   eliminar(id: string): Promise<void>;
+}
+
+export interface IAutomatizacionIndicadorRepository {
+  obtenerPorIndicador(indicadorId: string): Promise<AutomatizacionIndicador | null>;
+  guardar(config: AutomatizacionIndicador): Promise<void>;
+  eliminar(indicadorId: string): Promise<void>;
+}
+
+export interface IAliasDesagregacionOrigenRepository {
+  listarPorLista(listaId: string): Promise<AliasDesagregacionOrigen[]>;
+  listarPorOrigen(origenAutomaticoId: string): Promise<AliasDesagregacionOrigen[]>;
+  obtener(listaId: string, origenAutomaticoId: string): Promise<AliasDesagregacionOrigen | null>;
+  guardar(alias: AliasDesagregacionOrigen): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Resultado de probar la conectividad/credenciales de un origen automático, sin ejecutar ningún script. */
+export interface ResultadoPrueba {
+  ok: boolean;
+  mensaje: string;
+}
+
+/** Resultado tabular devuelto por la ejecución de un script contra un origen automático. */
+export interface ResultadoTabular {
+  columnas: string[];
+  filas: Record<string, string>[];
+}
+
+/**
+ * Conector de un origen automático: prueba la conexión/credenciales y
+ * ejecuta un script ya con sus tokens sustituidos. Cada tipo (API/SQL/XMLA)
+ * tiene una implementación concreta en infraestructura; la aplicación solo
+ * conoce esta interfaz.
+ */
+export interface IConectorOrigen {
+  probar(origen: OrigenAutomatico): Promise<ResultadoPrueba>;
+  ejecutar(origen: OrigenAutomatico, script: string): Promise<ResultadoTabular>;
 }
 
 /** Copia un archivo elegido por el usuario dentro de /Data/Adjuntos y devuelve su ruta relativa. */

@@ -36,10 +36,6 @@ export interface Indicador {
   esCalculado: boolean;
   /** Expresión aritmética sobre códigos de otros indicadores (p. ej. "IND-001 + IND-002 * 0.5"). Requerida cuando esCalculado = true. */
   formula: string | null;
-  /** Id del OrigenAutomatico configurado para obtener el resultado sin captura manual (opcional). */
-  origenAutomaticoId: string | null;
-  /** Parámetros dinámicos que resuelven el período/desagregación al consultar el origen automático (p. ej. medida MDX, filtro SQL, query param). */
-  parametrosOrigen: Record<string, string> | null;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

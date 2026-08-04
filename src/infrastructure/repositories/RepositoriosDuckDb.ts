@@ -1,17 +1,19 @@
 import type {
-  Adjunto, Atributo, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Indicador, Levantamiento, Lista,
-  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, DefinicionPeriodicidad, ElementoLista,
+  EntidadAdjunto, Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio,
+  Resultado, ResultadoHistorial
 } from '@domain/index';
 import type {
-  FiltroAuditoria, IAdjuntoRepository, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
-  IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository,
-  ResumenPeriodo, ValorAtributoEntidad
+  FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
+  IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IIndicadorRepository,
+  IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import type { Db } from '../duckdb/Db';
 import type { ParquetSyncService } from '../parquet/ParquetSyncService';
 import {
-  aAdjunto, aAtributo, aAuditoria, aDefinicionPeriodicidad, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
-  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, deAdjunto, deAtributo, deDefinicionPeriodicidad,
+  aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aDefinicionPeriodicidad,
+  aElemento, aIndicador, aLevantamiento, aLista, aMeta, aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial,
+  deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAutomatizacionIndicador, deDefinicionPeriodicidad,
   deElemento, deIndicador, deLista, deMeta, deOrigenAutomatico, deRegla, deResultadoHistorial
 } from './mapeos';
 
@@ -404,6 +406,71 @@ export class AdjuntoRepositoryDuckDb extends RepositorioBase implements IAdjunto
   async eliminar(id: string): Promise<void> {
     await this.db.run('DELETE FROM adjuntos WHERE id = ?', [id]);
     this.sync.marcarSucia('adjuntos');
+  }
+}
+
+export class AutomatizacionIndicadorRepositoryDuckDb extends RepositorioBase implements IAutomatizacionIndicadorRepository {
+  async obtenerPorIndicador(indicadorId: string): Promise<AutomatizacionIndicador | null> {
+    const fila = await this.db.uno('SELECT * FROM automatizaciones_indicador WHERE indicador_id = ?', [indicadorId]);
+    return fila ? aAutomatizacionIndicador(fila) : null;
+  }
+
+  async guardar(config: AutomatizacionIndicador): Promise<void> {
+    await this.db.run(
+      `INSERT INTO automatizaciones_indicador VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (indicador_id) DO UPDATE SET
+         origen_automatico_id = excluded.origen_automatico_id,
+         parametros_dinamicos = excluded.parametros_dinamicos,
+         script = excluded.script,
+         columna_valor = excluded.columna_valor,
+         mapeo_columnas = excluded.mapeo_columnas,
+         desagregaciones_omitidas = excluded.desagregaciones_omitidas,
+         actualizado_en = excluded.actualizado_en`,
+      deAutomatizacionIndicador(config)
+    );
+    this.sync.marcarSucia('automatizaciones_indicador');
+  }
+
+  async eliminar(indicadorId: string): Promise<void> {
+    await this.db.run('DELETE FROM automatizaciones_indicador WHERE indicador_id = ?', [indicadorId]);
+    this.sync.marcarSucia('automatizaciones_indicador');
+  }
+}
+
+export class AliasDesagregacionOrigenRepositoryDuckDb extends RepositorioBase implements IAliasDesagregacionOrigenRepository {
+  async listarPorLista(listaId: string): Promise<AliasDesagregacionOrigen[]> {
+    const filas = await this.db.all('SELECT * FROM alias_desagregacion_origen WHERE lista_id = ? ORDER BY alias', [listaId]);
+    return filas.map(aAliasDesagregacionOrigen);
+  }
+
+  async listarPorOrigen(origenAutomaticoId: string): Promise<AliasDesagregacionOrigen[]> {
+    const filas = await this.db.all(
+      'SELECT * FROM alias_desagregacion_origen WHERE origen_automatico_id = ? ORDER BY alias',
+      [origenAutomaticoId]
+    );
+    return filas.map(aAliasDesagregacionOrigen);
+  }
+
+  async obtener(listaId: string, origenAutomaticoId: string): Promise<AliasDesagregacionOrigen | null> {
+    const fila = await this.db.uno(
+      'SELECT * FROM alias_desagregacion_origen WHERE lista_id = ? AND origen_automatico_id = ?',
+      [listaId, origenAutomaticoId]
+    );
+    return fila ? aAliasDesagregacionOrigen(fila) : null;
+  }
+
+  async guardar(alias: AliasDesagregacionOrigen): Promise<void> {
+    await this.db.run(
+      `INSERT INTO alias_desagregacion_origen VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (lista_id, origen_automatico_id) DO UPDATE SET alias = excluded.alias, actualizado_en = excluded.actualizado_en`,
+      deAliasDesagregacionOrigen(alias)
+    );
+    this.sync.marcarSucia('alias_desagregacion_origen');
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.db.run('DELETE FROM alias_desagregacion_origen WHERE id = ?', [id]);
+    this.sync.marcarSucia('alias_desagregacion_origen');
   }
 }
 

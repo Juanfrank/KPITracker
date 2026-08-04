@@ -11,6 +11,7 @@ import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodici
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
+import { ServicioAutomatizacionIndicador } from '@application/use-cases/ServicioAutomatizacionIndicador';
 import type { CanalesIpc, NombreCanal } from '@shared/ipc';
 
 export interface Aplicacion {
@@ -39,7 +40,7 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
   const indicadores = new ServicioIndicadores(ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos);
   const atributos = new ServicioAtributos(ctx, infra.atributos);
-  const listas = new ServicioListas(ctx, infra.listas);
+  const listas = new ServicioListas(ctx, infra.listas, infra.aliasDesagregacionOrigen);
   const metas = new ServicioMetas(ctx, infra.metas, infra.periodicidades);
   const reglas = new ServicioReglas(ctx, infra.reglas);
   const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
@@ -47,13 +48,18 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
   const categorias = new ServicioCatalogoGenerico(ctx, infra.categorias, 'Categoria');
   const origenesAutomaticos = new ServicioCatalogoGenerico(ctx, infra.origenesAutomaticos, 'OrigenAutomatico');
   const recoleccion = new ServicioRecoleccion(
-    ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos
+    ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos,
+    infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen
   );
   const seguimiento = new ServicioSeguimiento(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
     infra.periodicidades, infra.responsables, infra.categorias, infra.atributos, reglasFechaLimite
   );
   const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos);
+  const automatizacion = new ServicioAutomatizacionIndicador(
+    ctx, infra.automatizaciones, infra.indicadores, infra.origenesAutomaticos, infra.atributos,
+    infra.listas, infra.periodicidades, infra.conectorOrigen
+  );
 
   const manejadores: Aplicacion['manejadores'] = {
     'config:obtener': () => configuracion.obtener(),
@@ -104,6 +110,19 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'origenes:listar': () => origenesAutomaticos.listar(),
     'origenes:guardar': (origen) => origenesAutomaticos.guardar(origen),
     'origenes:eliminar': ({ id }) => origenesAutomaticos.eliminar(id),
+    'origenes:probar': (origen) => infra.conectorOrigen.probar(origen),
+
+    'listas:aliasOrigen': ({ listaId }) => listas.listarAliasOrigen(listaId),
+    'listas:guardarAliasOrigen': (alias) => listas.guardarAliasOrigen(alias),
+    'listas:eliminarAliasOrigen': ({ id }) => listas.eliminarAliasOrigen(id),
+
+    'automatizacion:obtener': ({ indicadorId }) => automatizacion.obtener(indicadorId),
+    'automatizacion:guardar': (config) => automatizacion.guardar(config),
+    'automatizacion:eliminar': ({ indicadorId }) => automatizacion.eliminar(indicadorId),
+    'automatizacion:ejecutarPrueba': ({ indicadorId, periodoId, origenAutomaticoId, parametrosDinamicos, script }) =>
+      automatizacion.ejecutarPrueba(indicadorId, periodoId, origenAutomaticoId, parametrosDinamicos, script),
+    'automatizacion:validarColumna': ({ listaId, valoresUnicos }) => automatizacion.validarColumna(listaId, valoresUnicos),
+    'automatizacion:agregarElementosFaltantes': ({ listaId, codigos }) => automatizacion.agregarElementosFaltantes(listaId, codigos),
 
     'recoleccion:periodos': ({ indicadorId }) => recoleccion.periodosDisponibles(indicadorId),
     'recoleccion:captura': ({ indicadorId, periodoId }) => recoleccion.obtenerCaptura(indicadorId, periodoId),

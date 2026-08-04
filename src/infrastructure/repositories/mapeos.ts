@@ -1,7 +1,7 @@
 import type {
-  Adjunto, Atributo, Categoria, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Indicador,
-  Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial,
-  Responsable
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
+  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
+  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -41,8 +41,6 @@ export const aIndicador = (f: Fila): Indicador => ({
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   esCalculado: b(f.es_calculado),
   formula: sn(f.formula),
-  origenAutomaticoId: sn(f.origen_automatico_id),
-  parametrosOrigen: json<Record<string, string> | null>(f.parametros_origen, null),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -53,11 +51,15 @@ export const aIndicador = (f: Fila): Indicador => ({
 // registros importados de archivos de configuración portable anteriores a
 // estos campos (ver ConfigPortableService), que llegan como `Record<string,
 // unknown>` sin ellos.
+// Las columnas `origen_automatico_id`/`parametros_origen` de la tabla son
+// vestigiales (la configuración de obtención automática vive ahora en
+// `automatizaciones_indicador`, ver AutomatizacionIndicador): se escriben
+// siempre en null para no romper el conteo posicional de columnas.
 export const deIndicador = (i: Indicador): unknown[] => [
   i.id, i.codigo ?? '', i.nombre, i.definicion, i.formaCalculo ?? null, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
   JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
   i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null,
-  i.origenAutomaticoId ?? null, i.parametrosOrigen == null ? null : JSON.stringify(i.parametrosOrigen),
+  null, null,
   i.creadoEn, i.actualizadoEn
 ];
 
@@ -241,13 +243,47 @@ export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
   tipo: s(f.tipo) as OrigenAutomatico['tipo'],
   descripcion: s(f.descripcion),
   configuracion: json<Record<string, string>>(f.configuracion, {}),
+  parametrosGenerales: json<ParametroGeneral[]>(f.parametros_generales, []),
   activo: b(f.activo),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deOrigenAutomatico = (o: OrigenAutomatico): unknown[] => [
-  o.id, o.nombre, o.tipo, o.descripcion, JSON.stringify(o.configuracion), o.activo, o.creadoEn, o.actualizadoEn
+  o.id, o.nombre, o.tipo, o.descripcion, JSON.stringify(o.configuracion),
+  JSON.stringify(o.parametrosGenerales ?? []), o.activo, o.creadoEn, o.actualizadoEn
+];
+
+export const aAutomatizacionIndicador = (f: Fila): AutomatizacionIndicador => ({
+  id: s(f.id),
+  indicadorId: s(f.indicador_id),
+  origenAutomaticoId: s(f.origen_automatico_id),
+  parametrosDinamicos: json<ParametroDinamico[]>(f.parametros_dinamicos, []),
+  script: s(f.script),
+  columnaValor: sn(f.columna_valor),
+  mapeoColumnas: json<MapeoColumna[]>(f.mapeo_columnas, []),
+  desagregacionesOmitidas: json<string[]>(f.desagregaciones_omitidas, []),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deAutomatizacionIndicador = (a: AutomatizacionIndicador): unknown[] => [
+  a.id, a.indicadorId, a.origenAutomaticoId, JSON.stringify(a.parametrosDinamicos), a.script,
+  a.columnaValor, JSON.stringify(a.mapeoColumnas), JSON.stringify(a.desagregacionesOmitidas),
+  a.creadoEn, a.actualizadoEn
+];
+
+export const aAliasDesagregacionOrigen = (f: Fila): AliasDesagregacionOrigen => ({
+  id: s(f.id),
+  listaId: s(f.lista_id),
+  origenAutomaticoId: s(f.origen_automatico_id),
+  alias: s(f.alias),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deAliasDesagregacionOrigen = (a: AliasDesagregacionOrigen): unknown[] => [
+  a.id, a.listaId, a.origenAutomaticoId, a.alias, a.creadoEn, a.actualizadoEn
 ];
 
 export const aResultadoHistorial = (f: Fila): ResultadoHistorial => ({

@@ -1,8 +1,59 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ElementoLista, Lista } from '@domain/index';
+import type { AliasDesagregacionOrigen, ElementoLista, Lista, OrigenAutomatico } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+
+/**
+ * Nombre de esta lista en cada origen automático configurado (reutilizable
+ * al mapear columnas del resultado a esta desagregación desde cualquier
+ * indicador). Solo aplica a listas ya guardadas.
+ */
+function SeccionAliasOrigen({ listaId }: { listaId: string }): React.JSX.Element | null {
+  const [origenes, setOrigenes] = useState<OrigenAutomatico[]>([]);
+  const [alias, setAlias] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    void Promise.all([invocar('origenes:listar', undefined), invocar('listas:aliasOrigen', { listaId })]).then(
+      ([origenesCargados, aliasCargados]) => {
+        setOrigenes(origenesCargados);
+        setAlias(new Map(aliasCargados.map((a) => [a.origenAutomaticoId, a.alias])));
+      }
+    );
+  }, [listaId]);
+
+  const guardar = async (origenAutomaticoId: string, valor: string): Promise<void> => {
+    setAlias((previo) => new Map(previo).set(origenAutomaticoId, valor));
+    if (!valor.trim()) return;
+    const guardado: AliasDesagregacionOrigen = {
+      id: '', listaId, origenAutomaticoId, alias: valor, creadoEn: '', actualizadoEn: ''
+    };
+    await invocar('listas:guardarAliasOrigen', guardado);
+  };
+
+  if (origenes.length === 0) return null;
+
+  return (
+    <>
+      <h4 style={{ margin: '8px 0 0' }}>Nombre en cada origen automático</h4>
+      <p className="texto-suave" style={{ margin: 0 }}>
+        Cómo se identifica esta desagregación en los datos de cada origen (para sugerir el mapeo de columnas al configurar
+        la obtención automática de un indicador).
+      </p>
+      {origenes.map((o) => (
+        <div key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ minWidth: 140 }}>{o.nombre}</span>
+          <input
+            type="text"
+            value={alias.get(o.id) ?? ''}
+            onChange={(e) => void guardar(o.id, e.target.value)}
+            data-testid={`lista-alias-${o.nombre}`}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
 
 function listaVacia(): Lista {
   return {
@@ -373,6 +424,7 @@ export function ListasPage(): React.JSX.Element {
             />
             Lista jerárquica (elementos con padre)
           </label>
+          {editando.id && <SeccionAliasOrigen listaId={editando.id} />}
           {editando.id && (
             <button
               className="boton peligro"

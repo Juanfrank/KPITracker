@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { componerAplicacion } from '../../src/main/composicion';
@@ -15,7 +16,6 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
     estado: 'Activo', responsable: null, categoria: null, unidadMedida: null, esCalculado: false, formula: null,
-    origenAutomaticoId: null, parametrosOrigen: null,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -608,7 +608,8 @@ describe('Composition root — orígenes automáticos', () => {
   it('CRUD de orígenes automáticos vía IPC', async () => {
     const origen = await app.manejadores['origenes:guardar']({
       id: '', nombre: 'API institucional', tipo: 'API', descripcion: '',
-      configuracion: { url: 'https://ejemplo.local/api', metodo: 'GET' }, activo: true, creadoEn: '', actualizadoEn: ''
+      configuracion: { url: 'https://ejemplo.local/api', metodo: 'GET' }, parametrosGenerales: [],
+      activo: true, creadoEn: '', actualizadoEn: ''
     });
     expect(origen.id).not.toBe('');
     expect(await app.manejadores['origenes:listar'](undefined)).toHaveLength(1);
@@ -616,27 +617,132 @@ describe('Composition root — orígenes automáticos', () => {
     expect(await app.manejadores['origenes:listar'](undefined)).toHaveLength(0);
   });
 
-  it('rechaza obtenerAutomatico si el indicador no tiene origen configurado', async () => {
+  it('rechaza obtenerAutomatico si el indicador no tiene la obtención automática configurada', async () => {
     const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
     const periodoId = periodos[periodos.length - 1]!.id;
     await expect(
       app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId })
-    ).rejects.toThrow(/origen automático/);
+    ).rejects.toThrow(/obtención automática/);
   });
 
-  it('rechaza con NoImplementadoError cuando el indicador sí tiene origen configurado', async () => {
+  it('rechaza si falta configurar la columna del valor', async () => {
     const origen = await app.manejadores['origenes:guardar']({
-      id: '', nombre: 'API institucional', tipo: 'API', descripcion: '',
-      configuracion: {}, activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Origen sin columna de valor', tipo: 'API', descripcion: '',
+      configuracion: { url: 'http://127.0.0.1:9', metodo: 'GET' }, parametrosGenerales: [],
+      activo: true, creadoEn: '', actualizadoEn: ''
     });
-    const guardado = await app.manejadores['indicadores:guardar']({
-      indicador: indicador({ origenAutomaticoId: origen.id }), valores: []
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    await app.manejadores['automatizacion:guardar']({
+      id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+      script: '', columnaValor: null, mapeoColumnas: [], desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
     });
     const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
     const periodoId = periodos[periodos.length - 1]!.id;
     await expect(
       app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId })
-    ).rejects.toThrow(/no está implementada/);
+    ).rejects.toThrow(/columna del valor/);
+  });
+
+  it('ejecuta el script real contra un servidor HTTP local y escribe los resultados mapeados por desagregación', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([
+        { sexo: '', total: '82.5' },
+        { sexo: 'M', total: '90' },
+        { sexo: 'F', total: '75' }
+      ]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'API local de prueba', tipo: 'API', descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' },
+        parametrosGenerales: [{ nombre: 'anio', fuente: 'Anio' }], activo: true, creadoEn: '', actualizadoEn: ''
+      });
+
+      const lista = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1,
+        jerarquica: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({
+        id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true
+      });
+      await app.manejadores['listas:guardarElemento']({
+        id: '', listaId: lista.id, codigo: 'F', nombre: 'Femenino', descripcion: '', orden: 2, padreCodigo: null, activo: true
+      });
+
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [lista.id] }), valores: []
+      });
+
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: '', columnaValor: 'total', mapeoColumnas: [{ columna: 'sexo', listaId: lista.id }],
+        desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
+      });
+
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId });
+      expect(resultado.celdasActualizadas).toBe(3);
+      expect(resultado.filasConError).toBe(0);
+      expect(resultado.desagregacionesSinMapear).toEqual([]);
+
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+      expect(captura.filas.find((f) => f.esGeneral)?.valor).toBe(82.5);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M'))?.valor).toBe(90);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=F'))?.valor).toBe(75);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('marca las desagregaciones sin mapear y solo completa la fila General', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([{ total: '50' }]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'API sin mapeo de desagregación', tipo: 'API', descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, creadoEn: '', actualizadoEn: ''
+      });
+      const lista = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Provincia', descripcion: '', prefijo: 'PROV', estado: 'Activa', version: 1, orden: 1,
+        jerarquica: false, creadoEn: '', actualizadoEn: ''
+      });
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [lista.id] }), valores: []
+      });
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: '', columnaValor: 'total', mapeoColumnas: [], desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
+      });
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId });
+      expect(resultado.celdasActualizadas).toBe(1);
+      expect(resultado.desagregacionesSinMapear).toEqual([lista.id]);
+
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+      expect(captura.filas.find((f) => f.esGeneral)?.valor).toBe(50);
+    } finally {
+      servidor.close();
+    }
   });
 });

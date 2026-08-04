@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Categoria, OrigenAutomatico, Responsable, TipoOrigenAutomatico } from '@domain/index';
+import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, TipoOrigenAutomatico } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
@@ -13,27 +13,97 @@ function categoriaVacia(): Categoria {
 }
 
 function origenVacio(): OrigenAutomatico {
-  return { id: '', nombre: '', tipo: 'API', descripcion: '', configuracion: {}, activo: true, creadoEn: '', actualizadoEn: '' };
+  return {
+    id: '', nombre: '', tipo: 'API', descripcion: '', configuracion: {},
+    parametrosGenerales: [{ nombre: 'periodo', fuente: 'PeriodoId' }],
+    activo: true, creadoEn: '', actualizadoEn: ''
+  };
 }
 
 /** Campos de configuración específicos por tipo de origen (clave dentro de `configuracion`, con máscara para credenciales). */
 const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, Array<{ clave: string; etiqueta: string; sensible?: boolean }>> = {
   XMLA: [
-    { clave: 'servidor', etiqueta: 'Servidor XMLA' },
+    { clave: 'servidor', etiqueta: 'URL del servidor XMLA' },
     { clave: 'catalogo', etiqueta: 'Catálogo / cubo' },
     { clave: 'usuario', etiqueta: 'Usuario' },
     { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
   ],
   SQL: [
-    { clave: 'cadenaConexion', etiqueta: 'Cadena de conexión', sensible: true },
-    { clave: 'consulta', etiqueta: 'Consulta SQL (plantilla)' }
+    { clave: 'servidor', etiqueta: 'Servidor (host[,puerto])' },
+    { clave: 'puerto', etiqueta: 'Puerto (opcional)' },
+    { clave: 'baseDatos', etiqueta: 'Base de datos' },
+    { clave: 'usuario', etiqueta: 'Usuario' },
+    { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
   ],
   API: [
-    { clave: 'url', etiqueta: 'URL del endpoint' },
+    { clave: 'url', etiqueta: 'URL base del endpoint' },
     { clave: 'metodo', etiqueta: 'Método (GET/POST)' },
     { clave: 'token', etiqueta: 'Token / API Key', sensible: true }
   ]
 };
+
+const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
+  { valor: 'PeriodoId', etiqueta: 'Id del período (p. ej. 2026-Trimestral-03)' },
+  { valor: 'PeriodoEtiqueta', etiqueta: 'Etiqueta del período (p. ej. T3 2026)' },
+  { valor: 'FechaInicio', etiqueta: 'Fecha de inicio del período' },
+  { valor: 'FechaFin', etiqueta: 'Fecha de fin del período' },
+  { valor: 'Anio', etiqueta: 'Año' },
+  { valor: 'MesNumero', etiqueta: 'Mes (numérico, del inicio del período)' },
+  { valor: 'MesNombre', etiqueta: 'Mes (texto, del inicio del período)' },
+  { valor: 'MesesNumeroLista', etiqueta: 'Lista de meses cubiertos (numérica, separada por comas)' },
+  { valor: 'MesesNombreLista', etiqueta: 'Lista de meses cubiertos (texto, separada por comas)' },
+  { valor: 'Numero', etiqueta: 'Número ordinal del período en el año' },
+  { valor: 'Periodicidad', etiqueta: 'Periodicidad' }
+];
+
+/** Editor de parámetros generales: nombre del token en el script + de dónde sale su valor. */
+function EditorParametrosGenerales({
+  parametros, onChange
+}: {
+  parametros: ParametroGeneral[];
+  onChange: (parametros: ParametroGeneral[]) => void;
+}): React.JSX.Element {
+  const actualizar = (indice: number, cambio: Partial<ParametroGeneral>): void => {
+    onChange(parametros.map((p, i) => (i === indice ? { ...p, ...cambio } : p)));
+  };
+  const eliminar = (indice: number): void => onChange(parametros.filter((_, i) => i !== indice));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {parametros.map((p, indice) => (
+        <div key={indice} style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="text"
+            placeholder="nombre del token"
+            value={p.nombre}
+            onChange={(e) => actualizar(indice, { nombre: e.target.value })}
+            data-testid={`origen-parametro-general-nombre-${indice}`}
+            style={{ flex: 1 }}
+          />
+          <select
+            value={p.fuente}
+            onChange={(e) => actualizar(indice, { fuente: e.target.value as FuenteParametroGeneral })}
+            data-testid={`origen-parametro-general-fuente-${indice}`}
+            style={{ flex: 2 }}
+          >
+            {FUENTES_PARAMETRO_GENERAL.map((f) => <option key={f.valor} value={f.valor}>{f.etiqueta}</option>)}
+          </select>
+          <button className="boton sutil" onClick={() => eliminar(indice)}>
+            <Icono nombre="cerrar" tamano={13} />
+          </button>
+        </div>
+      ))}
+      <button
+        className="boton sutil"
+        style={{ justifySelf: 'start' }}
+        onClick={() => onChange([...parametros, { nombre: '', fuente: 'PeriodoId' }])}
+        data-testid="origen-parametro-general-agregar"
+      >
+        <Icono nombre="mas" tamano={13} /> Agregar parámetro general
+      </button>
+    </div>
+  );
+}
 
 function SeccionResponsables(): React.JSX.Element {
   const [items, setItems] = useState<Responsable[]>([]);
@@ -230,6 +300,8 @@ function SeccionCategorias(): React.JSX.Element {
 function SeccionOrigenesAutomaticos(): React.JSX.Element {
   const [items, setItems] = useState<OrigenAutomatico[]>([]);
   const [editando, setEditando] = useState<OrigenAutomatico | null>(null);
+  const [probando, setProbando] = useState(false);
+  const [resultadoPrueba, setResultadoPrueba] = useState<{ ok: boolean; mensaje: string } | null>(null);
 
   const cargar = useCallback(async (): Promise<void> => {
     setItems(await invocar('origenes:listar', undefined));
@@ -246,6 +318,19 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
     await cargar();
   };
 
+  const probar = async (): Promise<void> => {
+    if (!editando) return;
+    setProbando(true);
+    setResultadoPrueba(null);
+    try {
+      setResultadoPrueba(await invocar('origenes:probar', editando));
+    } catch (error) {
+      setResultadoPrueba({ ok: false, mensaje: (error as Error).message });
+    } finally {
+      setProbando(false);
+    }
+  };
+
   return (
     <div className="tarjeta">
       <div className="toolbar">
@@ -256,8 +341,8 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
         </button>
       </div>
       <p className="texto-suave">
-        Conexiones externas (XMLA, SQL, API) para obtener resultados de indicadores sin captura manual. La ejecución real de la
-        consulta aún no está disponible en esta versión; aquí solo se configuran el origen y sus credenciales.
+        Conexiones externas (XMLA, SQL, API) para obtener resultados de indicadores sin captura manual. XMLA se soporta de
+        mejor esfuerzo (consultas MDX de 2 ejes; sin autenticación Windows/NTLM).
       </p>
       <div className="tabla-envoltura">
         <table className="tabla">
@@ -289,7 +374,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar origen automático' : 'Nuevo origen automático'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setResultadoPrueba(null); }}
           pie={
             <>
               {editando.id && (
@@ -306,7 +391,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
+              <button className="boton" onClick={() => { setEditando(null); setResultadoPrueba(null); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-origen">Guardar</button>
             </>
           }
@@ -317,7 +402,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
           <Campo etiqueta="Tipo" obligatorio>
             <select
               value={editando.tipo}
-              onChange={(e) => setEditando({ ...editando, tipo: e.target.value as TipoOrigenAutomatico, configuracion: {} })}
+              onChange={(e) => { setEditando({ ...editando, tipo: e.target.value as TipoOrigenAutomatico, configuracion: {} }); setResultadoPrueba(null); }}
               data-testid="origen-tipo"
             >
               <option value="XMLA">XMLA</option>
@@ -340,7 +425,28 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               />
             </Campo>
           ))}
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+          <div className="toolbar">
+            <button className="boton" onClick={() => void probar()} disabled={probando} data-testid="origen-probar">
+              {probando ? 'Probando…' : 'Probar conexión'}
+            </button>
+          </div>
+          {resultadoPrueba && (
+            <div className={`aviso ${resultadoPrueba.ok ? 'exito' : 'error'}`} data-testid="origen-resultado-prueba">
+              {resultadoPrueba.mensaje}
+            </div>
+          )}
+
+          <h4 style={{ margin: '8px 0 0' }}>Parámetros generales del período</h4>
+          <p className="texto-suave" style={{ margin: 0 }}>
+            Cómo se nombra el período al sustituirlo en el script de cada indicador: un único valor, un rango de fechas
+            (desde/hasta), año y mes por separado (numérico o textual), listas de meses, etc. — agregue tantos como necesite.
+          </p>
+          <EditorParametrosGenerales
+            parametros={editando.parametrosGenerales}
+            onChange={(parametrosGenerales) => setEditando({ ...editando, parametrosGenerales })}
+          />
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
             Activo
           </label>
