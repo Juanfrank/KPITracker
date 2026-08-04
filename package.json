@@ -66,6 +66,9 @@
     "asarUnpack": [
       "node_modules/@duckdb/**"
     ],
+    "toolsets": {
+      "wine": "1.0.1"
+    },
     "win": {
       "target": [
         { "target": "nsis", "arch": ["x64"] },
