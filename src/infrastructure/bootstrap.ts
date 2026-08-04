@@ -4,15 +4,16 @@ import { crearEsquema, restaurarDesdeParquetSiVacio } from './duckdb/esquema';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import { ParquetSyncService } from './parquet/ParquetSyncService';
 import {
-  AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, CatalogoRepositoryDuckDb, IndicadorRepositoryDuckDb,
-  ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb, ResultadoRepositoryDuckDb,
-  crearRepositorioDefinicionesPeriodicidad
+  AdjuntoRepositoryDuckDb, AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, CatalogoRepositoryDuckDb,
+  IndicadorRepositoryDuckDb, ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb,
+  ResultadoRepositoryDuckDb, crearRepositorioDefinicionesPeriodicidad
 } from './repositories/RepositoriosDuckDb';
 import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
 import { GeneradorUuid, RelojSistema } from './soporte/servicios';
+import { ArchivoService } from './soporte/ArchivoService';
 
 export interface Infraestructura {
   db: Db;
@@ -30,9 +31,11 @@ export interface Infraestructura {
   responsables: CatalogoRepositoryDuckDb<Responsable>;
   categorias: CatalogoRepositoryDuckDb<Categoria>;
   resultados: ResultadoRepositoryDuckDb;
+  adjuntos: AdjuntoRepositoryDuckDb;
   auditoria: AuditoriaRepositoryDuckDb;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
+  archivos: ArchivoService;
   cerrar(): Promise<void>;
 }
 
@@ -70,11 +73,13 @@ export async function crearInfraestructura(
   const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
   const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
+  const adjuntos = new AdjuntoRepositoryDuckDb(db, sync);
   const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);
   const auditoria = new AuditoriaRepositoryDuckDb(db, sync);
   const configPortable = new ConfigPortableService(
     configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
   );
+  const archivos = new ArchivoService(rutas);
 
   return {
     db,
@@ -92,9 +97,11 @@ export async function crearInfraestructura(
     responsables,
     categorias,
     resultados,
+    adjuntos,
     auditoria,
     exportacion,
     configPortable,
+    archivos,
     async cerrar() {
       await sync.sincronizar();
       db.cerrar();

@@ -29,6 +29,9 @@ export class RutasDataLake {
   get exportacion(): string {
     return join(this.raiz, 'Export');
   }
+  get adjuntos(): string {
+    return join(this.raiz, 'Adjuntos');
+  }
   get archivoConfiguracion(): string {
     return join(this.raiz, 'Configuracion.json');
   }
@@ -40,7 +43,7 @@ export class RutasDataLake {
   }
 
   crearDirectorios(): void {
-    for (const dir of [this.config, this.dimensions, this.facts, this.logs, this.exportacion]) {
+    for (const dir of [this.config, this.dimensions, this.facts, this.logs, this.exportacion, this.adjuntos]) {
       mkdirSync(dir, { recursive: true });
     }
   }

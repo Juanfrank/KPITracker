@@ -10,6 +10,7 @@ import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalog
 import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodicidades';
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
+import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
 import type { CanalesIpc, NombreCanal } from '@shared/ipc';
 
 export interface Aplicacion {
@@ -39,7 +40,7 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
   const indicadores = new ServicioIndicadores(ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos);
   const atributos = new ServicioAtributos(ctx, infra.atributos);
   const listas = new ServicioListas(ctx, infra.listas);
-  const metas = new ServicioMetas(ctx, infra.metas);
+  const metas = new ServicioMetas(ctx, infra.metas, infra.periodicidades);
   const reglas = new ServicioReglas(ctx, infra.reglas);
   const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
   const responsables = new ServicioCatalogoGenerico(ctx, infra.responsables, 'Responsable');
@@ -51,6 +52,7 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
     infra.periodicidades, infra.responsables, infra.categorias, reglasFechaLimite
   );
+  const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos);
 
   const manejadores: Aplicacion['manejadores'] = {
     'config:obtener': () => configuracion.obtener(),
@@ -61,6 +63,9 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'indicadores:obtener': ({ id }) => indicadores.obtener(id),
     'indicadores:guardar': (input) => indicadores.guardar(input),
     'indicadores:eliminar': ({ id }) => indicadores.eliminar(id),
+    'indicadores:reasignarMasivo': ({ ids, responsable, categoria }) =>
+      indicadores.reasignarMasivo(ids, { responsable, categoria }),
+    'indicadores:importarExcel': ({ filas, mapeo }) => indicadores.importarExcel(filas, mapeo),
 
     'atributos:listar': (payload) => atributos.listar(payload?.entidad),
     'atributos:guardar': (atributo) => atributos.guardar(atributo),
@@ -103,6 +108,10 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
       recoleccion.establecerFechaCorte(indicadorId, periodoId, fechaCorte),
     'recoleccion:exclusion': ({ indicadorId, periodoId, listaId, excluir }) =>
       recoleccion.alternarExclusion(indicadorId, periodoId, listaId, excluir),
+    'recoleccion:historial': ({ indicadorId, periodoId, claveDesagregacion }) =>
+      recoleccion.historialCelda(indicadorId, periodoId, claveDesagregacion),
+    'recoleccion:restaurarVersion': ({ indicadorId, periodoId, claveDesagregacion, version }) =>
+      recoleccion.restaurarVersion(indicadorId, periodoId, claveDesagregacion, version),
 
     'seguimiento:tablero': () => seguimiento.tablero(),
     'seguimiento:detalle': ({ indicadorId }) => seguimiento.detalle(indicadorId),
@@ -119,7 +128,15 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'portable:importar': ({ json }) => infra.configPortable.importar(json),
 
     'tipos:listar': async () =>
-      tipos.listar().map((t) => ({ tipo: String(t.tipo), etiqueta: t.etiqueta, editorHint: t.editorHint }))
+      tipos.listar().map((t) => ({ tipo: String(t.tipo), etiqueta: t.etiqueta, editorHint: t.editorHint })),
+
+    'adjuntos:listar': ({ entidad, entidadId }) => adjuntos.listarPorEntidad(entidad, entidadId),
+    'adjuntos:subir': ({ entidad, entidadId, comentario }) => adjuntos.subir(entidad, entidadId, comentario ?? null),
+    'adjuntos:abrir': ({ id }) => adjuntos.abrir(id),
+    'adjuntos:eliminar': ({ id }) => adjuntos.eliminar(id),
+
+    'sistema:seleccionarArchivo': (payload) => infra.archivos.seleccionarArchivo(payload?.filtros),
+    'sistema:leerHojaCalculo': ({ rutaArchivo }) => infra.archivos.leerHojaCalculo(rutaArchivo)
   };
 
   return {

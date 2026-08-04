@@ -18,6 +18,24 @@ export interface Resultado {
 }
 
 /**
+ * Versión histórica de un Resultado. Se agrega una entrada append-only cada
+ * vez que `valor`/`observacion` cambian, permitiendo consultar versiones
+ * previas y hacer rollback sin perder el rastro de lo capturado.
+ */
+export interface ResultadoHistorial {
+  readonly id: string;
+  indicadorId: string;
+  periodoId: string;
+  claveDesagregacion: string;
+  /** Número de versión, incremental desde 1 por (indicadorId, periodoId, claveDesagregacion). */
+  version: number;
+  valor: number | null;
+  observacion: string | null;
+  usuario: string;
+  actualizadoEn: string;
+}
+
+/**
  * Estado del levantamiento de un indicador para un período: fecha de corte
  * única y obligatoria, y exclusiones temporales de desagregación que nunca
  * modifican la configuración del indicador.

@@ -33,6 +33,8 @@ interface EstadoRecoleccion {
   alternarExclusion(listaId: string, excluir: boolean): Promise<void>;
   /** Pegado desde Excel: aplica valores TSV a partir de una fila. */
   pegarDesde(filaInicio: number, textoPortapapeles: string): Promise<void>;
+  /** Restaura una versión anterior de una celda (registra el estado actual en el historial). */
+  restaurarVersion(claveDesagregacion: string, version: number): Promise<void>;
 }
 
 /**
@@ -153,6 +155,23 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     await invocar('recoleccion:exclusion', { indicadorId, periodoId, listaId, excluir });
     // La exclusión cambia las combinaciones: recarga la grilla.
     await get().seleccionarPeriodo(periodoId);
+  },
+
+  async restaurarVersion(claveDesagregacion, version) {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return;
+    const { valor, advertencias } = await invocar('recoleccion:restaurarVersion', {
+      indicadorId, periodoId, claveDesagregacion, version
+    });
+    set((s) => ({
+      captura: s.captura && {
+        ...s.captura,
+        advertencias,
+        filas: s.captura.filas.map((f) =>
+          f.claveDesagregacion === claveDesagregacion ? { ...f, valor, actualizadoEn: new Date().toISOString() } : f
+        )
+      }
+    }));
   },
 
   async pegarDesde(filaInicio, textoPortapapeles) {

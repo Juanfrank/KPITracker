@@ -1,13 +1,15 @@
 import {
-  EntidadNoEncontradaError, GeneradorPeriodos, Periodicidad, ProductoCartesiano, TipoDato,
+  EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, TipoDato,
   ValidacionError, calcularAgregadosCaptura, claveATexto, evaluarValidacionesCaptura
 } from '@domain/index';
-import type { DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Periodo, TypeRegistry } from '@domain/index';
+import type {
+  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Periodo, ResultadoHistorial, TypeRegistry
+} from '@domain/index';
 import type {
   IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
   IListaRepository, IReglaRepository, IResultadoRepository
 } from '@application/ports/index';
-import { ServicioBase } from './base';
+import { ServicioBase, USUARIO_LOCAL } from './base';
 import type { ContextoAplicacion } from './base';
 
 export interface FilaCaptura {
@@ -42,6 +44,7 @@ export interface DatosCaptura {
 export class ServicioRecoleccion extends ServicioBase {
   private readonly generadorPeriodos = new GeneradorPeriodos();
   private readonly productoCartesiano = new ProductoCartesiano();
+  private readonly formulas = new EvaluadorFormulas();
 
   constructor(
     ctx: ContextoAplicacion,
@@ -76,6 +79,27 @@ export class ServicioRecoleccion extends ServicioBase {
   async obtenerCaptura(indicadorId: string, periodoId: string): Promise<DatosCaptura> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+
+    if (indicador.esCalculado && indicador.formula) {
+      const valor = await this.calcularValorIndicador(indicador.formula, periodoId);
+      const definicion = await this.definicionPara(indicador);
+      return {
+        indicadorId,
+        periodoId,
+        periodoEtiqueta: this.etiquetaPeriodo(periodoId, definicion),
+        fechaCorte: null,
+        desagregacionesDisponibles: [],
+        filas: [{
+          claveDesagregacion: 'GENERAL',
+          etiquetas: [],
+          esGeneral: true,
+          valor,
+          observacion: null,
+          actualizadoEn: null
+        }],
+        advertencias: []
+      };
+    }
 
     const levantamiento = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     const excluidas = levantamiento?.desagregacionesExcluidas ?? [];
@@ -138,6 +162,10 @@ export class ServicioRecoleccion extends ServicioBase {
     valorCrudo: string,
     observacion: string | null = null
   ): Promise<{ valor: number | null; advertencias: string[] }> {
+    const indicadorActual = await this.indicadores.obtener(indicadorId);
+    if (indicadorActual?.esCalculado) {
+      throw new ValidacionError('Este indicador es calculado: su valor se obtiene automáticamente de la fórmula y no admite captura manual.');
+    }
     const parseado = this.tipos.obtener(TipoDato.Decimal).parse(valorCrudo);
     if (!parseado.ok) throw new ValidacionError(parseado.error ?? 'Valor inválido.');
     const valor = parseado.valor as number | null;
@@ -145,6 +173,11 @@ export class ServicioRecoleccion extends ServicioBase {
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
     const ahora = this.ctx.reloj.ahoraIso();
+
+    if (anterior) {
+      await this.registrarVersionAnterior(indicadorId, periodoId, claveDesagregacion, anterior.valor, anterior.observacion, anterior.actualizadoEn);
+    }
+
     await this.resultados.guardar({
       id: anterior?.id ?? this.ctx.ids.nuevoId(),
       indicadorId,
@@ -162,6 +195,74 @@ export class ServicioRecoleccion extends ServicioBase {
 
     const captura = await this.obtenerCaptura(indicadorId, periodoId);
     return { valor, advertencias: captura.advertencias };
+  }
+
+  /** Historial de versiones previas de una celda, más reciente primero. */
+  async historialCelda(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]> {
+    return this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
+  }
+
+  /**
+   * Restaura una versión previa de una celda: la vuelve a escribir como el
+   * valor vigente (registrando, a su vez, el estado que reemplaza como una
+   * nueva versión del historial — el historial nunca se reescribe).
+   */
+  async restaurarVersion(
+    indicadorId: string,
+    periodoId: string,
+    claveDesagregacion: string,
+    version: number
+  ): Promise<{ valor: number | null; advertencias: string[] }> {
+    const historial = await this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
+    const objetivo = historial.find((h) => h.version === version);
+    if (!objetivo) throw new EntidadNoEncontradaError('ResultadoHistorial', `${indicadorId}:${periodoId}:${claveDesagregacion}:v${version}`);
+
+    const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
+    const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
+    if (anterior) {
+      await this.registrarVersionAnterior(indicadorId, periodoId, claveDesagregacion, anterior.valor, anterior.observacion, anterior.actualizadoEn);
+    }
+
+    const ahora = this.ctx.reloj.ahoraIso();
+    await this.resultados.guardar({
+      id: anterior?.id ?? this.ctx.ids.nuevoId(),
+      indicadorId,
+      periodoId,
+      anio: Number(periodoId.slice(0, 4)),
+      claveDesagregacion,
+      valor: objetivo.valor,
+      observacion: objetivo.observacion,
+      creadoEn: anterior?.creadoEn ?? ahora,
+      actualizadoEn: ahora
+    });
+    await this.auditar('Restaurar', 'Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`,
+      'valor', anterior?.valor ?? null, objetivo.valor);
+    this.sincronizarExport();
+
+    const captura = await this.obtenerCaptura(indicadorId, periodoId);
+    return { valor: objetivo.valor, advertencias: captura.advertencias };
+  }
+
+  private async registrarVersionAnterior(
+    indicadorId: string,
+    periodoId: string,
+    claveDesagregacion: string,
+    valor: number | null,
+    observacion: string | null,
+    actualizadoEn: string
+  ): Promise<void> {
+    const historialExistente = await this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
+    await this.resultados.registrarVersion({
+      id: this.ctx.ids.nuevoId(),
+      indicadorId,
+      periodoId,
+      claveDesagregacion,
+      version: historialExistente.length + 1,
+      valor,
+      observacion,
+      usuario: USUARIO_LOCAL,
+      actualizadoEn
+    });
   }
 
   /** La fecha de corte es única por indicador+período y obligatoria para completar. */
@@ -207,6 +308,36 @@ export class ServicioRecoleccion extends ServicioBase {
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });
+  }
+
+  /**
+   * Evalúa la fórmula de un indicador calculado para un período, resolviendo
+   * cada código referenciado al valor GENERAL de ese indicador en el mismo
+   * período. Solo opera a nivel GENERAL (sin desagregar).
+   */
+  private async calcularValorIndicador(formula: string, periodoId: string): Promise<number | null> {
+    let codigos: string[];
+    try {
+      codigos = this.formulas.codigosReferenciados(formula);
+    } catch {
+      return null;
+    }
+    const valores = new Map<string, number | null>();
+    for (const codigo of codigos) {
+      const refIndicador = await this.indicadores.buscarPorCodigo(codigo);
+      if (!refIndicador) {
+        valores.set(codigo, null);
+        continue;
+      }
+      const resultados = await this.resultados.obtenerPorIndicadorPeriodo(refIndicador.id, periodoId);
+      const general = resultados.find((r) => r.claveDesagregacion === 'GENERAL');
+      valores.set(codigo, general?.valor ?? null);
+    }
+    try {
+      return this.formulas.evaluar(formula, valores);
+    } catch {
+      return null;
+    }
   }
 
   private etiquetaPeriodo(periodoId: string, definicion?: DefinicionPeriodicidad): string {

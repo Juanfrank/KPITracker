@@ -1,12 +1,46 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import { join } from 'node:path';
 import { componerAplicacion } from './composicion';
 import type { Aplicacion } from './composicion';
 import { NOMBRES_CANALES } from '@shared/ipc';
 import type { RespuestaIpc } from '@shared/ipc';
 import { ValidacionError } from '@domain/index';
+import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 
 let aplicacion: Aplicacion | null = null;
+let temporizadorNotificaciones: ReturnType<typeof setInterval> | null = null;
+const yaNotificados = new Set<string>();
+
+const INTERVALO_NOTIFICACIONES_MS = 60 * 60 * 1000; // cada hora
+
+/**
+ * Revisa el tablero de seguimiento y dispara notificaciones del sistema
+ * operativo para indicadores vencidos o próximos a vencer. Deduplica en
+ * memoria por sesión (una vez notificado, no se repite hasta reiniciar la
+ * app) — no persiste estado en disco.
+ */
+async function revisarVencimientos(aplicacionActual: Aplicacion): Promise<void> {
+  if (!Notification.isSupported()) return;
+  const tablero = await aplicacionActual.manejadores['seguimiento:tablero'](undefined);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const pendientes = indicadoresQueRequierenNotificacion(tablero, hoy);
+
+  for (const p of pendientes) {
+    const clave = `${p.indicadorId}:${p.motivo}:${p.fechaLimite ?? ''}`;
+    if (yaNotificados.has(clave)) continue;
+    yaNotificados.add(clave);
+    const titulo = p.motivo === 'Vencido' ? 'Indicador vencido' : 'Indicador próximo a vencer';
+    const cuerpo = p.fechaLimite
+      ? `${p.nombre} — fecha límite ${p.fechaLimite}`
+      : p.nombre;
+    new Notification({ title: titulo, body: cuerpo }).show();
+  }
+}
+
+function iniciarNotificaciones(aplicacionActual: Aplicacion): void {
+  void revisarVencimientos(aplicacionActual);
+  temporizadorNotificaciones = setInterval(() => void revisarVencimientos(aplicacionActual), INTERVALO_NOTIFICACIONES_MS);
+}
 
 /** El directorio de datos puede fijarse por variable de entorno (pruebas E2E). */
 function directorioDatos(): string {
@@ -66,6 +100,7 @@ app.whenReady().then(async () => {
   aplicacion = await componerAplicacion(directorioDatos());
   registrarIpc(aplicacion);
   await crearVentana();
+  iniciarNotificaciones(aplicacion);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void crearVentana();
@@ -78,6 +113,10 @@ app.on('window-all-closed', () => {
 
 // Garantiza que todo lo pendiente quede materializado en Parquet al salir.
 app.on('before-quit', (evento) => {
+  if (temporizadorNotificaciones) {
+    clearInterval(temporizadorNotificaciones);
+    temporizadorNotificaciones = null;
+  }
   if (aplicacion) {
     evento.preventDefault();
     const actual = aplicacion;

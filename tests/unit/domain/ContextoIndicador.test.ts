@@ -8,9 +8,9 @@ import type { ValorAtributo } from '@domain/data-types/TypeDescriptor';
 
 function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
-    id: 'i1', nombre: 'Tasa de resolución', definicion: 'def', periodicidad: Periodicidad.Trimestral,
-    periodicidadPersonalizadaId: null, lineaBase: 60, metaGlobal: 90, desagregaciones: [],
-    estado: 'Activo', responsable: 'resp-1', categoria: 'cat-1', unidadMedida: '%',
+    id: 'i1', codigo: 'IND-1', nombre: 'Tasa de resolución', definicion: 'def', periodicidad: Periodicidad.Trimestral,
+    periodicidadPersonalizadaId: null, lineaBase: 60, lineaBasePeriodoId: null, metaGlobal: 90, desagregaciones: [],
+    estado: 'Activo', responsable: 'resp-1', categoria: 'cat-1', unidadMedida: '%', esCalculado: false, formula: null,
     creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial
   };

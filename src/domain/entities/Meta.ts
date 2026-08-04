@@ -19,6 +19,8 @@ export interface Meta {
   valor: number;
   /** Periodicidad con la que se mide el cumplimiento de la meta. */
   periodicidadMedicion: Periodicidad;
+  /** Id de DefinicionPeriodicidad; requerido cuando periodicidadMedicion = Personalizada. */
+  periodicidadPersonalizadaId: string | null;
   metodoCalculo: MetodoCalculo;
   anioVigencia: number;
   readonly creadoEn: string;

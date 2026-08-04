@@ -1,17 +1,18 @@
 import type {
-  Atributo, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Lista, Meta,
-  RegistroAuditoria, ReglaNegocio, Resultado
+  Adjunto, Atributo, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Indicador, Levantamiento, Lista,
+  Meta, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial
 } from '@domain/index';
 import type {
-  FiltroAuditoria, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
+  FiltroAuditoria, IAdjuntoRepository, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
   IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository,
   ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import type { Db } from '../duckdb/Db';
 import type { ParquetSyncService } from '../parquet/ParquetSyncService';
 import {
-  aAtributo, aAuditoria, aDefinicionPeriodicidad, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
-  aRegla, aResultado, deAtributo, deDefinicionPeriodicidad, deElemento, deIndicador, deLista, deMeta, deRegla
+  aAdjunto, aAtributo, aAuditoria, aDefinicionPeriodicidad, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
+  aRegla, aResultado, aResultadoHistorial, deAdjunto, deAtributo, deDefinicionPeriodicidad, deElemento, deIndicador,
+  deLista, deMeta, deRegla, deResultadoHistorial
 } from './mapeos';
 
 /**
@@ -38,9 +39,16 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
     return fila ? aIndicador(fila) : null;
   }
 
+  async buscarPorCodigo(codigo: string, excluirId?: string): Promise<Indicador | null> {
+    const fila = excluirId
+      ? await this.db.uno('SELECT * FROM indicadores WHERE codigo = ? AND id != ?', [codigo, excluirId])
+      : await this.db.uno('SELECT * FROM indicadores WHERE codigo = ?', [codigo]);
+    return fila ? aIndicador(fila) : null;
+  }
+
   async guardar(indicador: Indicador): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deIndicador(indicador)
     );
     this.sync.marcarSucia('indicadores');
@@ -154,7 +162,7 @@ export class MetaRepositoryDuckDb extends RepositorioBase implements IMetaReposi
   }
 
   async guardar(meta: Meta): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO metas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', deMeta(meta));
+    await this.db.run('INSERT OR REPLACE INTO metas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', deMeta(meta));
     this.sync.marcarSucia('metas');
   }
 
@@ -267,6 +275,21 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
       ultimaActualizacion: f.ultima == null ? null : String(f.ultima)
     }));
   }
+
+  async obtenerHistorial(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]> {
+    const filas = await this.db.all(
+      `SELECT * FROM resultados_historial
+       WHERE indicador_id = ? AND periodo_id = ? AND clave_desagregacion = ?
+       ORDER BY version DESC`,
+      [indicadorId, periodoId, claveDesagregacion]
+    );
+    return filas.map(aResultadoHistorial);
+  }
+
+  async registrarVersion(entrada: ResultadoHistorial): Promise<void> {
+    await this.db.run('INSERT INTO resultados_historial VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', deResultadoHistorial(entrada));
+    this.sync.marcarSucia('resultados_historial');
+  }
 }
 
 export class AuditoriaRepositoryDuckDb extends RepositorioBase implements IAuditoriaRepository {
@@ -344,6 +367,31 @@ export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends
   async eliminar(id: string): Promise<void> {
     await this.db.run(`DELETE FROM ${this.tabla} WHERE id = ?`, [id]);
     this.sync.marcarSucia(this.tabla);
+  }
+}
+
+export class AdjuntoRepositoryDuckDb extends RepositorioBase implements IAdjuntoRepository {
+  async listarPorEntidad(entidad: EntidadAdjunto, entidadId: string): Promise<Adjunto[]> {
+    const filas = await this.db.all(
+      'SELECT * FROM adjuntos WHERE entidad = ? AND entidad_id = ? ORDER BY subido_en DESC',
+      [entidad, entidadId]
+    );
+    return filas.map(aAdjunto);
+  }
+
+  async obtener(id: string): Promise<Adjunto | null> {
+    const fila = await this.db.uno('SELECT * FROM adjuntos WHERE id = ?', [id]);
+    return fila ? aAdjunto(fila) : null;
+  }
+
+  async guardar(adjunto: Adjunto): Promise<void> {
+    await this.db.run('INSERT OR REPLACE INTO adjuntos VALUES (?, ?, ?, ?, ?, ?, ?, ?)', deAdjunto(adjunto));
+    this.sync.marcarSucia('adjuntos');
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.db.run('DELETE FROM adjuntos WHERE id = ?', [id]);
+    this.sync.marcarSucia('adjuntos');
   }
 }
 

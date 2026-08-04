@@ -2,37 +2,31 @@
 
 La arquitectura ya contempla estas incorporaciones sin rediseños importantes. Se listan con su punto de extensión previsto.
 
-## Completado (iteración 2)
+## Completado (iteración 3)
 
-Todo el roadmap de corto plazo de la primera entrega quedó implementado:
+Todo el roadmap de corto plazo y la mayor parte del de mediano plazo (excepto flujos de revisión/aprobación, que queda pendiente deliberadamente) quedaron implementados, junto con varias funcionalidades adicionales solicitadas fuera del roadmap:
 
 | Funcionalidad | Estado |
 |---|---|
-| **Periodicidad personalizada** | Implementada: `DefinicionPeriodicidad` (cortes con validación de cobertura anual sin huecos ni solapes), CRUD en Configuración General, selector en Indicadores, generación de períodos en Recolección/Seguimiento/Export. |
-| **Responsables por indicador** | Catálogo `Responsable` (CRUD en Administración), selector en Indicadores, columna y filtro en Seguimiento, nombre resuelto en el export analítico. |
-| **Categorías de indicadores** | Catálogo `Categoria` (CRUD en Administración), selector en Indicadores, columna y filtro en Seguimiento, nombre resuelto en el export analítico. |
-| **UI avanzada del motor de reglas** | Constructor visual (`EditorCondicion`) con condiciones anidadas Y/O/NO, agrupar cualquier nodo, comparación atributo↔literal/atributo; modo JSON avanzado se mantiene como alternativa. Tabla de reglas con descripción legible (`explicarCondicion`). |
-| **Validación cruzada en captura** | Conectada: `ServicioRecoleccion` evalúa reglas `ValidacionCruzada` de entidad `Recoleccion` sobre agregados del levantamiento (General/Máximo/Mínimo/Suma/Promedio/CantidadConValor/TotalCombinaciones); advertencia por defecto (General < máximo) más reglas configurables; siempre no bloqueante. |
-| **Reglas de Visibilidad/Obligatoriedad aplicadas** | El formulario de Indicadores evalúa en vivo (mismo dominio puro que el backend) la visibilidad y obligatoriedad de cada atributo dinámico, combinando la condición propia del atributo con las reglas del módulo Reglas que lo referencian. |
-| **Validación cruzada al guardar indicadores** | `ServicioIndicadores.guardar` valida atributos y reglas `ValidacionCruzada` de entidad `Indicador` **antes** de persistir; si falla, no se escribe nada (indicador ni valores EAV). |
+| **Constructor visual: sugerencias de valor por tipo** | `EditorCondicion` resuelve el `TypeRegistry` del atributo referenciado en el lado izquierdo y ofrece `<select>` (listas de selección), date picker o Sí/No según `editorHint`, en vez de un input de texto plano. |
+| **Metas con periodicidad personalizada** | `Meta.periodicidadPersonalizadaId`, con el mismo patrón de validación que `Indicador`; selector condicional en el formulario de metas. |
+| **Reasignación masiva de responsable/categoría** | Selección múltiple en Seguimiento (checkboxes + "seleccionar todos") con barra de acción para asignar/quitar responsable o categoría en lote (`ServicioIndicadores.reasignarMasivo`). |
+| **Importación de indicadores desde Excel** | Selector de archivo nativo + lectura de `.xlsx`/`.csv` (ExcelJS) + mapeo de columnas a campos → creación en lote con reporte de errores por fila sin bloquear el resto. |
+| **Código de indicador** | `Indicador.codigo`: string único visible (validado al guardar, no obligatorio para no romper indicadores existentes), columna en la tabla y en el export analítico. |
+| **Línea base con período** | `Indicador.lineaBasePeriodoId`: selector de período junto al valor de línea base. |
+| **Subtotal general en desagregaciones** | Confirmado y etiquetado explícitamente: `ProductoCartesiano` ya generaba una fila `GENERAL` transitiva al dato sin sub-desagregación; ahora se muestra como "Subtotal general" en la grilla de Recolección. |
+| **Fórmulas automáticas / indicadores derivados** | `Indicador.esCalculado` + `formula` (expresión aritmética sobre códigos de otros indicadores entre corchetes, p. ej. `[IND-001] + [IND-002] * 0.5`); `EvaluadorFormulas` de dominio con detección de ciclos; cómputo a nivel GENERAL en la grilla de Recolección (solo lectura) y en el export analítico. |
+| **Evidencias adjuntas** | Entidad `Adjunto` + tabla `adjuntos`; archivos copiados a `/Data/Adjuntos`; panel de adjuntos en el formulario de Indicadores (subir/abrir/eliminar). `Resultado.observacion` sigue cubriendo comentarios simples. |
+| **Versionado de resultados + rollback** | Tabla append-only `resultados_historial`; cada escritura de celda registra el estado reemplazado; ícono de historial junto a "Última modificación" en Recolección, con restauración a una versión anterior (que a su vez preserva el estado reemplazado). |
+| **Notificaciones de vencimientos** | Función pura `indicadoresQueRequierenNotificacion` (vencidos y próximos a vencer) + integración en el proceso main con `Notification` de Electron cada hora, deduplicada en memoria por sesión. |
 
-## Corto plazo (siguiente iteración)
+Items previos de la iteración 2 (periodicidad personalizada base, catálogos, motor de reglas, validación cruzada) también completados — ver historial de este documento.
 
-| Funcionalidad | Punto de extensión previsto |
-|---|---|
-| **Constructor visual: sugerencias de valor por tipo** | `EditorCondicion` hoy trata todo literal como texto/número; podría consultar el `TypeRegistry` del atributo referenciado para ofrecer selects de listas de selección o date pickers en el operando. |
-| **Metas con periodicidad personalizada** | `Meta.periodicidadMedicion` no admite aún `Personalizada`; agregar `metaPeriodicidadPersonalizadaId` siguiendo el mismo patrón que `Indicador`. |
-| **Reasignación masiva de responsable/categoría** | Acción por lote desde Seguimiento (seleccionar varios indicadores y asignar). |
-
-## Mediano plazo
+## Mediano plazo (pendiente)
 
 | Funcionalidad | Estrategia |
 |---|---|
-| **Fórmulas automáticas / indicadores derivados y compuestos** | Nuevo tipo de indicador con expresión sobre otros indicadores; evaluar con DuckDB sobre `FactResultados`; el motor de operadores (ya extensible) es la base del lenguaje de fórmulas. |
-| **Flujos de revisión/aprobación** | `Levantamiento` es el agregado natural: añadir `estadoFlujo` + tabla de transiciones; la auditoría ya registra actor y momento. |
-| **Comentarios y evidencias adjuntas** | Tabla `Adjuntos` (entidad, entidadId, ruta relativa en `/Data/Adjuntos`); `Resultado.observacion` ya existe como comentario simple. |
-| **Versionado de resultados** | El upsert actual conserva `creadoEn/actualizadoEn` y la auditoría guarda valor anterior/nuevo; para versionado completo, convertir `resultados` en tabla append-only con `version` y vista del último valor. |
-| **Notificaciones** | `CalculadoraEstados` ya produce vencimientos; añadir un programador local (al abrir la app) con notificaciones del sistema operativo. |
+| **Flujos de revisión/aprobación** | Excluido deliberadamente de esta iteración. `Levantamiento` es el agregado natural: añadir `estadoFlujo` + tabla de transiciones; la auditoría ya registra actor y momento. |
 
 ## Largo plazo
 

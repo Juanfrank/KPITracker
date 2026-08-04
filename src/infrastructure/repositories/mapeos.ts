@@ -1,6 +1,6 @@
 import type {
-  Atributo, Categoria, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Indicador,
-  Levantamiento, Lista, Meta, RegistroAuditoria, ReglaNegocio, Resultado, Responsable
+  Adjunto, Atributo, Categoria, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Indicador,
+  Levantamiento, Lista, Meta, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -24,10 +24,12 @@ const json = <T>(v: unknown, porDefecto: T): T => {
 
 export const aIndicador = (f: Fila): Indicador => ({
   id: s(f.id),
+  codigo: s(f.codigo),
   nombre: s(f.nombre),
   definicion: s(f.definicion),
   periodicidad: s(f.periodicidad) as Periodicidad,
   lineaBase: nn(f.linea_base),
+  lineaBasePeriodoId: sn(f.linea_base_periodo_id),
   metaGlobal: nn(f.meta_global),
   desagregaciones: json<string[]>(f.desagregaciones, []),
   estado: s(f.estado) as Indicador['estado'],
@@ -35,14 +37,22 @@ export const aIndicador = (f: Fila): Indicador => ({
   categoria: sn(f.categoria),
   unidadMedida: sn(f.unidad_medida),
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
+  esCalculado: b(f.es_calculado),
+  formula: sn(f.formula),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
+// Nota: `codigo`, `lineaBasePeriodoId`, `esCalculado` y `formula` se leen con
+// fallback (?? '' / ?? null / ?? false) porque además de las escrituras
+// normales (siempre con Indicador completo), esta función serializa
+// registros importados de archivos de configuración portable anteriores a
+// estos campos (ver ConfigPortableService), que llegan como `Record<string,
+// unknown>` sin ellos.
 export const deIndicador = (i: Indicador): unknown[] => [
-  i.id, i.nombre, i.definicion, i.periodicidad, i.lineaBase, i.metaGlobal,
+  i.id, i.codigo ?? '', i.nombre, i.definicion, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
   JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
-  i.unidadMedida, i.periodicidadPersonalizadaId, i.creadoEn, i.actualizadoEn
+  i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null, i.creadoEn, i.actualizadoEn
 ];
 
 export const aAtributo = (f: Fila): Atributo => ({
@@ -110,6 +120,7 @@ export const aMeta = (f: Fila): Meta => ({
   claveDesagregacion: s(f.clave_desagregacion),
   valor: n(f.valor),
   periodicidadMedicion: s(f.periodicidad_medicion) as Periodicidad,
+  periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   metodoCalculo: s(f.metodo_calculo) as Meta['metodoCalculo'],
   anioVigencia: n(f.anio_vigencia),
   creadoEn: s(f.creado_en),
@@ -117,7 +128,7 @@ export const aMeta = (f: Fila): Meta => ({
 });
 
 export const deMeta = (m: Meta): unknown[] => [
-  m.id, m.indicadorId, m.claveDesagregacion, m.valor, m.periodicidadMedicion,
+  m.id, m.indicadorId, m.claveDesagregacion, m.valor, m.periodicidadMedicion, m.periodicidadPersonalizadaId ?? null,
   m.metodoCalculo, m.anioVigencia, m.creadoEn, m.actualizadoEn
 ];
 
@@ -212,4 +223,36 @@ export const aCategoria = (f: Fila): Categoria => ({
 
 export const deCategoria = (c: Categoria): unknown[] => [
   c.id, c.nombre, c.descripcion, c.activo, c.creadoEn, c.actualizadoEn
+];
+
+export const aResultadoHistorial = (f: Fila): ResultadoHistorial => ({
+  id: s(f.id),
+  indicadorId: s(f.indicador_id),
+  periodoId: s(f.periodo_id),
+  claveDesagregacion: s(f.clave_desagregacion),
+  version: n(f.version),
+  valor: nn(f.valor),
+  observacion: sn(f.observacion),
+  usuario: s(f.usuario),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deResultadoHistorial = (h: ResultadoHistorial): unknown[] => [
+  h.id, h.indicadorId, h.periodoId, h.claveDesagregacion, h.version, h.valor,
+  h.observacion, h.usuario, h.actualizadoEn
+];
+
+export const aAdjunto = (f: Fila): Adjunto => ({
+  id: s(f.id),
+  entidad: s(f.entidad) as Adjunto['entidad'],
+  entidadId: s(f.entidad_id),
+  nombreArchivo: s(f.nombre_archivo),
+  rutaRelativa: s(f.ruta_relativa),
+  tamanioBytes: n(f.tamanio_bytes),
+  comentario: sn(f.comentario),
+  subidoEn: s(f.subido_en)
+});
+
+export const deAdjunto = (a: Adjunto): unknown[] => [
+  a.id, a.entidad, a.entidadId, a.nombreArchivo, a.rutaRelativa, a.tamanioBytes, a.comentario, a.subidoEn
 ];

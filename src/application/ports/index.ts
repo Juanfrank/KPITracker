@@ -1,9 +1,11 @@
 import type {
+  Adjunto,
   Atributo,
   Categoria,
   ConfiguracionGeneral,
   DefinicionPeriodicidad,
   ElementoLista,
+  EntidadAdjunto,
   Indicador,
   Levantamiento,
   Lista,
@@ -11,7 +13,8 @@ import type {
   RegistroAuditoria,
   ReglaNegocio,
   Responsable,
-  Resultado
+  Resultado,
+  ResultadoHistorial
 } from '@domain/index';
 
 /**
@@ -40,6 +43,8 @@ export interface IConfiguracionRepository {
 export interface IIndicadorRepository {
   listar(): Promise<Indicador[]>;
   obtener(id: string): Promise<Indicador | null>;
+  /** Busca un indicador por código único (excluyendo opcionalmente un id, para validar en edición). */
+  buscarPorCodigo(codigo: string, excluirId?: string): Promise<Indicador | null>;
   guardar(indicador: Indicador): Promise<void>;
   eliminar(id: string): Promise<void>;
 }
@@ -119,6 +124,10 @@ export interface IResultadoRepository {
   guardarLevantamiento(levantamiento: Levantamiento): Promise<void>;
   resumenPorIndicador(indicadorId: string): Promise<ResumenPeriodo[]>;
   resumenGlobal(): Promise<ResumenPeriodo[]>;
+  /** Historial de versiones de una celda, más reciente primero. */
+  obtenerHistorial(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]>;
+  /** Agrega una entrada de versión (append-only, nunca se sobrescribe). */
+  registrarVersion(entrada: ResultadoHistorial): Promise<void>;
 }
 
 export interface FiltroAuditoria {
@@ -146,4 +155,23 @@ export interface IExportService {
 export interface IConfigPortableService {
   exportar(): Promise<string>;
   importar(json: string): Promise<{ advertencias: string[] }>;
+}
+
+export interface IAdjuntoRepository {
+  listarPorEntidad(entidad: EntidadAdjunto, entidadId: string): Promise<Adjunto[]>;
+  obtener(id: string): Promise<Adjunto | null>;
+  guardar(adjunto: Adjunto): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Copia un archivo elegido por el usuario dentro de /Data/Adjuntos y devuelve su ruta relativa. */
+export interface IArchivoService {
+  guardarAdjunto(rutaOrigen: string, nombreSugerido: string): Promise<{ rutaRelativa: string; tamanioBytes: number }>;
+  rutaAbsoluta(rutaRelativa: string): string;
+  eliminarArchivo(rutaRelativa: string): Promise<void>;
+  abrir(rutaRelativa: string): Promise<void>;
+  /** Abre un diálogo nativo de selección de archivo; null si el usuario cancela. */
+  seleccionarArchivo(filtros?: { nombre: string; extensiones: string[] }[]): Promise<string | null>;
+  /** Lee un archivo de hoja de cálculo (xlsx/xls/csv) y devuelve columnas + filas de la primera pestaña. */
+  leerHojaCalculo(rutaArchivo: string): Promise<{ columnas: string[]; filas: Record<string, string>[] }>;
 }

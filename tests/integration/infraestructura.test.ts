@@ -13,17 +13,21 @@ let infra: Infraestructura;
 function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
   return {
     id,
+    codigo: '',
     nombre: `Indicador ${id}`,
     definicion: 'Definición de prueba',
     periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null,
     lineaBase: 50,
+    lineaBasePeriodoId: null,
     metaGlobal: 100,
     desagregaciones: [],
     estado: 'Activo',
     responsable: null,
     categoria: null,
     unidadMedida: '%',
+    esCalculado: false,
+    formula: null,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial
@@ -215,7 +219,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     await infra.indicadores.guardar(indicador('i1', { desagregaciones: ['sexo'] }));
     await infra.metas.guardar({
       id: 'm1', indicadorId: 'i1', claveDesagregacion: 'GENERAL', valor: 95,
-      periodicidadMedicion: Periodicidad.Anual, metodoCalculo: 'Promedio', anioVigencia: 2025,
+      periodicidadMedicion: Periodicidad.Anual, periodicidadPersonalizadaId: null, metodoCalculo: 'Promedio', anioVigencia: 2025,
       creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z'
     });
 
@@ -244,5 +248,55 @@ describe('Infraestructura DuckDB + Parquet', () => {
     const archivo = JSON.parse(json);
     archivo.schemaVersion = 999;
     await expect(infra.configPortable.importar(JSON.stringify(archivo))).rejects.toThrow(/versión más nueva/);
+  });
+});
+
+describe('Adjuntos (evidencias)', () => {
+  it('CRUD de adjuntos por entidad', async () => {
+    await infra.indicadores.guardar(indicador('i1'));
+    const nuevo = {
+      id: 'a1', entidad: 'Indicador' as const, entidadId: 'i1', nombreArchivo: 'reporte.pdf',
+      rutaRelativa: 'Adjuntos/a1_reporte.pdf', tamanioBytes: 1024, comentario: null, subidoEn: '2025-01-01T00:00:00Z'
+    };
+    await infra.adjuntos.guardar(nuevo);
+
+    expect(await infra.adjuntos.listarPorEntidad('Indicador', 'i1')).toHaveLength(1);
+    expect(await infra.adjuntos.listarPorEntidad('Indicador', 'otro')).toHaveLength(0);
+    expect((await infra.adjuntos.obtener('a1'))?.nombreArchivo).toBe('reporte.pdf');
+
+    await infra.adjuntos.eliminar('a1');
+    expect(await infra.adjuntos.obtener('a1')).toBeNull();
+  });
+});
+
+describe('ArchivoService — lectura de hojas de cálculo', () => {
+  it('lee columnas y filas de un archivo .xlsx real', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const libro = new ExcelJS.Workbook();
+    const hoja = libro.addWorksheet('Indicadores');
+    hoja.addRow(['Codigo', 'Nombre', 'Definicion']);
+    hoja.addRow(['IND-01', 'Primero', 'Def 1']);
+    hoja.addRow(['IND-02', 'Segundo', 'Def 2']);
+    const ruta = join(dataDir, 'prueba-import.xlsx');
+    await libro.xlsx.writeFile(ruta);
+
+    const leido = await infra.archivos.leerHojaCalculo(ruta);
+    expect(leido.columnas).toEqual(['Codigo', 'Nombre', 'Definicion']);
+    expect(leido.filas).toHaveLength(2);
+    expect(leido.filas[0]).toEqual({ Codigo: 'IND-01', Nombre: 'Primero', Definicion: 'Def 1' });
+  });
+
+  it('omite filas completamente vacías', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const libro = new ExcelJS.Workbook();
+    const hoja = libro.addWorksheet('Indicadores');
+    hoja.addRow(['Codigo', 'Nombre']);
+    hoja.addRow(['IND-01', 'Primero']);
+    hoja.addRow([]);
+    const ruta = join(dataDir, 'prueba-import-vacia.xlsx');
+    await libro.xlsx.writeFile(ruta);
+
+    const leido = await infra.archivos.leerHojaCalculo(ruta);
+    expect(leido.filas).toHaveLength(1);
   });
 });

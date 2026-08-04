@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Encabezado, Campo, Vacio } from '../../componentes/basicos';
+import { HistorialCelda } from '../../componentes/HistorialCelda';
 import { useRecoleccion } from '../../stores/recoleccion';
 import { useNavegacion } from '../../stores/navegacion';
 
@@ -42,6 +43,7 @@ export function RecoleccionPage(): React.JSX.Element {
 
   const captura = vm.captura;
   const columnasDesagregacion = captura?.filas.find((f) => !f.esGeneral)?.etiquetas.map((e) => e.listaNombre) ?? [];
+  const indicadorSeleccionado = vm.indicadores.find((i) => i.id === vm.indicadorId);
 
   return (
     <>
@@ -108,6 +110,12 @@ export function RecoleccionPage(): React.JSX.Element {
         )}
       </div>
 
+      {captura && indicadorSeleccionado?.esCalculado && (
+        <div className="aviso info">
+          Este indicador es calculado a partir de su fórmula ({indicadorSeleccionado.formula}); su valor se obtiene automáticamente y no admite captura manual.
+        </div>
+      )}
+
       {captura && captura.advertencias.length > 0 && (
         <div className="aviso info" data-testid="advertencias-captura">
           {captura.advertencias.map((a) => (
@@ -136,7 +144,9 @@ export function RecoleccionPage(): React.JSX.Element {
                 return (
                   <tr key={fila.claveDesagregacion} className={fila.esGeneral ? 'fila-general' : ''} data-indice={indice}>
                     {fila.esGeneral ? (
-                      <td colSpan={Math.max(columnasDesagregacion.length, 1)}>General (total del indicador)</td>
+                      <td colSpan={Math.max(columnasDesagregacion.length, 1)}>
+                        {indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'Subtotal general (total del indicador)'}
+                      </td>
                     ) : (
                       fila.etiquetas.map((e) => <td key={e.listaId}>{e.descripcion}</td>)
                     )}
@@ -144,17 +154,29 @@ export function RecoleccionPage(): React.JSX.Element {
                       className={`celda-editable ${estado ?? ''} ${error ? 'error' : ''}`}
                       title={error}
                     >
-                      <CeldaValor
-                        clave={fila.claveDesagregacion}
-                        valorInicial={fila.valor}
-                        invalida={Boolean(error)}
-                        alConfirmar={(texto) => void vm.guardarCelda(fila.claveDesagregacion, texto)}
-                        alPegar={(texto) => void vm.pegarDesde(indice, texto)}
-                        alMover={(delta) => enfocarFila(indice + delta)}
-                      />
+                      {indicadorSeleccionado?.esCalculado ? (
+                        <span data-testid={`celda-${fila.claveDesagregacion}`}>{fila.valor ?? '—'}</span>
+                      ) : (
+                        <CeldaValor
+                          clave={fila.claveDesagregacion}
+                          valorInicial={fila.valor}
+                          invalida={Boolean(error)}
+                          alConfirmar={(texto) => void vm.guardarCelda(fila.claveDesagregacion, texto)}
+                          alPegar={(texto) => void vm.pegarDesde(indice, texto)}
+                          alMover={(delta) => enfocarFila(indice + delta)}
+                        />
+                      )}
                     </td>
-                    <td className="texto-suave">
+                    <td className="texto-suave" style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
                       {fila.actualizadoEn ? new Date(fila.actualizadoEn).toLocaleString('es') : '—'}
+                      {!indicadorSeleccionado?.esCalculado && vm.indicadorId && vm.periodoId && (
+                        <HistorialCelda
+                          indicadorId={vm.indicadorId}
+                          periodoId={vm.periodoId}
+                          claveDesagregacion={fila.claveDesagregacion}
+                          alRestaurar={(version) => vm.restaurarVersion(fila.claveDesagregacion, version)}
+                        />
+                      )}
                     </td>
                   </tr>
                 );

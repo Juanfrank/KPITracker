@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Categoria, Responsable } from '@domain/index';
 import type { FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { invocar } from '../../api';
 import { BarraProgreso, ChipEstado, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
@@ -26,12 +27,22 @@ export function SeguimientoPage(): React.JSX.Element {
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [filtroTexto, setFiltroTexto] = useState('');
   const [detalle, setDetalle] = useState<DetalleSeguimiento | null>(null);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [responsablesCatalogo, setResponsablesCatalogo] = useState<Responsable[]>([]);
+  const [categoriasCatalogo, setCategoriasCatalogo] = useState<Categoria[]>([]);
+  const [reasignando, setReasignando] = useState(false);
   const { navegar } = useNavegacion();
 
-  useEffect(() => {
+  const cargarTablero = (): void => {
     void invocar('seguimiento:tablero', undefined)
       .then(setFilas)
       .finally(() => setCargando(false));
+  };
+
+  useEffect(() => {
+    cargarTablero();
+    void invocar('responsables:listar', undefined).then(setResponsablesCatalogo);
+    void invocar('categorias:listar', undefined).then(setCategoriasCatalogo);
   }, []);
 
   const periodicidades = [...new Set(filas.map((f) => f.periodicidad))];
@@ -47,6 +58,31 @@ export function SeguimientoPage(): React.JSX.Element {
   );
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
+
+  const alternarSeleccion = (id: string): void => {
+    setSeleccionados((previo) => {
+      const nuevo = new Set(previo);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
+      return nuevo;
+    });
+  };
+
+  const alternarSeleccionTodos = (): void => {
+    setSeleccionados((previo) => (previo.size === visibles.length ? new Set() : new Set(visibles.map((f) => f.indicadorId))));
+  };
+
+  const reasignarSeleccionados = async (cambios: { responsable?: string | null; categoria?: string | null }): Promise<void> => {
+    if (seleccionados.size === 0) return;
+    setReasignando(true);
+    try {
+      await invocar('indicadores:reasignarMasivo', { ids: [...seleccionados], ...cambios });
+      setSeleccionados(new Set());
+      cargarTablero();
+    } finally {
+      setReasignando(false);
+    }
+  };
 
   return (
     <>
@@ -84,10 +120,57 @@ export function SeguimientoPage(): React.JSX.Element {
         <input type="search" placeholder="Buscar indicador…" value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
       </div>
 
+      {seleccionados.size > 0 && (
+        <div className="toolbar" data-testid="barra-reasignacion-masiva">
+          <span>{seleccionados.size} indicador(es) seleccionado(s)</span>
+          <div className="separador" />
+          <select
+            defaultValue=""
+            disabled={reasignando}
+            onChange={(e) => {
+              const valor = e.target.value;
+              if (valor === '') return;
+              void reasignarSeleccionados({ responsable: valor === '__quitar__' ? null : valor });
+              e.target.value = '';
+            }}
+            data-testid="reasignar-responsable"
+          >
+            <option value="" disabled>Asignar responsable…</option>
+            <option value="__quitar__">— quitar asignación —</option>
+            {responsablesCatalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+          <select
+            defaultValue=""
+            disabled={reasignando}
+            onChange={(e) => {
+              const valor = e.target.value;
+              if (valor === '') return;
+              void reasignarSeleccionados({ categoria: valor === '__quitar__' ? null : valor });
+              e.target.value = '';
+            }}
+            data-testid="reasignar-categoria"
+          >
+            <option value="" disabled>Asignar categoría…</option>
+            <option value="__quitar__">— quitar asignación —</option>
+            {categoriasCatalogo.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <button className="boton sutil" onClick={() => setSeleccionados(new Set())}>Cancelar selección</button>
+        </div>
+      )}
+
       <div className="tabla-envoltura">
         <table className="tabla" data-testid="tabla-seguimiento">
           <thead>
             <tr>
+              <th style={{ width: 28 }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={visibles.length > 0 && seleccionados.size === visibles.length}
+                  onChange={alternarSeleccionTodos}
+                  data-testid="seleccionar-todos"
+                />
+              </th>
               <th>Indicador</th>
               <th>Estado</th>
               <th>Periodicidad</th>
@@ -108,6 +191,15 @@ export function SeguimientoPage(): React.JSX.Element {
                 onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
                 data-testid={`seguimiento-${f.nombre}`}
               >
+                <td onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={seleccionados.has(f.indicadorId)}
+                    onChange={() => alternarSeleccion(f.indicadorId)}
+                    data-testid={`seleccionar-${f.nombre}`}
+                  />
+                </td>
                 <td><strong>{f.nombre}</strong></td>
                 <td><ChipEstado estado={f.estado} /></td>
                 <td>{f.periodicidad}</td>
@@ -124,7 +216,7 @@ export function SeguimientoPage(): React.JSX.Element {
             ))}
             {visibles.length === 0 && (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   {cargando ? (
                     <Vacio mensaje="Cargando…" />
                   ) : (

@@ -1,29 +1,38 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
-  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, ReglaNegocio, Responsable, ValorAtributo
+  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo, ReglaNegocio, Responsable,
+  ValorAtributo
 } from '@domain/index';
-import { Periodicidad, construirContextoIndicador } from '@domain/index';
+import { GeneradorPeriodos, Periodicidad, construirContextoIndicador } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
 import { tipos, validadorAtributos } from '../../dominio';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { CampoAtributo } from '../../componentes/CampoAtributo';
 import { Icono } from '../../componentes/Icono';
+import { PanelAdjuntos } from '../../componentes/PanelAdjuntos';
+import { ImportarExcelIndicadores } from './ImportarExcelIndicadores';
+
+const generadorPeriodos = new GeneradorPeriodos();
 
 function indicadorVacio(): Indicador {
   return {
     id: '',
+    codigo: '',
     nombre: '',
     definicion: '',
     periodicidad: Periodicidad.Mensual,
     periodicidadPersonalizadaId: null,
     lineaBase: null,
+    lineaBasePeriodoId: null,
     metaGlobal: null,
     desagregaciones: [],
     estado: 'Activo',
     responsable: null,
     categoria: null,
     unidadMedida: null,
+    esCalculado: false,
+    formula: null,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -60,7 +69,7 @@ function construirValorEntidad(atributo: Atributo, crudo: string, entidadId: str
 }
 
 const PERIODICIDADES_INDICADOR = Object.values(Periodicidad);
-const PERIODICIDADES_META = Object.values(Periodicidad).filter((p) => p !== Periodicidad.Personalizada);
+const PERIODICIDADES_META = Object.values(Periodicidad);
 const METODOS_CALCULO: Meta['metodoCalculo'][] = ['Promedio', 'Sumatoria', 'UltimoValor', 'Maximo', 'Minimo'];
 
 /**
@@ -84,6 +93,8 @@ export function IndicadoresPage(): React.JSX.Element {
   const [metas, setMetas] = useState<Meta[]>([]);
   const [errores, setErrores] = useState<string[]>([]);
   const [filtro, setFiltro] = useState('');
+  const [anioInicial, setAnioInicial] = useState<number>(new Date().getFullYear());
+  const [mostrarImportar, setMostrarImportar] = useState(false);
 
   const cargar = useCallback(async (): Promise<void> => {
     setIndicadores(await invocar('indicadores:listar', undefined));
@@ -97,7 +108,18 @@ export function IndicadoresPage(): React.JSX.Element {
     void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
     void invocar('responsables:listar', undefined).then(setResponsables);
     void invocar('categorias:listar', undefined).then(setCategorias);
+    void invocar('config:obtener', undefined).then((c) => setAnioInicial(c.anioInicial));
   }, [cargar]);
+
+  /** Períodos disponibles para el selector de línea base, calculados localmente (dominio puro). */
+  const periodosLineaBase = (indicador: Indicador): Periodo[] => {
+    if (indicador.periodicidad === Periodicidad.Personalizada) {
+      const definicion = periodicidades.find((d) => d.id === indicador.periodicidadPersonalizadaId);
+      if (!definicion) return [];
+      return generadorPeriodos.periodosDisponibles(anioInicial, indicador.periodicidad, new Date().toISOString().slice(0, 10), definicion);
+    }
+    return generadorPeriodos.periodosDisponibles(anioInicial, indicador.periodicidad, new Date().toISOString().slice(0, 10));
+  };
 
   useEffect(() => {
     const idsListas = [...new Set(atributos.filter((a) => a.listaId).map((a) => a.listaId as string))];
@@ -151,6 +173,7 @@ export function IndicadoresPage(): React.JSX.Element {
       claveDesagregacion: 'GENERAL',
       valor: editando.metaGlobal ?? 0,
       periodicidadMedicion: editando.periodicidad,
+      periodicidadPersonalizadaId: editando.periodicidad === Periodicidad.Personalizada ? editando.periodicidadPersonalizadaId : null,
       metodoCalculo: 'Promedio',
       anioVigencia: new Date().getFullYear(),
       creadoEn: '',
@@ -164,7 +187,9 @@ export function IndicadoresPage(): React.JSX.Element {
     setMetas((previas) => previas.map((m) => (m.id === meta.id ? meta : m)));
   };
 
-  const filtrados = indicadores.filter((i) => i.nombre.toLowerCase().includes(filtro.toLowerCase()));
+  const filtrados = indicadores.filter((i) =>
+    i.nombre.toLowerCase().includes(filtro.toLowerCase()) || i.codigo.toLowerCase().includes(filtro.toLowerCase())
+  );
 
   // Validación en vivo de atributos dinámicos: mismas reglas que evaluará el backend al guardar.
   const base = editando ?? indicadorVacio();
@@ -186,11 +211,25 @@ export function IndicadoresPage(): React.JSX.Element {
         titulo="Configuración de Indicadores"
         descripcion="Definición de indicadores institucionales: periodicidad, línea base, metas y desagregaciones."
         acciones={
-          <button className="boton primario" onClick={() => void abrirEditor(indicadorVacio())} data-testid="nuevo-indicador">
-            <Icono nombre="mas" /> Nuevo indicador
-          </button>
+          <>
+            <button className="boton" onClick={() => setMostrarImportar(true)} data-testid="importar-excel">
+              <Icono nombre="subir" tamano={14} /> Importar desde Excel
+            </button>
+            <button className="boton primario" onClick={() => void abrirEditor(indicadorVacio())} data-testid="nuevo-indicador">
+              <Icono nombre="mas" /> Nuevo indicador
+            </button>
+          </>
         }
       />
+      {mostrarImportar && (
+        <ImportarExcelIndicadores
+          alCerrar={() => setMostrarImportar(false)}
+          alTerminar={() => {
+            setMostrarImportar(false);
+            void cargar();
+          }}
+        />
+      )}
       <div className="toolbar">
         <input type="search" placeholder="Filtrar indicadores…" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
       </div>
@@ -198,6 +237,7 @@ export function IndicadoresPage(): React.JSX.Element {
         <table className="tabla">
           <thead>
             <tr>
+              <th>Código</th>
               <th>Nombre</th>
               <th>Periodicidad</th>
               <th>Línea base</th>
@@ -209,7 +249,8 @@ export function IndicadoresPage(): React.JSX.Element {
           <tbody>
             {filtrados.map((i) => (
               <tr key={i.id} onClick={() => void abrirEditor(i)} style={{ cursor: 'pointer' }} data-testid={`indicador-${i.nombre}`}>
-                <td><strong>{i.nombre}</strong></td>
+                <td className="texto-suave">{i.codigo || '—'}</td>
+                <td><strong>{i.nombre}</strong>{i.esCalculado && <span className="chip" style={{ marginLeft: 6 }}>Calculado</span>}</td>
                 <td>{i.periodicidad}</td>
                 <td>{i.lineaBase ?? '—'}</td>
                 <td>{i.metaGlobal ?? '—'}</td>
@@ -225,7 +266,7 @@ export function IndicadoresPage(): React.JSX.Element {
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <Vacio icono="◫" mensaje="Sin indicadores" detalle="Cree el primer indicador para comenzar." />
                 </td>
               </tr>
@@ -264,9 +305,20 @@ export function IndicadoresPage(): React.JSX.Element {
               {errores.map((e) => <div key={e}>{e}</div>)}
             </div>
           )}
-          <Campo etiqueta="Nombre del indicador" obligatorio>
-            <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} data-testid="indicador-nombre" autoFocus />
-          </Campo>
+          <div className="fila-form c2">
+            <Campo etiqueta="Código">
+              <input
+                type="text"
+                value={editando.codigo}
+                placeholder="IND-001 (opcional, único)"
+                onChange={(e) => setEditando({ ...editando, codigo: e.target.value })}
+                data-testid="indicador-codigo"
+              />
+            </Campo>
+            <Campo etiqueta="Nombre del indicador" obligatorio>
+              <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} data-testid="indicador-nombre" autoFocus />
+            </Campo>
+          </div>
           <Campo etiqueta="Definición" obligatorio>
             <textarea rows={3} value={editando.definicion} onChange={(e) => setEditando({ ...editando, definicion: e.target.value })} data-testid="indicador-definicion" />
           </Campo>
@@ -331,6 +383,19 @@ export function IndicadoresPage(): React.JSX.Element {
               <input type="text" value={editando.unidadMedida ?? ''} placeholder="%, casos…" onChange={(e) => setEditando({ ...editando, unidadMedida: e.target.value || null })} />
             </Campo>
           </div>
+          {editando.lineaBase != null && (
+            <Campo etiqueta="Período de la línea base">
+              <select
+                value={editando.lineaBasePeriodoId ?? ''}
+                onChange={(e) => setEditando({ ...editando, lineaBasePeriodoId: e.target.value || null })}
+                data-testid="indicador-linea-base-periodo"
+              >
+                <option value="">— sin especificar —</option>
+                {periodosLineaBase(editando).map((p) => <option key={p.id} value={p.id}>{p.etiqueta}</option>)}
+              </select>
+              <span className="texto-suave">A qué período corresponde el valor de línea base registrado.</span>
+            </Campo>
+          )}
           <div className="fila-form c2">
             <Campo etiqueta="Responsable">
               <select
@@ -353,6 +418,31 @@ export function IndicadoresPage(): React.JSX.Element {
               </select>
             </Campo>
           </div>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={editando.esCalculado}
+              onChange={(e) => setEditando({ ...editando, esCalculado: e.target.checked })}
+              style={{ width: 'auto' }}
+              data-testid="indicador-es-calculado"
+            />
+            Indicador calculado (su valor se obtiene de una fórmula, no se captura manualmente)
+          </label>
+          {editando.esCalculado && (
+            <Campo etiqueta="Fórmula" obligatorio>
+              <input
+                type="text"
+                value={editando.formula ?? ''}
+                placeholder="[IND-001] + [IND-002] * 0.5"
+                onChange={(e) => setEditando({ ...editando, formula: e.target.value })}
+                data-testid="indicador-formula"
+              />
+              <span className="texto-suave">
+                Expresión aritmética (+ − × ÷, paréntesis) que referencia el código de otros indicadores entre corchetes.
+              </span>
+            </Campo>
+          )}
 
           <h4 style={{ margin: '8px 0 0' }}>Desagregaciones</h4>
           <p className="texto-suave" style={{ margin: 0 }}>
@@ -398,6 +488,7 @@ export function IndicadoresPage(): React.JSX.Element {
 
           {editando.id && (
             <>
+              <PanelAdjuntos entidad="Indicador" entidadId={editando.id} />
               <div className="toolbar" style={{ marginTop: 8 }}>
                 <h4 style={{ margin: 0 }}>Metas</h4>
                 <div className="separador" />
@@ -422,7 +513,17 @@ export function IndicadoresPage(): React.JSX.Element {
                   </div>
                   <div className="fila-form c2">
                     <Campo etiqueta="Periodicidad de medición">
-                      <select value={m.periodicidadMedicion} onChange={(e) => void actualizarMeta({ ...m, periodicidadMedicion: e.target.value as Periodicidad })}>
+                      <select
+                        value={m.periodicidadMedicion}
+                        onChange={(e) => {
+                          const periodicidadMedicion = e.target.value as Periodicidad;
+                          void actualizarMeta({
+                            ...m,
+                            periodicidadMedicion,
+                            periodicidadPersonalizadaId: periodicidadMedicion === Periodicidad.Personalizada ? m.periodicidadPersonalizadaId : null
+                          });
+                        }}
+                      >
                         {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>
                     </Campo>
@@ -435,6 +536,17 @@ export function IndicadoresPage(): React.JSX.Element {
                       />
                     </Campo>
                   </div>
+                  {m.periodicidadMedicion === Periodicidad.Personalizada && (
+                    <Campo etiqueta="Definición de periodicidad personalizada">
+                      <select
+                        value={m.periodicidadPersonalizadaId ?? ''}
+                        onChange={(e) => void actualizarMeta({ ...m, periodicidadPersonalizadaId: e.target.value || null })}
+                      >
+                        <option value="">— seleccionar —</option>
+                        {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                      </select>
+                    </Campo>
+                  )}
                   <button
                     className="boton peligro"
                     style={{ justifySelf: 'start' }}

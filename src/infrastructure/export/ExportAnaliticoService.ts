@@ -3,6 +3,7 @@ import type { Db } from '../duckdb/Db';
 import type { RutasDataLake } from '../parquet/RutasDataLake';
 import type { ICatalogoRepository, IConfiguracionRepository, IExportService } from '@application/ports/index';
 import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
+import { EvaluadorFormulas } from '@domain/services/EvaluadorFormulas';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
 import { textoAClave } from '@domain/value-objects/ClaveDesagregacion';
 import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
@@ -30,6 +31,7 @@ export class ExportAnaliticoService implements IExportService {
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private regenerando: Promise<void> = Promise.resolve();
   private readonly generadorPeriodos = new GeneradorPeriodos();
+  private readonly formulas = new EvaluadorFormulas();
 
   constructor(
     private readonly db: Db,
@@ -163,6 +165,76 @@ export class ExportAnaliticoService implements IExportService {
        LEFT JOIN levantamientos l ON l.indicador_id = r.indicador_id AND l.periodo_id = r.periodo_id
        ORDER BY i.nombre, r.periodo_id, r.clave_desagregacion`
     );
+
+    // Indicadores calculados: no tienen filas propias en `resultados` (su
+    // valor nunca se captura manualmente), así que se sintetizan aquí a
+    // nivel GENERAL evaluando la fórmula sobre el valor GENERAL de los
+    // indicadores referenciados, para cada período en el que al menos uno
+    // de ellos tenga datos.
+    const indicadoresCalculados = await this.db.all<Record<string, unknown>>(
+      `SELECT * FROM indicadores WHERE es_calculado = true AND formula IS NOT NULL AND formula != ''`
+    );
+    if (indicadoresCalculados.length > 0) {
+      const codigoPorId = new Map(
+        (await this.db.all<{ id: string; codigo: string }>('SELECT id, codigo FROM indicadores')).map((i) => [i.id, i.codigo])
+      );
+      const valorPorCodigoYPeriodo = new Map<string, number | null>();
+      for (const f of filas) {
+        if (String(f.clave_desagregacion) !== 'GENERAL') continue;
+        const codigo = codigoPorId.get(String(f.indicador_id));
+        if (!codigo) continue;
+        valorPorCodigoYPeriodo.set(`${codigo}|${f.periodo_id}`, f.valor == null ? null : Number(f.valor));
+      }
+
+      for (const ic of indicadoresCalculados) {
+        const formula = String(ic.formula);
+        let codigosRef: string[];
+        try {
+          codigosRef = this.formulas.codigosReferenciados(formula);
+        } catch {
+          continue;
+        }
+        const periodosConDatos = new Set<string>();
+        for (const [clave] of valorPorCodigoYPeriodo) {
+          const separador = clave.indexOf('|');
+          const codigo = clave.slice(0, separador);
+          const periodoId = clave.slice(separador + 1);
+          if (codigosRef.includes(codigo)) periodosConDatos.add(periodoId);
+        }
+        for (const periodoId of periodosConDatos) {
+          const valores = new Map<string, number | null>(
+            codigosRef.map((c) => [c, valorPorCodigoYPeriodo.get(`${c}|${periodoId}`) ?? null])
+          );
+          let valorCalculado: number | null;
+          try {
+            valorCalculado = this.formulas.evaluar(formula, valores);
+          } catch {
+            valorCalculado = null;
+          }
+          filas.push({
+            resultado_id: `calc:${ic.id}:${periodoId}`,
+            indicador_id: ic.id,
+            periodo_id: periodoId,
+            anio: Number(String(periodoId).slice(0, 4)),
+            clave_desagregacion: 'GENERAL',
+            valor: valorCalculado,
+            observacion: null,
+            actualizado_en: ic.actualizado_en,
+            indicador: ic.nombre,
+            definicion: ic.definicion,
+            periodicidad: ic.periodicidad,
+            linea_base: ic.linea_base,
+            meta_global: ic.meta_global,
+            estado: ic.estado,
+            responsable: ic.responsable,
+            categoria: ic.categoria,
+            unidad_medida: ic.unidad_medida,
+            periodicidad_personalizada_id: ic.periodicidad_personalizada_id,
+            fecha_corte: null
+          });
+        }
+      }
+    }
 
     // Columnas de desagregación presentes en los datos, expandidas por lista.
     const listasUsadas = new Set<string>();

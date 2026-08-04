@@ -1,7 +1,7 @@
 import type {
   Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
 } from '@domain/index';
-import { Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador } from '@domain/index';
+import { EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador } from '@domain/index';
 import type {
   IAtributoRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository,
   IMetaRepository, IReglaRepository, ValorAtributoEntidad
@@ -9,6 +9,27 @@ import type {
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { mapaValoresDesdeEntidad } from './valoresEav';
+
+/** Mapeo de campos de Indicador -> nombre de columna del archivo importado (undefined = no mapeado). */
+export interface MapeoImportacionIndicadores {
+  codigo?: string;
+  nombre: string;
+  definicion: string;
+  periodicidad?: string;
+  lineaBase?: string;
+  metaGlobal?: string;
+  unidadMedida?: string;
+}
+
+export interface ErrorFilaImportacion {
+  fila: number;
+  mensaje: string;
+}
+
+export interface ResultadoImportacionIndicadores {
+  creados: number;
+  errores: ErrorFilaImportacion[];
+}
 
 export interface GuardarIndicadorInput {
   indicador: Indicador;
@@ -24,6 +45,8 @@ export interface GuardarIndicadorInput {
  * nada.
  */
 export class ServicioIndicadores extends ServicioBase {
+  private readonly formulas = new EvaluadorFormulas();
+
   constructor(
     ctx: ContextoAplicacion,
     private readonly repo: IIndicadorRepository,
@@ -55,6 +78,28 @@ export class ServicioIndicadores extends ServicioBase {
       } else if (!(await this.periodicidadesRepo.obtener(indicador.periodicidadPersonalizadaId))) {
         errores.push('La definición de periodicidad personalizada seleccionada no existe.');
       }
+    }
+    if (indicador.esCalculado) {
+      if (!indicador.formula?.trim()) {
+        errores.push('Un indicador calculado requiere una fórmula.');
+      } else {
+        try {
+          this.formulas.validar(indicador.formula);
+          const otros = await this.repo.listar();
+          const formulasPorCodigo = new Map(
+            otros.filter((o) => o.esCalculado && o.formula && o.id !== indicador.id).map((o) => [o.codigo, o.formula as string])
+          );
+          if (indicador.codigo.trim() && this.formulas.formaCiclo(indicador.codigo.trim(), indicador.formula, formulasPorCodigo)) {
+            errores.push('La fórmula genera una referencia circular entre indicadores calculados.');
+          }
+        } catch (err) {
+          errores.push(err instanceof Error ? err.message : 'Fórmula inválida.');
+        }
+      }
+    }
+    if (indicador.codigo.trim()) {
+      const duplicado = await this.repo.buscarPorCodigo(indicador.codigo.trim(), indicador.id || undefined);
+      if (duplicado) errores.push(`Ya existe un indicador con el código "${indicador.codigo.trim()}".`);
     }
     if (errores.length > 0) throw new ValidacionError('Indicador inválido.', errores);
 
@@ -103,6 +148,98 @@ export class ServicioIndicadores extends ServicioBase {
     await this.repo.eliminar(id);
     await this.auditar('Eliminar', 'Indicador', id, null, anterior ? JSON.stringify(anterior) : null, null);
     this.sincronizarExport();
+  }
+
+  /**
+   * Reasigna responsable y/o categoría a varios indicadores de una vez
+   * (acción masiva desde Seguimiento). `undefined` en un campo significa
+   * "no tocar"; `null` significa "quitar la asignación actual".
+   */
+  async reasignarMasivo(
+    indicadorIds: string[],
+    cambios: { responsable?: string | null; categoria?: string | null }
+  ): Promise<void> {
+    if (indicadorIds.length === 0) return;
+    const ahora = this.ctx.reloj.ahoraIso();
+    for (const id of indicadorIds) {
+      const actual = await this.repo.obtener(id);
+      if (!actual) continue;
+      const actualizado: Indicador = {
+        ...actual,
+        responsable: cambios.responsable === undefined ? actual.responsable : cambios.responsable,
+        categoria: cambios.categoria === undefined ? actual.categoria : cambios.categoria,
+        actualizadoEn: ahora
+      };
+      await this.repo.guardar(actualizado);
+      await this.auditar('Modificar', 'Indicador', id, 'reasignacionMasiva',
+        JSON.stringify({ responsable: actual.responsable, categoria: actual.categoria }),
+        JSON.stringify({ responsable: actualizado.responsable, categoria: actualizado.categoria }));
+    }
+    this.sincronizarExport();
+  }
+
+  /**
+   * Crea indicadores en lote a partir de filas de un archivo (Excel/CSV) ya
+   * leídas y un mapeo de columnas. Cada fila se valida y guarda de forma
+   * independiente: una fila inválida no bloquea el resto, y sus motivos se
+   * reportan en `errores`.
+   */
+  async importarExcel(
+    filas: Record<string, string>[],
+    mapeo: MapeoImportacionIndicadores
+  ): Promise<ResultadoImportacionIndicadores> {
+    const errores: ErrorFilaImportacion[] = [];
+    let creados = 0;
+
+    for (let i = 0; i < filas.length; i++) {
+      const fila = filas[i];
+      const numeroFila = i + 2; // +1 por índice 0-based, +1 por la fila de encabezados.
+      if (!fila) continue;
+      try {
+        const nombre = mapeo.nombre ? (fila[mapeo.nombre] ?? '').trim() : '';
+        const definicion = mapeo.definicion ? (fila[mapeo.definicion] ?? '').trim() : '';
+        const codigo = mapeo.codigo ? (fila[mapeo.codigo] ?? '').trim() : '';
+        const periodicidadTexto = mapeo.periodicidad ? (fila[mapeo.periodicidad] ?? '').trim() : '';
+        const periodicidad = (Object.values(Periodicidad) as string[]).includes(periodicidadTexto)
+          ? (periodicidadTexto as Periodicidad)
+          : Periodicidad.Mensual;
+        const lineaBaseTexto = mapeo.lineaBase ? (fila[mapeo.lineaBase] ?? '').trim() : '';
+        const metaGlobalTexto = mapeo.metaGlobal ? (fila[mapeo.metaGlobal] ?? '').trim() : '';
+
+        if (!nombre) throw new ValidacionError(`Fila ${numeroFila}: falta el nombre.`);
+        if (!definicion) throw new ValidacionError(`Fila ${numeroFila}: falta la definición.`);
+
+        const ahora = this.ctx.reloj.ahoraIso();
+        const indicador: Indicador = {
+          id: this.ctx.ids.nuevoId(),
+          codigo,
+          nombre,
+          definicion,
+          periodicidad,
+          periodicidadPersonalizadaId: null,
+          lineaBase: lineaBaseTexto ? Number(lineaBaseTexto) : null,
+          lineaBasePeriodoId: null,
+          metaGlobal: metaGlobalTexto ? Number(metaGlobalTexto) : null,
+          desagregaciones: [],
+          estado: 'Borrador',
+          responsable: null,
+          categoria: null,
+          unidadMedida: mapeo.unidadMedida ? (fila[mapeo.unidadMedida] ?? '').trim() || null : null,
+          esCalculado: false,
+          formula: null,
+          creadoEn: ahora,
+          actualizadoEn: ahora
+        };
+
+        await this.guardar({ indicador, valores: [] });
+        creados++;
+      } catch (err) {
+        const mensaje = err instanceof ValidacionError ? err.detalles?.[0] ?? err.message : String(err);
+        errores.push({ fila: numeroFila, mensaje: mensaje ?? 'Error desconocido.' });
+      }
+    }
+
+    return { creados, errores };
   }
 }
 
@@ -201,7 +338,8 @@ export class ServicioListas extends ServicioBase {
 export class ServicioMetas extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
-    private readonly repo: IMetaRepository
+    private readonly repo: IMetaRepository,
+    private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository
   ) {
     super(ctx);
   }
@@ -211,6 +349,14 @@ export class ServicioMetas extends ServicioBase {
   }
 
   async guardar(meta: Meta): Promise<Meta> {
+    if (meta.periodicidadMedicion === Periodicidad.Personalizada) {
+      if (!meta.periodicidadPersonalizadaId) {
+        throw new ValidacionError('Debe seleccionar una definición de periodicidad personalizada para la meta.');
+      }
+      if (!(await this.periodicidadesRepo.obtener(meta.periodicidadPersonalizadaId))) {
+        throw new ValidacionError('La definición de periodicidad personalizada seleccionada no existe.');
+      }
+    }
     const ahora = this.ctx.reloj.ahoraIso();
     const guardada: Meta = {
       ...meta,

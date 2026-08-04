@@ -1,10 +1,17 @@
-import type { Condicion, Operando } from '@domain/index';
+import type { Condicion, ElementoLista, Operando, TypeRegistry } from '@domain/index';
 import {
   agregarHijo, condicionVacia, envolverEnGrupo, esCondicion, esOperadorLogico,
   quitarHijo, reemplazarHijo
 } from '@domain/index';
 import { Campo } from './basicos';
 import { Icono } from './Icono';
+
+/** Atributo referenciable en una condición, con su tipo para sugerir el widget del operando literal. */
+export interface AtributoDisponible {
+  nombre: string;
+  tipoDato?: string;
+  listaId?: string | null;
+}
 
 /** Operadores de comparación ofrecidos por el constructor visual (los lógicos and/or/not se manejan aparte). */
 const OPERADORES_COMPARACION: Array<{ op: string; etiqueta: string; aridad: 1 | 2 | 3 }> = [
@@ -25,10 +32,13 @@ const ID_DATALIST = 'editor-condicion-atributos';
 
 export interface PropsEditorCondicion {
   condicion: Condicion;
-  atributosDisponibles: string[];
+  atributosDisponibles: AtributoDisponible[];
   alCambiar: (nueva: Condicion) => void;
   /** Presente solo si este nodo puede eliminarse de su padre (no aplica a la raíz). */
   alEliminar?: () => void;
+  /** Habilita sugerencias de valor por tipo (select/fecha) en el operando literal. Opcional. */
+  tipos?: TypeRegistry;
+  elementosPorLista?: Map<string, ElementoLista[]>;
 }
 
 /**
@@ -44,7 +54,7 @@ export function EditorCondicion(props: PropsEditorCondicion): React.JSX.Element 
       {esOperadorLogico(props.condicion.op) ? <EditorGrupo {...props} /> : <EditorComparacion {...props} />}
       <datalist id={ID_DATALIST}>
         {props.atributosDisponibles.map((a) => (
-          <option key={a} value={a} />
+          <option key={a.nombre} value={a.nombre} />
         ))}
       </datalist>
     </div>
@@ -124,30 +134,54 @@ function valorOperando(operando: Operando | undefined): { texto: string; esAtrib
 }
 
 function OperandoEditor({
-  operando, etiqueta, alCambiar
+  operando, etiqueta, alCambiar, atributoReferenciado, tipos, elementosPorLista
 }: {
   operando: Operando | undefined;
   etiqueta: string;
   alCambiar: (v: Operando) => void;
+  /** Definición del atributo del lado izquierdo (para sugerir el widget del literal según su tipo). */
+  atributoReferenciado?: AtributoDisponible;
+  tipos?: TypeRegistry;
+  elementosPorLista?: Map<string, ElementoLista[]>;
 }): React.JSX.Element {
   const actual = valorOperando(operando);
+  const descriptor = !actual.esAtributo && atributoReferenciado?.tipoDato && tipos?.existe(atributoReferenciado.tipoDato)
+    ? tipos.obtener(atributoReferenciado.tipoDato)
+    : undefined;
+  const opciones = descriptor && atributoReferenciado?.listaId ? elementosPorLista?.get(atributoReferenciado.listaId) : undefined;
+
   return (
     <Campo etiqueta={etiqueta}>
-      <input
-        type="text"
-        list={actual.esAtributo ? ID_DATALIST : undefined}
-        value={actual.texto}
-        onChange={(e) => {
-          const texto = e.target.value;
-          if (actual.esAtributo) {
-            alCambiar({ attr: texto });
-          } else {
-            const numero = Number(texto);
-            alCambiar({ literal: texto !== '' && !Number.isNaN(numero) ? numero : texto });
-          }
-        }}
-        data-testid="condicion-valor"
-      />
+      {!actual.esAtributo && descriptor?.editorHint === 'select' && opciones ? (
+        <select value={actual.texto} onChange={(e) => alCambiar({ literal: e.target.value })} data-testid="condicion-valor">
+          <option value="">— seleccionar —</option>
+          {opciones.map((o) => <option key={o.codigo} value={o.codigo}>{o.descripcion}</option>)}
+        </select>
+      ) : !actual.esAtributo && descriptor?.editorHint === 'date' ? (
+        <input type="date" value={actual.texto} onChange={(e) => alCambiar({ literal: e.target.value })} data-testid="condicion-valor" />
+      ) : !actual.esAtributo && descriptor?.editorHint === 'checkbox' ? (
+        <select value={actual.texto} onChange={(e) => alCambiar({ literal: e.target.value === 'true' })} data-testid="condicion-valor">
+          <option value="">— seleccionar —</option>
+          <option value="true">Sí</option>
+          <option value="false">No</option>
+        </select>
+      ) : (
+        <input
+          type="text"
+          list={actual.esAtributo ? ID_DATALIST : undefined}
+          value={actual.texto}
+          onChange={(e) => {
+            const texto = e.target.value;
+            if (actual.esAtributo) {
+              alCambiar({ attr: texto });
+            } else {
+              const numero = Number(texto);
+              alCambiar({ literal: texto !== '' && !Number.isNaN(numero) ? numero : texto });
+            }
+          }}
+          data-testid="condicion-valor"
+        />
+      )}
       <label className="texto-suave" style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer' }}>
         <input
           type="checkbox"
@@ -162,9 +196,12 @@ function OperandoEditor({
   );
 }
 
-function EditorComparacion({ condicion, alCambiar, alEliminar }: PropsEditorCondicion): React.JSX.Element {
+function EditorComparacion({
+  condicion, alCambiar, alEliminar, atributosDisponibles, tipos, elementosPorLista
+}: PropsEditorCondicion): React.JSX.Element {
   const definicion = OPERADORES_COMPARACION.find((o) => o.op === condicion.op) ?? OPERADORES_COMPARACION[0]!;
   const izquierda = valorOperando(condicion.args[0]);
+  const atributoReferenciado = atributosDisponibles.find((a) => a.nombre === izquierda.texto);
 
   const cambiarOperador = (nuevoOp: string): void => {
     const nuevaDefinicion = OPERADORES_COMPARACION.find((o) => o.op === nuevoOp) ?? OPERADORES_COMPARACION[0]!;
@@ -199,6 +236,9 @@ function EditorComparacion({ condicion, alCambiar, alEliminar }: PropsEditorCond
           operando={condicion.args[1]}
           etiqueta={definicion.aridad === 3 ? 'Desde' : 'Valor'}
           alCambiar={(v) => alCambiar(reemplazarHijo(condicion, 1, v))}
+          atributoReferenciado={atributoReferenciado}
+          tipos={tipos}
+          elementosPorLista={elementosPorLista}
         />
       )}
       {definicion.aridad >= 3 && (
@@ -206,6 +246,9 @@ function EditorComparacion({ condicion, alCambiar, alEliminar }: PropsEditorCond
           operando={condicion.args[2]}
           etiqueta="Hasta"
           alCambiar={(v) => alCambiar(reemplazarHijo(condicion, 2, v))}
+          atributoReferenciado={atributoReferenciado}
+          tipos={tipos}
+          elementosPorLista={elementosPorLista}
         />
       )}
       <BotonesAgrupar condicion={condicion} alCambiar={alCambiar} />

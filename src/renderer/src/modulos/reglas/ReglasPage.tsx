@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Atributo, ReglaNegocio } from '@domain/index';
+import type { Atributo, ElementoLista, ReglaNegocio } from '@domain/index';
 import { explicarCondicion } from '@domain/index';
 import { invocar } from '../../api';
+import { tipos } from '../../dominio';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+import type { AtributoDisponible } from '../../componentes/EditorCondicion';
 import { EditorCondicion } from '../../componentes/EditorCondicion';
 
-const CAMPOS_FIJOS_INDICADOR = ['Nombre', 'Definicion', 'Periodicidad', 'LineaBase', 'MetaGlobal', 'Estado', 'UnidadMedida', 'Responsable', 'Categoria'];
-const CAMPOS_AGREGADOS_CAPTURA = ['General', 'Maximo', 'Minimo', 'Suma', 'Promedio', 'CantidadConValor', 'TotalCombinaciones'];
+const CAMPOS_FIJOS_INDICADOR: AtributoDisponible[] = [
+  { nombre: 'Nombre' }, { nombre: 'Definicion' }, { nombre: 'Periodicidad' }, { nombre: 'LineaBase' },
+  { nombre: 'MetaGlobal' }, { nombre: 'Estado' }, { nombre: 'UnidadMedida' }, { nombre: 'Responsable' }, { nombre: 'Categoria' }
+];
+const CAMPOS_AGREGADOS_CAPTURA: AtributoDisponible[] = [
+  'General', 'Maximo', 'Minimo', 'Suma', 'Promedio', 'CantidadConValor', 'TotalCombinaciones'
+].map((nombre) => ({ nombre }));
 
 function reglaVacia(): ReglaNegocio {
   return {
@@ -36,6 +43,7 @@ function reglaVacia(): ReglaNegocio {
 export function ReglasPage(): React.JSX.Element {
   const [reglas, setReglas] = useState<ReglaNegocio[]>([]);
   const [atributos, setAtributos] = useState<Atributo[]>([]);
+  const [elementosPorLista, setElementosPorLista] = useState<Map<string, ElementoLista[]>>(new Map());
   const [editando, setEditando] = useState<ReglaNegocio | null>(null);
   const [modoAvanzado, setModoAvanzado] = useState(false);
   const [jsonAvanzado, setJsonAvanzado] = useState('');
@@ -53,6 +61,15 @@ export function ReglasPage(): React.JSX.Element {
     void cargar();
     void invocar('atributos:listar', { entidad: 'Indicador' }).then(setAtributos);
   }, [cargar]);
+
+  useEffect(() => {
+    const idsListas = [...new Set(atributos.filter((a) => a.listaId).map((a) => a.listaId as string))];
+    const pendientes = idsListas.filter((id) => !elementosPorLista.has(id));
+    if (pendientes.length === 0) return;
+    void Promise.all(pendientes.map((id) => invocar('listas:elementos', { listaId: id }).then((els) => [id, els] as const))).then(
+      (pares) => setElementosPorLista((previo) => new Map([...previo, ...pares]))
+    );
+  }, [atributos, elementosPorLista]);
 
   const abrir = (regla: ReglaNegocio): void => {
     setEditando(regla);
@@ -86,9 +103,9 @@ export function ReglasPage(): React.JSX.Element {
     );
   };
 
-  const nombresAtributos = editando?.entidad === 'Recoleccion'
+  const nombresAtributos: AtributoDisponible[] = editando?.entidad === 'Recoleccion'
     ? CAMPOS_AGREGADOS_CAPTURA
-    : [...CAMPOS_FIJOS_INDICADOR, ...atributos.map((a) => a.nombre)];
+    : [...CAMPOS_FIJOS_INDICADOR, ...atributos.map((a) => ({ nombre: a.nombre, tipoDato: a.tipoDato, listaId: a.listaId }))];
 
   return (
     <>
@@ -213,6 +230,8 @@ export function ReglasPage(): React.JSX.Element {
               condicion={editando.condicion}
               atributosDisponibles={nombresAtributos}
               alCambiar={(condicion) => setEditando({ ...editando, condicion })}
+              tipos={tipos}
+              elementosPorLista={elementosPorLista}
             />
           ) : (
             <Campo etiqueta="Condición (AST JSON)" error={errorJson}>

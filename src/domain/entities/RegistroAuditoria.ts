@@ -1,4 +1,4 @@
-export type AccionAuditoria = 'Crear' | 'Modificar' | 'Eliminar' | 'Importar' | 'Exportar';
+export type AccionAuditoria = 'Crear' | 'Modificar' | 'Eliminar' | 'Importar' | 'Exportar' | 'Restaurar';
 
 /**
  * Registro inmutable de auditoría. El campo `usuario` está preparado en la

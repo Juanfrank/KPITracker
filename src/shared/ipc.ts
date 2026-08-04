@@ -1,10 +1,12 @@
 import type {
-  Atributo, Categoria, ConfiguracionGeneral, DefinicionPeriodicidad, ElementoLista, Indicador, Lista, Meta,
-  Periodo, RegistroAuditoria, ReglaNegocio, Responsable
+  Adjunto, Atributo, Categoria, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista, EntidadAdjunto,
+  Indicador, Lista, Meta, Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
 } from '@domain/index';
 import type { FiltroAuditoria, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
-import type { GuardarIndicadorInput } from '@application/use-cases/ServicioCatalogos';
+import type {
+  GuardarIndicadorInput, MapeoImportacionIndicadores, ResultadoImportacionIndicadores
+} from '@application/use-cases/ServicioCatalogos';
 import type { DetalleSeguimiento, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 
@@ -21,6 +23,14 @@ export interface CanalesIpc {
   'indicadores:obtener': { req: { id: string }; res: Indicador | null };
   'indicadores:guardar': { req: GuardarIndicadorInput; res: Indicador };
   'indicadores:eliminar': { req: { id: string }; res: void };
+  'indicadores:reasignarMasivo': {
+    req: { ids: string[]; responsable?: string | null; categoria?: string | null };
+    res: void;
+  };
+  'indicadores:importarExcel': {
+    req: { filas: Record<string, string>[]; mapeo: MapeoImportacionIndicadores };
+    res: ResultadoImportacionIndicadores;
+  };
 
   'atributos:listar': { req: { entidad?: string } | void; res: Atributo[] };
   'atributos:guardar': { req: Atributo; res: Atributo };
@@ -63,6 +73,14 @@ export interface CanalesIpc {
   };
   'recoleccion:fechaCorte': { req: { indicadorId: string; periodoId: string; fechaCorte: string | null }; res: void };
   'recoleccion:exclusion': { req: { indicadorId: string; periodoId: string; listaId: string; excluir: boolean }; res: void };
+  'recoleccion:historial': {
+    req: { indicadorId: string; periodoId: string; claveDesagregacion: string };
+    res: ResultadoHistorial[];
+  };
+  'recoleccion:restaurarVersion': {
+    req: { indicadorId: string; periodoId: string; claveDesagregacion: string; version: number };
+    res: { valor: number | null; advertencias: string[] };
+  };
 
   'seguimiento:tablero': { req: void; res: FilaTablero[] };
   'seguimiento:detalle': { req: { indicadorId: string }; res: DetalleSeguimiento | null };
@@ -76,6 +94,17 @@ export interface CanalesIpc {
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };
 
   'tipos:listar': { req: void; res: Array<{ tipo: string; etiqueta: string; editorHint: string }> };
+
+  'adjuntos:listar': { req: { entidad: EntidadAdjunto; entidadId: string }; res: Adjunto[] };
+  'adjuntos:subir': { req: { entidad: EntidadAdjunto; entidadId: string; comentario?: string | null }; res: Adjunto | null };
+  'adjuntos:abrir': { req: { id: string }; res: void };
+  'adjuntos:eliminar': { req: { id: string }; res: void };
+
+  'sistema:seleccionarArchivo': {
+    req: { filtros?: { nombre: string; extensiones: string[] }[] } | void;
+    res: string | null;
+  };
+  'sistema:leerHojaCalculo': { req: { rutaArchivo: string }; res: { columnas: string[]; filas: Record<string, string>[] } };
 }
 
 export type NombreCanal = keyof CanalesIpc;
@@ -83,6 +112,7 @@ export type NombreCanal = keyof CanalesIpc;
 export const NOMBRES_CANALES: NombreCanal[] = [
   'config:obtener', 'config:guardar', 'config:reglasFechaLimite',
   'indicadores:listar', 'indicadores:obtener', 'indicadores:guardar', 'indicadores:eliminar',
+  'indicadores:reasignarMasivo', 'indicadores:importarExcel',
   'atributos:listar', 'atributos:guardar', 'atributos:eliminar', 'atributos:valores', 'atributos:guardarValor',
   'listas:listar', 'listas:guardar', 'listas:eliminar', 'listas:elementos', 'listas:guardarElemento', 'listas:eliminarElemento',
   'metas:listar', 'metas:guardar', 'metas:eliminar',
@@ -91,11 +121,14 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
   'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:exclusion',
+  'recoleccion:historial', 'recoleccion:restaurarVersion',
   'seguimiento:tablero', 'seguimiento:detalle',
   'exportacion:regenerar', 'exportacion:ruta',
   'auditoria:consultar',
   'portable:exportar', 'portable:importar',
-  'tipos:listar'
+  'tipos:listar',
+  'adjuntos:listar', 'adjuntos:subir', 'adjuntos:abrir', 'adjuntos:eliminar',
+  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo'
 ];
 
 /** Respuesta serializada por IPC: éxito con datos o error de negocio legible. */

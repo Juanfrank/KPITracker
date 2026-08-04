@@ -17,7 +17,10 @@ const RUTAS: Record<string, string> = {
   buscar: 'M11 19a8 8 0 100-16 8 8 0 000 16zm10 2l-4.35-4.35',
   mas: 'M12 5v14M5 12h14',
   cerrar: 'M6 6l12 12M18 6L6 18',
-  flecha: 'M9 6l6 6-6 6'
+  flecha: 'M9 6l6 6-6 6',
+  subir: 'M12 20V6m0 0l-5 5m5-5l5 5M4 20h16',
+  historial: 'M3 12a9 9 0 109-9M3 12h5m-5 0V7M12 7v5l3 3',
+  adjunto: 'M17 7l-8.5 8.5a3 3 0 004.24 4.24L21 11.5a5 5 0 00-7.07-7.07L6 11.5'
 };
 
 export function Icono({ nombre, tamano = 17 }: { nombre: string; tamano?: number }): React.JSX.Element {

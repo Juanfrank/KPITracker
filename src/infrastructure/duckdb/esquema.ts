@@ -10,10 +10,12 @@ import { join } from 'node:path';
 const TABLAS: Record<string, string> = {
   indicadores: `CREATE TABLE IF NOT EXISTS indicadores (
     id VARCHAR PRIMARY KEY,
+    codigo VARCHAR NOT NULL DEFAULT '',
     nombre VARCHAR NOT NULL,
     definicion VARCHAR NOT NULL DEFAULT '',
     periodicidad VARCHAR NOT NULL,
     linea_base DOUBLE,
+    linea_base_periodo_id VARCHAR,
     meta_global DOUBLE,
     desagregaciones VARCHAR NOT NULL DEFAULT '[]',
     estado VARCHAR NOT NULL DEFAULT 'Activo',
@@ -21,6 +23,8 @@ const TABLAS: Record<string, string> = {
     categoria VARCHAR,
     unidad_medida VARCHAR,
     periodicidad_personalizada_id VARCHAR,
+    es_calculado BOOLEAN NOT NULL DEFAULT false,
+    formula VARCHAR,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -94,6 +98,7 @@ const TABLAS: Record<string, string> = {
     clave_desagregacion VARCHAR NOT NULL DEFAULT 'GENERAL',
     valor DOUBLE NOT NULL,
     periodicidad_medicion VARCHAR NOT NULL,
+    periodicidad_personalizada_id VARCHAR,
     metodo_calculo VARCHAR NOT NULL,
     anio_vigencia INTEGER NOT NULL,
     creado_en VARCHAR NOT NULL,
@@ -155,6 +160,27 @@ const TABLAS: Record<string, string> = {
     campo VARCHAR,
     valor_anterior VARCHAR,
     valor_nuevo VARCHAR
+  )`,
+  resultados_historial: `CREATE TABLE IF NOT EXISTS resultados_historial (
+    id VARCHAR PRIMARY KEY,
+    indicador_id VARCHAR NOT NULL,
+    periodo_id VARCHAR NOT NULL,
+    clave_desagregacion VARCHAR NOT NULL,
+    version INTEGER NOT NULL,
+    valor DOUBLE,
+    observacion VARCHAR,
+    usuario VARCHAR NOT NULL,
+    actualizado_en VARCHAR NOT NULL
+  )`,
+  adjuntos: `CREATE TABLE IF NOT EXISTS adjuntos (
+    id VARCHAR PRIMARY KEY,
+    entidad VARCHAR NOT NULL,
+    entidad_id VARCHAR NOT NULL,
+    nombre_archivo VARCHAR NOT NULL,
+    ruta_relativa VARCHAR NOT NULL,
+    tamanio_bytes INTEGER NOT NULL,
+    comentario VARCHAR,
+    subido_en VARCHAR NOT NULL
   )`
 };
 
@@ -171,7 +197,9 @@ export const PARQUET_POR_TABLA: Record<string, string> = {
   categorias: 'Config/Categorias.parquet',
   valores_atributos: 'Facts/FactValoresAtributos.parquet',
   levantamientos: 'Facts/FactSeguimiento.parquet',
-  auditoria: 'Logs/Auditoria.parquet'
+  auditoria: 'Logs/Auditoria.parquet',
+  resultados_historial: 'Logs/ResultadosHistorial.parquet',
+  adjuntos: 'Config/Adjuntos.parquet'
   // `resultados` se particiona por año: Facts/FactResultados/anio=YYYY/*.parquet
 };
 
@@ -181,8 +209,17 @@ export const PARQUET_POR_TABLA: Record<string, string> = {
  * EXISTS` no agrega columnas nuevas a una tabla preexistente; estas
  * sentencias sí, sin afectar los datos ya almacenados.
  */
+// Nota: DuckDB no admite restricciones (NOT NULL) en `ALTER TABLE ADD COLUMN`
+// ("Adding columns with constraints not yet supported"), a diferencia de
+// `CREATE TABLE`. Las columnas agregadas aquí llevan DEFAULT pero sin NOT
+// NULL; el valor por defecto de DuckDB ya cubre las filas preexistentes.
 const MIGRACIONES_ADITIVAS: string[] = [
-  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR'
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR',
+  "ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS codigo VARCHAR DEFAULT ''",
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS linea_base_periodo_id VARCHAR',
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS es_calculado BOOLEAN DEFAULT false',
+  'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS formula VARCHAR',
+  'ALTER TABLE metas ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR'
 ];
 
 export async function crearEsquema(db: Db): Promise<void> {
