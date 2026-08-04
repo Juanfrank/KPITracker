@@ -31,6 +31,8 @@ export interface Atributo {
   condicionVisibilidad: Condicion | null;
   /** Condición declarativa de obligatoriedad; null = usa el flag `obligatorio`. */
   condicionObligatorio: Condicion | null;
+  /** Si es true, el valor de este atributo se ofrece como filtro en el tablero de Seguimiento. */
+  filtrable: boolean;
   activo: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;

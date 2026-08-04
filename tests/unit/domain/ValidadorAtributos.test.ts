@@ -32,6 +32,7 @@ function atributo(parcial: Partial<Atributo> & { id: string }): Atributo {
     validaciones: [],
     condicionVisibilidad: null,
     condicionObligatorio: null,
+    filtrable: false,
     activo: true,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z',

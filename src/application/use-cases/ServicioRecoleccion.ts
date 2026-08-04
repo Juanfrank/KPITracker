@@ -1,6 +1,6 @@
 import {
-  EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, TipoDato,
-  ValidacionError, calcularAgregadosCaptura, claveATexto, evaluarValidacionesCaptura
+  EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, NoImplementadoError, Periodicidad,
+  ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, evaluarValidacionesCaptura
 } from '@domain/index';
 import type {
   DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Periodo, ResultadoHistorial, TypeRegistry
@@ -159,6 +159,25 @@ export class ServicioRecoleccion extends ServicioBase {
    * Decimal del TypeRegistry. Retorna, además del valor persistido, las
    * advertencias de validación cruzada recalculadas sobre el levantamiento.
    */
+  /**
+   * Punto de entrada para la obtención automática del resultado de un
+   * indicador+período desde su origen configurado (XMLA/SQL/API). La
+   * plataforma de configuración (origen, credenciales, parámetros
+   * dinámicos por indicador) ya existe; la ejecución real de la consulta
+   * contra el origen se implementará en una versión posterior.
+   */
+  async obtenerResultadoAutomatico(indicadorId: string, periodoId: string): Promise<{ valor: number | null }> {
+    const indicador = await this.indicadores.obtener(indicadorId);
+    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    if (!indicador.origenAutomaticoId) {
+      throw new ValidacionError('Este indicador no tiene un origen automático configurado.');
+    }
+    void periodoId;
+    throw new NoImplementadoError(
+      'La obtención automática de resultados aún no está implementada. El origen y los parámetros ya quedaron configurados; la ejecución real se habilitará en una próxima versión.'
+    );
+  }
+
   async guardarCelda(
     indicadorId: string,
     periodoId: string,

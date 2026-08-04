@@ -10,6 +10,7 @@ import type {
   Levantamiento,
   Lista,
   Meta,
+  OrigenAutomatico,
   RegistroAuditoria,
   ReglaNegocio,
   Responsable,
@@ -107,6 +108,7 @@ export interface ICatalogoRepository<T extends { readonly id: string }> {
 
 export type IResponsableRepository = ICatalogoRepository<Responsable>;
 export type ICategoriaRepository = ICatalogoRepository<Categoria>;
+export type IOrigenAutomaticoRepository = ICatalogoRepository<OrigenAutomatico>;
 
 /** Resumen por período para el tablero de seguimiento. */
 export interface ResumenPeriodo {
@@ -124,6 +126,8 @@ export interface IResultadoRepository {
   guardarLevantamiento(levantamiento: Levantamiento): Promise<void>;
   resumenPorIndicador(indicadorId: string): Promise<ResumenPeriodo[]>;
   resumenGlobal(): Promise<ResumenPeriodo[]>;
+  /** Valor GENERAL (sin desagregar) de cada período con datos, para el histórico de Seguimiento. */
+  resultadosGeneralPorIndicador(indicadorId: string): Promise<Array<{ periodoId: string; valor: number | null }>>;
   /** Historial de versiones de una celda, más reciente primero. */
   obtenerHistorial(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]>;
   /** Agrega una entrada de versión (append-only, nunca se sobrescribe). */

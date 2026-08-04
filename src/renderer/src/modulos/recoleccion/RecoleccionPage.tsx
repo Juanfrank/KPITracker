@@ -101,6 +101,17 @@ export function RecoleccionPage(): React.JSX.Element {
             </Campo>
           </div>
         )}
+        {captura && indicadorSeleccionado?.origenAutomaticoId && (
+          <div className="toolbar" style={{ marginTop: 10 }}>
+            <button className="boton" onClick={() => void vm.obtenerAutomatico()} data-testid="recoleccion-obtener-automatico">
+              Obtener automáticamente
+            </button>
+            <span className="texto-suave">Consulta el origen configurado para este indicador y este período.</span>
+          </div>
+        )}
+        {vm.mensajeAutomatico && (
+          <div className="aviso info" data-testid="aviso-obtener-automatico">{vm.mensajeAutomatico}</div>
+        )}
         {captura && !indicadorSeleccionado?.esCalculado && vm.indicadorId && vm.periodoId && (
           <div style={{ marginTop: 10 }}>
             <PanelAdjuntos

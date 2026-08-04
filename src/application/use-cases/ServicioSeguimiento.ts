@@ -1,16 +1,23 @@
 import {
-  CalculadoraEstados, GeneradorPeriodos, Periodicidad, ProductoCartesiano
+  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano
 } from '@domain/index';
 import type {
-  Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, EstadoPeriodo,
+  Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, EstadoPeriodo,
   EstadoSeguimiento, Indicador, Responsable
 } from '@domain/index';
 import type {
-  ICatalogoRepository, IConfiguracionRepository, IDefinicionPeriodicidadRepository,
+  IAtributoRepository, ICatalogoRepository, IConfiguracionRepository, IDefinicionPeriodicidadRepository,
   IIndicadorRepository, IListaRepository, IResultadoRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
+
+/** Valor de un atributo dinámico marcado como filtrable, resuelto a texto legible. */
+export interface AtributoFiltro {
+  atributoId: string;
+  nombre: string;
+  valor: string | null;
+}
 
 export interface FilaTablero {
   indicadorId: string;
@@ -27,12 +34,30 @@ export interface FilaTablero {
   categoria: string | null;
   totalPeriodos: number;
   periodosCompletos: number;
+  atributosFiltro: AtributoFiltro[];
 }
 
 export interface DetalleSeguimiento {
   indicadorId: string;
   nombre: string;
   estados: EstadoPeriodo[];
+}
+
+export interface PuntoHistorico {
+  periodoId: string;
+  etiqueta: string;
+  fechaInicio: string;
+  valor: number | null;
+  cumplimientoPct: number | null;
+}
+
+export interface FilaHistorico {
+  indicadorId: string;
+  nombre: string;
+  lineaBase: number | null;
+  metaGlobal: number | null;
+  unidadMedida: string | null;
+  puntos: PuntoHistorico[];
 }
 
 /**
@@ -43,6 +68,7 @@ export interface DetalleSeguimiento {
 export class ServicioSeguimiento extends ServicioBase {
   private readonly generadorPeriodos = new GeneradorPeriodos();
   private readonly productoCartesiano = new ProductoCartesiano();
+  private readonly formulas = new EvaluadorFormulas();
   private readonly calculadora: CalculadoraEstados;
 
   constructor(
@@ -54,10 +80,41 @@ export class ServicioSeguimiento extends ServicioBase {
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly responsablesRepo: ICatalogoRepository<Responsable>,
     private readonly categoriasRepo: ICatalogoRepository<Categoria>,
+    private readonly atributosRepo: IAtributoRepository,
     reglasFechaLimite: DeadlineRuleRegistry
   ) {
     super(ctx);
     this.calculadora = new CalculadoraEstados(reglasFechaLimite);
+  }
+
+  /** Atributos dinámicos de Indicador marcados como filtrables (activos). */
+  private async atributosFiltrables(): Promise<Atributo[]> {
+    return (await this.atributosRepo.listar('Indicador')).filter((a) => a.filtrable && a.activo);
+  }
+
+  /** Resuelve el valor legible de los atributos filtrables de un indicador (codigo -> nombre para listas). */
+  private async valoresFiltroPara(
+    indicadorId: string,
+    atributos: Atributo[],
+    elementosPorLista: Map<string, ElementoLista[]>
+  ): Promise<AtributoFiltro[]> {
+    if (atributos.length === 0) return [];
+    const valores = await this.atributosRepo.obtenerValores('Indicador', indicadorId);
+    const porAtributo = new Map(valores.map((v) => [v.atributoId, v]));
+    return atributos.map((a) => {
+      const v = porAtributo.get(a.id);
+      let valor: string | null = null;
+      if (v) {
+        if (a.listaId && v.valorTexto) {
+          const elementos = elementosPorLista.get(a.listaId) ?? [];
+          valor = elementos.find((e) => e.codigo === v.valorTexto)?.nombre ?? v.valorTexto;
+        } else {
+          valor = v.valorTexto ?? (v.valorNumero != null ? String(v.valorNumero)
+            : (v.valorFecha ?? (v.valorBooleano != null ? (v.valorBooleano ? 'Sí' : 'No') : null)));
+        }
+      }
+      return { atributoId: a.id, nombre: a.nombre, valor };
+    });
   }
 
   private async definicionPara(
@@ -71,18 +128,23 @@ export class ServicioSeguimiento extends ServicioBase {
   }
 
   async tablero(): Promise<FilaTablero[]> {
-    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias] = await Promise.all([
+    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias, atributosFiltrables] = await Promise.all([
       this.configuracion.obtener(),
       this.indicadores.listar(),
       this.resultados.resumenGlobal(),
       this.resultados.listarLevantamientos(),
       this.periodicidadesRepo.listar(),
       this.responsablesRepo.listar(),
-      this.categoriasRepo.listar()
+      this.categoriasRepo.listar(),
+      this.atributosFiltrables()
     ]);
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
     const nombreResponsable = new Map(responsables.map((r) => [r.id, r.nombre]));
     const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
+    const elementosPorLista = new Map<string, ElementoLista[]>();
+    for (const listaId of new Set(atributosFiltrables.map((a) => a.listaId).filter((id): id is string => id != null))) {
+      elementosPorLista.set(listaId, await this.listas.listarElementos(listaId));
+    }
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaTablero[] = [];
 
@@ -132,7 +194,8 @@ export class ServicioSeguimiento extends ServicioBase {
         categoriaId: indicador.categoria,
         categoria: indicador.categoria == null ? null : (nombreCategoria.get(indicador.categoria) ?? indicador.categoria),
         totalPeriodos: estados.length,
-        periodosCompletos: estados.filter((e) => e.estado === 'Completo').length
+        periodosCompletos: estados.filter((e) => e.estado === 'Completo').length,
+        atributosFiltro: await this.valoresFiltroPara(indicador.id, atributosFiltrables, elementosPorLista)
       });
     }
     return filas;
@@ -174,6 +237,75 @@ export class ServicioSeguimiento extends ServicioBase {
       );
     });
     return { indicadorId, nombre: indicador.nombre, estados };
+  }
+
+  /**
+   * Serie histórica por indicador (períodos cerrados con su valor GENERAL y
+   * cumplimiento respecto a la meta), para la vista pivotada de Seguimiento.
+   * Los indicadores calculados evalúan su fórmula por período en vez de leer
+   * `resultados` (no tienen filas propias, ver ExportAnaliticoService).
+   */
+  async historico(): Promise<FilaHistorico[]> {
+    const [config, indicadores] = await Promise.all([this.configuracion.obtener(), this.indicadores.listar()]);
+    const definicionesLista = await this.periodicidadesRepo.listar();
+    const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
+    const hoy = this.ctx.reloj.hoyIso();
+    const filas: FilaHistorico[] = [];
+
+    for (const indicador of indicadores) {
+      const definicion = await this.definicionPara(indicador, definiciones);
+      const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
+      const valoresPorPeriodo = new Map<string, number | null>();
+      if (indicador.esCalculado && indicador.formula) {
+        for (const periodo of periodos) {
+          valoresPorPeriodo.set(periodo.id, await this.calcularValorIndicador(indicador.formula, periodo.id));
+        }
+      } else {
+        for (const dato of await this.resultados.resultadosGeneralPorIndicador(indicador.id)) {
+          valoresPorPeriodo.set(dato.periodoId, dato.valor);
+        }
+      }
+      const puntos: PuntoHistorico[] = periodos.map((periodo) => {
+        const valor = valoresPorPeriodo.get(periodo.id) ?? null;
+        const meta = indicador.metaGlobal;
+        const cumplimientoPct = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
+        return { periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, valor, cumplimientoPct };
+      });
+      filas.push({
+        indicadorId: indicador.id,
+        nombre: indicador.nombre,
+        lineaBase: indicador.lineaBase,
+        metaGlobal: indicador.metaGlobal,
+        unidadMedida: indicador.unidadMedida,
+        puntos
+      });
+    }
+    return filas;
+  }
+
+  /** Evalúa la fórmula de un indicador calculado para un período específico, a nivel GENERAL. */
+  private async calcularValorIndicador(formula: string, periodoId: string): Promise<number | null> {
+    let codigos: string[];
+    try {
+      codigos = this.formulas.codigosReferenciados(formula);
+    } catch {
+      return null;
+    }
+    const valores = new Map<string, number | null>();
+    for (const codigo of codigos) {
+      const refIndicador = await this.indicadores.buscarPorCodigo(codigo);
+      if (!refIndicador) {
+        valores.set(codigo, null);
+        continue;
+      }
+      const datos = await this.resultados.resultadosGeneralPorIndicador(refIndicador.id);
+      valores.set(codigo, datos.find((d) => d.periodoId === periodoId)?.valor ?? null);
+    }
+    try {
+      return this.formulas.evaluar(formula, valores);
+    } catch {
+      return null;
+    }
   }
 
   private async totalCombinaciones(

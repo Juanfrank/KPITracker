@@ -1,13 +1,13 @@
 import type {
   Adjunto, Atributo, Categoria, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista, EntidadAdjunto,
-  Indicador, Lista, Meta, Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
+  Indicador, Lista, Meta, OrigenAutomatico, Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
 } from '@domain/index';
 import type { FiltroAuditoria, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
 import type {
   GuardarIndicadorInput, MapeoImportacionIndicadores, ResultadoImportacionIndicadores
 } from '@application/use-cases/ServicioCatalogos';
-import type { DetalleSeguimiento, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
+import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 
 /**
@@ -65,6 +65,10 @@ export interface CanalesIpc {
   'categorias:guardar': { req: Categoria; res: Categoria };
   'categorias:eliminar': { req: { id: string }; res: void };
 
+  'origenes:listar': { req: void; res: OrigenAutomatico[] };
+  'origenes:guardar': { req: OrigenAutomatico; res: OrigenAutomatico };
+  'origenes:eliminar': { req: { id: string }; res: void };
+
   'recoleccion:periodos': { req: { indicadorId: string }; res: Periodo[] };
   'recoleccion:captura': { req: { indicadorId: string; periodoId: string }; res: DatosCaptura };
   'recoleccion:guardarCelda': {
@@ -82,9 +86,12 @@ export interface CanalesIpc {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string; version: number };
     res: { valor: number | null; advertencias: string[] };
   };
+  /** Siempre rechaza con NoImplementadoError por ahora: la plataforma de orígenes está lista, la ejecución real no. */
+  'recoleccion:obtenerAutomatico': { req: { indicadorId: string; periodoId: string }; res: { valor: number | null } };
 
   'seguimiento:tablero': { req: void; res: FilaTablero[] };
   'seguimiento:detalle': { req: { indicadorId: string }; res: DetalleSeguimiento | null };
+  'seguimiento:historico': { req: void; res: FilaHistorico[] };
 
   'exportacion:regenerar': { req: void; res: { ruta: string } };
   'exportacion:ruta': { req: void; res: { ruta: string } };
@@ -121,9 +128,10 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
+  'origenes:listar', 'origenes:guardar', 'origenes:eliminar',
   'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:comentario',
-  'recoleccion:exclusion', 'recoleccion:historial', 'recoleccion:restaurarVersion',
-  'seguimiento:tablero', 'seguimiento:detalle',
+  'recoleccion:exclusion', 'recoleccion:historial', 'recoleccion:restaurarVersion', 'recoleccion:obtenerAutomatico',
+  'seguimiento:tablero', 'seguimiento:detalle', 'seguimiento:historico',
   'exportacion:regenerar', 'exportacion:ruta',
   'auditoria:consultar',
   'portable:exportar', 'portable:importar',

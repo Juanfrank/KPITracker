@@ -7,7 +7,7 @@ function fila(parcial: Partial<FilaTablero> = {}): FilaTablero {
     indicadorId: 'i1', nombre: 'Indicador 1', estado: 'Pendiente', periodicidad: 'Mensual' as FilaTablero['periodicidad'],
     periodoPendiente: null, fechaLimite: null, fechaCorte: null, ultimaActualizacion: null,
     responsableId: null, responsable: null, categoriaId: null, categoria: null,
-    totalPeriodos: 1, periodosCompletos: 0,
+    totalPeriodos: 1, periodosCompletos: 0, atributosFiltro: [],
     ...parcial
   };
 }

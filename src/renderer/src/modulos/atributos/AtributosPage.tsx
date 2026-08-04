@@ -22,6 +22,7 @@ function atributoVacio(): Atributo {
     validaciones: [],
     condicionVisibilidad: null,
     condicionObligatorio: null,
+    filtrable: false,
     activo: true,
     creadoEn: '',
     actualizadoEn: ''
@@ -209,7 +210,8 @@ export function AtributosPage(): React.JSX.Element {
                 ['visible', 'Visible'],
                 ['editable', 'Editable'],
                 ['obligatorio', 'Obligatorio'],
-                ['activo', 'Activo']
+                ['activo', 'Activo'],
+                ['filtrable', 'Usar como filtro en Seguimiento']
               ] as const
             ).map(([campo, etiqueta]) => (
               <label key={campo} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>

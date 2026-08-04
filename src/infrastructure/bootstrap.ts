@@ -1,4 +1,4 @@
-import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, OrigenAutomatico, Responsable } from '@domain/index';
 import { Db } from './duckdb/Db';
 import { crearEsquema, restaurarDesdeParquetSiVacio } from './duckdb/esquema';
 import { RutasDataLake } from './parquet/RutasDataLake';
@@ -6,7 +6,7 @@ import { ParquetSyncService } from './parquet/ParquetSyncService';
 import {
   AdjuntoRepositoryDuckDb, AtributoRepositoryDuckDb, AuditoriaRepositoryDuckDb, CatalogoRepositoryDuckDb,
   IndicadorRepositoryDuckDb, ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb,
-  ResultadoRepositoryDuckDb, crearRepositorioDefinicionesPeriodicidad
+  ResultadoRepositoryDuckDb, crearRepositorioDefinicionesPeriodicidad, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosDuckDb';
 import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
@@ -30,6 +30,7 @@ export interface Infraestructura {
   periodicidades: CatalogoRepositoryDuckDb<DefinicionPeriodicidad>;
   responsables: CatalogoRepositoryDuckDb<Responsable>;
   categorias: CatalogoRepositoryDuckDb<Categoria>;
+  origenesAutomaticos: CatalogoRepositoryDuckDb<OrigenAutomatico>;
   resultados: ResultadoRepositoryDuckDb;
   adjuntos: AdjuntoRepositoryDuckDb;
   auditoria: AuditoriaRepositoryDuckDb;
@@ -72,6 +73,7 @@ export async function crearInfraestructura(
   const periodicidades = crearRepositorioDefinicionesPeriodicidad(db, sync);
   const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
   const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
+  const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
   const resultados = new ResultadoRepositoryDuckDb(db, sync);
   const adjuntos = new AdjuntoRepositoryDuckDb(db, sync);
   const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);
@@ -96,6 +98,7 @@ export async function crearInfraestructura(
     periodicidades,
     responsables,
     categorias,
+    origenesAutomaticos,
     resultados,
     adjuntos,
     auditoria,

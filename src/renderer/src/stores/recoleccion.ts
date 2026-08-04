@@ -22,6 +22,8 @@ interface EstadoRecoleccion {
   erroresCeldas: Map<string, string>;
   pilaDeshacer: CambioCelda[];
   pilaRehacer: CambioCelda[];
+  /** Mensaje de la última obtención automática intentada (éxito o error), para mostrar en la UI. */
+  mensajeAutomatico: string | null;
 
   cargarIndicadores(): Promise<void>;
   seleccionarIndicador(indicadorId: string): Promise<void>;
@@ -36,6 +38,8 @@ interface EstadoRecoleccion {
   pegarDesde(filaInicio: number, textoPortapapeles: string): Promise<void>;
   /** Restaura una versión anterior de una celda (registra el estado actual en el historial). */
   restaurarVersion(claveDesagregacion: string, version: number): Promise<void>;
+  /** Solicita el resultado automático del período actual al origen configurado del indicador. */
+  obtenerAutomatico(): Promise<void>;
 }
 
 /**
@@ -53,6 +57,7 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   erroresCeldas: new Map(),
   pilaDeshacer: [],
   pilaRehacer: [],
+  mensajeAutomatico: null,
 
   async cargarIndicadores() {
     const indicadores = (await invocar('indicadores:listar', undefined)).filter((i) => i.estado === 'Activo');
@@ -180,6 +185,17 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
         )
       }
     }));
+  },
+
+  async obtenerAutomatico() {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return;
+    set({ mensajeAutomatico: null });
+    try {
+      await invocar('recoleccion:obtenerAutomatico', { indicadorId, periodoId });
+    } catch (error) {
+      set({ mensajeAutomatico: (error as Error).message });
+    }
   },
 
   async pegarDesde(filaInicio, textoPortapapeles) {

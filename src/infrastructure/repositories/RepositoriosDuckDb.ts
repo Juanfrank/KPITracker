@@ -1,6 +1,6 @@
 import type {
   Adjunto, Atributo, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Indicador, Levantamiento, Lista,
-  Meta, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial
+  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAtributoRepository, IAuditoriaRepository, ICatalogoRepository,
@@ -11,8 +11,8 @@ import type { Db } from '../duckdb/Db';
 import type { ParquetSyncService } from '../parquet/ParquetSyncService';
 import {
   aAdjunto, aAtributo, aAuditoria, aDefinicionPeriodicidad, aElemento, aIndicador, aLevantamiento, aLista, aMeta,
-  aRegla, aResultado, aResultadoHistorial, deAdjunto, deAtributo, deDefinicionPeriodicidad, deElemento, deIndicador,
-  deLista, deMeta, deRegla, deResultadoHistorial
+  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, deAdjunto, deAtributo, deDefinicionPeriodicidad,
+  deElemento, deIndicador, deLista, deMeta, deOrigenAutomatico, deRegla, deResultadoHistorial
 } from './mapeos';
 
 /**
@@ -48,7 +48,7 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
 
   async guardar(indicador: Indicador): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deIndicador(indicador)
     );
     this.sync.marcarSucia('indicadores');
@@ -75,7 +75,7 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
 
   async guardar(atributo: Atributo): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO atributos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO atributos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deAtributo(atributo)
     );
     this.sync.marcarSucia('atributos');
@@ -277,6 +277,17 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
     }));
   }
 
+  async resultadosGeneralPorIndicador(indicadorId: string): Promise<Array<{ periodoId: string; valor: number | null }>> {
+    const filas = await this.db.all(
+      `SELECT periodo_id, valor FROM resultados WHERE indicador_id = ? AND clave_desagregacion = 'GENERAL'`,
+      [indicadorId]
+    );
+    return filas.map((f) => ({
+      periodoId: String(f.periodo_id),
+      valor: f.valor == null ? null : Number(f.valor)
+    }));
+  }
+
   async obtenerHistorial(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]> {
     const filas = await this.db.all(
       `SELECT * FROM resultados_historial
@@ -401,4 +412,11 @@ export function crearRepositorioDefinicionesPeriodicidad(
   sync: ParquetSyncService
 ): CatalogoRepositoryDuckDb<DefinicionPeriodicidad> {
   return new CatalogoRepositoryDuckDb(db, sync, 'periodicidades_personalizadas', aDefinicionPeriodicidad, deDefinicionPeriodicidad);
+}
+
+export function crearRepositorioOrigenesAutomaticos(
+  db: Db,
+  sync: ParquetSyncService
+): CatalogoRepositoryDuckDb<OrigenAutomatico> {
+  return new CatalogoRepositoryDuckDb(db, sync, 'origenes_automaticos', aOrigenAutomatico, deOrigenAutomatico);
 }

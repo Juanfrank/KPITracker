@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { Categoria, Responsable } from '@domain/index';
-import type { FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
+import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { invocar } from '../../api';
 import { BarraProgreso, ChipEstado, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { useNavegacion } from '../../stores/navegacion';
+
+const PESTANAS = [
+  { id: 'estado', etiqueta: 'Estado' },
+  { id: 'historico', etiqueta: 'Histórico' }
+] as const;
+type Pestana = (typeof PESTANAS)[number]['id'];
 
 const FILTROS_ESTADO = [
   { id: 'todos', etiqueta: 'Todos' },
@@ -19,12 +25,16 @@ const FILTROS_ESTADO = [
  * nunca a partir de banderas persistidas.
  */
 export function SeguimientoPage(): React.JSX.Element {
+  const [pestana, setPestana] = useState<Pestana>('estado');
   const [filas, setFilas] = useState<FilaTablero[]>([]);
+  const [historico, setHistorico] = useState<FilaHistorico[] | null>(null);
+  const [cargandoHistorico, setCargandoHistorico] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroPeriodicidad, setFiltroPeriodicidad] = useState('todas');
   const [filtroResponsable, setFiltroResponsable] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  const [filtrosAtributos, setFiltrosAtributos] = useState<Record<string, string>>({});
   const [filtroTexto, setFiltroTexto] = useState('');
   const [detalle, setDetalle] = useState<DetalleSeguimiento | null>(null);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
@@ -45,17 +55,49 @@ export function SeguimientoPage(): React.JSX.Element {
     void invocar('categorias:listar', undefined).then(setCategoriasCatalogo);
   }, []);
 
+  useEffect(() => {
+    if (pestana === 'historico' && historico === null) {
+      setCargandoHistorico(true);
+      void invocar('seguimiento:historico', undefined)
+        .then(setHistorico)
+        .finally(() => setCargandoHistorico(false));
+    }
+  }, [pestana, historico]);
+
   const periodicidades = [...new Set(filas.map((f) => f.periodicidad))];
   const responsablesUnicos = [...new Map(filas.filter((f) => f.responsableId).map((f) => [f.responsableId as string, f.responsable ?? f.responsableId as string])).entries()];
   const categoriasUnicas = [...new Map(filas.filter((f) => f.categoriaId).map((f) => [f.categoriaId as string, f.categoria ?? f.categoriaId as string])).entries()];
+  const atributosFiltrables = filas[0]?.atributosFiltro.map((a) => ({ id: a.atributoId, nombre: a.nombre })) ?? [];
+  const valoresPorAtributo = new Map<string, string[]>();
+  for (const a of atributosFiltrables) {
+    const valores = new Set<string>();
+    for (const f of filas) {
+      const v = f.atributosFiltro.find((x) => x.atributoId === a.id)?.valor;
+      if (v) valores.add(v);
+    }
+    valoresPorAtributo.set(a.id, [...valores].sort());
+  }
+
   const visibles = filas.filter(
     (f) =>
       (filtroEstado === 'todos' || f.estado === filtroEstado) &&
       (filtroPeriodicidad === 'todas' || f.periodicidad === filtroPeriodicidad) &&
       (filtroResponsable === 'todos' || f.responsableId === filtroResponsable) &&
       (filtroCategoria === 'todas' || f.categoriaId === filtroCategoria) &&
+      Object.entries(filtrosAtributos).every(
+        ([atributoId, valor]) => !valor || f.atributosFiltro.find((a) => a.atributoId === atributoId)?.valor === valor
+      ) &&
       f.nombre.toLowerCase().includes(filtroTexto.toLowerCase())
   );
+  const idsVisibles = new Set(visibles.map((f) => f.indicadorId));
+  const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
+  const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string }>();
+  for (const fila of historicoVisible) {
+    for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio });
+  }
+  const columnasHistorico = [...columnasPorId.entries()]
+    .map(([periodoId, v]) => ({ periodoId, ...v }))
+    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
 
@@ -90,20 +132,34 @@ export function SeguimientoPage(): React.JSX.Element {
         titulo="Seguimiento"
         descripcion="Estado de cumplimiento de los levantamientos por indicador. El estado se calcula dinámicamente con la fecha límite configurada."
       />
+      <div className="filtros-chips">
+        {PESTANAS.map((p) => (
+          <button
+            key={p.id}
+            className={`filtro-chip ${pestana === p.id ? 'activo' : ''}`}
+            onClick={() => setPestana(p.id)}
+            data-testid={`pestana-${p.id}`}
+          >
+            {p.etiqueta}
+          </button>
+        ))}
+      </div>
       <div className="toolbar">
-        <div className="filtros-chips">
-          {FILTROS_ESTADO.map((f) => (
-            <button
-              key={f.id}
-              className={`filtro-chip ${filtroEstado === f.id ? 'activo' : ''}`}
-              onClick={() => setFiltroEstado(f.id)}
-              data-testid={`filtro-${f.id}`}
-            >
-              {f.etiqueta}
-              {f.id !== 'todos' && ` (${conteo(f.id)})`}
-            </button>
-          ))}
-        </div>
+        {pestana === 'estado' && (
+          <div className="filtros-chips">
+            {FILTROS_ESTADO.map((f) => (
+              <button
+                key={f.id}
+                className={`filtro-chip ${filtroEstado === f.id ? 'activo' : ''}`}
+                onClick={() => setFiltroEstado(f.id)}
+                data-testid={`filtro-${f.id}`}
+              >
+                {f.etiqueta}
+                {f.id !== 'todos' && ` (${conteo(f.id)})`}
+              </button>
+            ))}
+          </div>
+        )}
         <select value={filtroPeriodicidad} onChange={(e) => setFiltroPeriodicidad(e.target.value)} style={{ width: 'auto' }}>
           <option value="todas">Todas las periodicidades</option>
           {periodicidades.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -116,11 +172,23 @@ export function SeguimientoPage(): React.JSX.Element {
           <option value="todas">Todas las categorías</option>
           {categoriasUnicas.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
         </select>
+        {atributosFiltrables.map((a) => (
+          <select
+            key={a.id}
+            value={filtrosAtributos[a.id] ?? ''}
+            onChange={(e) => setFiltrosAtributos((previo) => ({ ...previo, [a.id]: e.target.value }))}
+            style={{ width: 'auto' }}
+            data-testid={`filtro-atributo-${a.nombre}`}
+          >
+            <option value="">{a.nombre} (todos)</option>
+            {(valoresPorAtributo.get(a.id) ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        ))}
         <div className="separador" />
         <input type="search" placeholder="Buscar indicador…" value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
       </div>
 
-      {seleccionados.size > 0 && (
+      {pestana === 'estado' && seleccionados.size > 0 && (
         <div className="toolbar" data-testid="barra-reasignacion-masiva">
           <span>{seleccionados.size} indicador(es) seleccionado(s)</span>
           <div className="separador" />
@@ -158,6 +226,7 @@ export function SeguimientoPage(): React.JSX.Element {
         </div>
       )}
 
+      {pestana === 'estado' && (
       <div className="tabla-envoltura">
         <table className="tabla" data-testid="tabla-seguimiento">
           <thead>
@@ -228,6 +297,61 @@ export function SeguimientoPage(): React.JSX.Element {
           </tbody>
         </table>
       </div>
+      )}
+
+      {pestana === 'historico' && (
+        <div className="tabla-envoltura">
+          <table className="tabla" data-testid="tabla-historico">
+            <thead>
+              <tr>
+                <th>Indicador</th>
+                <th>Línea base</th>
+                <th>Meta</th>
+                {columnasHistorico.map((c) => (
+                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {historicoVisible.map((h) => (
+                <tr key={h.indicadorId} data-testid={`historico-${h.nombre}`}>
+                  <td><strong>{h.nombre}</strong></td>
+                  <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+                  <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+                  {columnasHistorico.map((c) => {
+                    const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
+                    return (
+                      <td key={c.periodoId} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
+                        {punto?.valor == null ? (
+                          <span className="texto-suave">—</span>
+                        ) : (
+                          <>
+                            {punto.valor}
+                            {punto.cumplimientoPct != null && (
+                              <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              {historicoVisible.length === 0 && (
+                <tr>
+                  <td colSpan={3 + columnasHistorico.length}>
+                    {cargandoHistorico ? (
+                      <Vacio mensaje="Cargando…" />
+                    ) : (
+                      <Vacio icono="▤" mensaje="Sin resultados históricos" detalle="Ajuste los filtros o capture resultados en Recolección." />
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {detalle && (
         <PanelLateral titulo={detalle.nombre} alCerrar={() => setDetalle(null)}>

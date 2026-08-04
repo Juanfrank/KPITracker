@@ -15,6 +15,7 @@ export * from './entities/RegistroAuditoria';
 export * from './entities/DefinicionPeriodicidad';
 export * from './entities/Catalogos';
 export * from './entities/Adjunto';
+export * from './entities/OrigenAutomatico';
 export * from './data-types/TypeDescriptor';
 export * from './data-types/TypeRegistry';
 export * from './data-types/builtinTypes';

@@ -222,6 +222,8 @@ export class ServicioIndicadores extends ServicioBase {
           nombre,
           definicion,
           formaCalculo: null,
+          origenAutomaticoId: null,
+          parametrosOrigen: null,
           periodicidad,
           periodicidadPersonalizadaId: null,
           lineaBase: lineaBaseTexto ? Number(lineaBaseTexto) : null,

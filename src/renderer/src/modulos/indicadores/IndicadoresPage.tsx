@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
-  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo, ReglaNegocio, Responsable,
-  ValorAtributo
+  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, OrigenAutomatico, Periodo,
+  ReglaNegocio, Responsable, ValorAtributo
 } from '@domain/index';
 import { GeneradorPeriodos, Periodicidad, construirContextoIndicador } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
@@ -33,6 +33,8 @@ function indicadorVacio(): Indicador {
     unidadMedida: null,
     esCalculado: false,
     formula: null,
+    origenAutomaticoId: null,
+    parametrosOrigen: null,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -88,6 +90,7 @@ export function IndicadoresPage(): React.JSX.Element {
   const [periodicidades, setPeriodicidades] = useState<DefinicionPeriodicidad[]>([]);
   const [responsables, setResponsables] = useState<Responsable[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [origenes, setOrigenes] = useState<OrigenAutomatico[]>([]);
   const [editando, setEditando] = useState<Indicador | null>(null);
   const [valoresAttr, setValoresAttr] = useState<Map<string, string>>(new Map());
   const [metas, setMetas] = useState<Meta[]>([]);
@@ -108,6 +111,7 @@ export function IndicadoresPage(): React.JSX.Element {
     void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
     void invocar('responsables:listar', undefined).then(setResponsables);
     void invocar('categorias:listar', undefined).then(setCategorias);
+    void invocar('origenes:listar', undefined).then(setOrigenes);
     void invocar('config:obtener', undefined).then((c) => setAnioInicial(c.anioInicial));
   }, [cargar]);
 
@@ -456,6 +460,37 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
 
+          {!editando.esCalculado && (
+            <>
+              <Campo etiqueta="Origen automático de resultados">
+                <select
+                  value={editando.origenAutomaticoId ?? ''}
+                  onChange={(e) => setEditando({ ...editando, origenAutomaticoId: e.target.value || null })}
+                  data-testid="indicador-origen-automatico"
+                >
+                  <option value="">— sin configurar (captura manual) —</option>
+                  {origenes.map((o) => <option key={o.id} value={o.id}>{o.nombre} ({o.tipo})</option>)}
+                </select>
+                <span className="texto-suave">
+                  Los orígenes se administran en Administración. Al configurarlo, en Recolección aparecerá la opción de obtener el
+                  resultado automáticamente para el período seleccionado (ejecución aún no disponible en esta versión).
+                </span>
+              </Campo>
+              {editando.origenAutomaticoId && (
+                <Campo etiqueta="Parámetros dinámicos del origen">
+                  <EditorParametros
+                    valores={editando.parametrosOrigen ?? {}}
+                    onChange={(parametrosOrigen) => setEditando({ ...editando, parametrosOrigen })}
+                  />
+                  <span className="texto-suave">
+                    Pares clave/valor específicos de este indicador para resolver la consulta (p. ej. medida MDX, filtro SQL, query
+                    param de la API) según el período y las desagregaciones.
+                  </span>
+                </Campo>
+              )}
+            </>
+          )}
+
           <h4 style={{ margin: '8px 0 0' }}>Desagregaciones</h4>
           <p className="texto-suave" style={{ margin: 0 }}>
             Si selecciona varias, la captura generará todas las combinaciones (producto cartesiano) más una fila para el resultado General.
@@ -574,5 +609,54 @@ export function IndicadoresPage(): React.JSX.Element {
         </PanelLateral>
       )}
     </>
+  );
+}
+
+/** Editor de pares clave/valor para los parámetros dinámicos de un origen automático. */
+function EditorParametros({
+  valores, onChange
+}: {
+  valores: Record<string, string>;
+  onChange: (valores: Record<string, string>) => void;
+}): React.JSX.Element {
+  const pares = Object.entries(valores);
+
+  const actualizar = (indice: number, clave: string, valor: string): void => {
+    const nuevos = [...pares];
+    nuevos[indice] = [clave, valor];
+    onChange(Object.fromEntries(nuevos));
+  };
+
+  const eliminar = (indice: number): void => {
+    onChange(Object.fromEntries(pares.filter((_, i) => i !== indice)));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {pares.map(([clave, valor], indice) => (
+        <div key={indice} style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="text"
+            placeholder="clave"
+            value={clave}
+            onChange={(e) => actualizar(indice, e.target.value, valor)}
+            data-testid={`origen-parametro-clave-${indice}`}
+          />
+          <input
+            type="text"
+            placeholder="valor"
+            value={valor}
+            onChange={(e) => actualizar(indice, clave, e.target.value)}
+            data-testid={`origen-parametro-valor-${indice}`}
+          />
+          <button className="boton sutil" onClick={() => eliminar(indice)}>
+            <Icono nombre="cerrar" tamano={13} />
+          </button>
+        </div>
+      ))}
+      <button className="boton sutil" style={{ justifySelf: 'start' }} onClick={() => onChange({ ...valores, '': '' })} data-testid="origen-parametro-agregar">
+        <Icono nombre="mas" tamano={13} /> Agregar parámetro
+      </button>
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { componerAplicacion } from '../../src/main/composicion';
 import type { Aplicacion } from '../../src/main/composicion';
-import { Periodicidad } from '@domain/index';
+import { Periodicidad, TipoDato } from '@domain/index';
 import type { DefinicionPeriodicidad, Indicador, Meta, ReglaNegocio } from '@domain/index';
 
 let dataDir: string;
@@ -15,6 +15,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
     estado: 'Activo', responsable: null, categoria: null, unidadMedida: null, esCalculado: false, formula: null,
+    origenAutomaticoId: null, parametrosOrigen: null,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -524,5 +525,118 @@ describe('Composition root — forma de cálculo del indicador', () => {
       const detalles = (error as Error & { detalles?: string[] }).detalles;
       expect(detalles?.some((d) => d.includes('agrupación'))).toBe(true);
     }
+  });
+});
+
+describe('Composition root — histórico de resultados en Seguimiento', () => {
+  it('expone el valor y el cumplimiento de meta por período', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ metaGlobal: 100 }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const hoy = new Date().toISOString().slice(0, 10);
+    const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '80'
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    expect(fila).toBeDefined();
+    const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
+    expect(punto?.valor).toBe(80);
+    expect(punto?.cumplimientoPct).toBe(80);
+  });
+
+  it('evalúa la fórmula por período para indicadores calculados', async () => {
+    const base = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'IND-BASE' }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: base.id });
+    const hoy = new Date().toISOString().slice(0, 10);
+    const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: base.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: base.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10'
+    });
+
+    const calculado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ nombre: 'Indicador calculado', esCalculado: true, formula: '[IND-BASE] * 2' }), valores: []
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === calculado.id);
+    const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
+    expect(punto?.valor).toBe(20);
+  });
+});
+
+describe('Composition root — atributos filtrables en Seguimiento', () => {
+  it('expone el valor legible del atributo marcado como filtrable en el tablero', async () => {
+    const atributo = await app.manejadores['atributos:guardar']({
+      id: '', entidad: 'Indicador', nombre: 'Prioridad', descripcion: '', grupo: 'General', orden: 1,
+      visible: true, editable: true, obligatorio: false, valorPorDefecto: null, tipoDato: TipoDato.ShortText,
+      listaId: null, validaciones: [], condicionVisibilidad: null, condicionObligatorio: null, filtrable: true,
+      activo: true, creadoEn: '', actualizadoEn: ''
+    });
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador(),
+      valores: [{ atributoId: atributo.id, entidadTipo: 'Indicador', entidadId: '', valorTexto: 'Alta', valorNumero: null, valorFecha: null, valorBooleano: null }]
+    });
+
+    const tablero = await app.manejadores['seguimiento:tablero'](undefined);
+    const fila = tablero.find((f) => f.indicadorId === guardado.id);
+    expect(fila?.atributosFiltro).toEqual([{ atributoId: atributo.id, nombre: 'Prioridad', valor: 'Alta' }]);
+  });
+
+  it('no incluye atributos no marcados como filtrables', async () => {
+    await app.manejadores['atributos:guardar']({
+      id: '', entidad: 'Indicador', nombre: 'Interno', descripcion: '', grupo: 'General', orden: 1,
+      visible: true, editable: true, obligatorio: false, valorPorDefecto: null, tipoDato: TipoDato.ShortText,
+      listaId: null, validaciones: [], condicionVisibilidad: null, condicionObligatorio: null, filtrable: false,
+      activo: true, creadoEn: '', actualizadoEn: ''
+    });
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const tablero = await app.manejadores['seguimiento:tablero'](undefined);
+    const fila = tablero.find((f) => f.indicadorId === guardado.id);
+    expect(fila?.atributosFiltro).toEqual([]);
+  });
+});
+
+describe('Composition root — orígenes automáticos', () => {
+  it('CRUD de orígenes automáticos vía IPC', async () => {
+    const origen = await app.manejadores['origenes:guardar']({
+      id: '', nombre: 'API institucional', tipo: 'API', descripcion: '',
+      configuracion: { url: 'https://ejemplo.local/api', metodo: 'GET' }, activo: true, creadoEn: '', actualizadoEn: ''
+    });
+    expect(origen.id).not.toBe('');
+    expect(await app.manejadores['origenes:listar'](undefined)).toHaveLength(1);
+    await app.manejadores['origenes:eliminar']({ id: origen.id });
+    expect(await app.manejadores['origenes:listar'](undefined)).toHaveLength(0);
+  });
+
+  it('rechaza obtenerAutomatico si el indicador no tiene origen configurado', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await expect(
+      app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId })
+    ).rejects.toThrow(/origen automático/);
+  });
+
+  it('rechaza con NoImplementadoError cuando el indicador sí tiene origen configurado', async () => {
+    const origen = await app.manejadores['origenes:guardar']({
+      id: '', nombre: 'API institucional', tipo: 'API', descripcion: '',
+      configuracion: {}, activo: true, creadoEn: '', actualizadoEn: ''
+    });
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ origenAutomaticoId: origen.id }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await expect(
+      app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId })
+    ).rejects.toThrow(/no está implementada/);
   });
 });

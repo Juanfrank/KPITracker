@@ -45,12 +45,13 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
   const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
   const responsables = new ServicioCatalogoGenerico(ctx, infra.responsables, 'Responsable');
   const categorias = new ServicioCatalogoGenerico(ctx, infra.categorias, 'Categoria');
+  const origenesAutomaticos = new ServicioCatalogoGenerico(ctx, infra.origenesAutomaticos, 'OrigenAutomatico');
   const recoleccion = new ServicioRecoleccion(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos
   );
   const seguimiento = new ServicioSeguimiento(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
-    infra.periodicidades, infra.responsables, infra.categorias, reglasFechaLimite
+    infra.periodicidades, infra.responsables, infra.categorias, infra.atributos, reglasFechaLimite
   );
   const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos);
 
@@ -100,6 +101,10 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'categorias:guardar': (categoria) => categorias.guardar(categoria),
     'categorias:eliminar': ({ id }) => categorias.eliminar(id),
 
+    'origenes:listar': () => origenesAutomaticos.listar(),
+    'origenes:guardar': (origen) => origenesAutomaticos.guardar(origen),
+    'origenes:eliminar': ({ id }) => origenesAutomaticos.eliminar(id),
+
     'recoleccion:periodos': ({ indicadorId }) => recoleccion.periodosDisponibles(indicadorId),
     'recoleccion:captura': ({ indicadorId, periodoId }) => recoleccion.obtenerCaptura(indicadorId, periodoId),
     'recoleccion:guardarCelda': ({ indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion }) =>
@@ -114,9 +119,12 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
       recoleccion.historialCelda(indicadorId, periodoId, claveDesagregacion),
     'recoleccion:restaurarVersion': ({ indicadorId, periodoId, claveDesagregacion, version }) =>
       recoleccion.restaurarVersion(indicadorId, periodoId, claveDesagregacion, version),
+    'recoleccion:obtenerAutomatico': ({ indicadorId, periodoId }) =>
+      recoleccion.obtenerResultadoAutomatico(indicadorId, periodoId),
 
     'seguimiento:tablero': () => seguimiento.tablero(),
     'seguimiento:detalle': ({ indicadorId }) => seguimiento.detalle(indicadorId),
+    'seguimiento:historico': () => seguimiento.historico(),
 
     'exportacion:regenerar': async () => {
       await infra.exportacion.regenerar();

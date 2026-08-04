@@ -1,6 +1,7 @@
 import type {
   Adjunto, Atributo, Categoria, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Indicador,
-  Levantamiento, Lista, Meta, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable
+  Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial,
+  Responsable
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -40,6 +41,8 @@ export const aIndicador = (f: Fila): Indicador => ({
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   esCalculado: b(f.es_calculado),
   formula: sn(f.formula),
+  origenAutomaticoId: sn(f.origen_automatico_id),
+  parametrosOrigen: json<Record<string, string> | null>(f.parametros_origen, null),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -53,7 +56,9 @@ export const aIndicador = (f: Fila): Indicador => ({
 export const deIndicador = (i: Indicador): unknown[] => [
   i.id, i.codigo ?? '', i.nombre, i.definicion, i.formaCalculo ?? null, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
   JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
-  i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null, i.creadoEn, i.actualizadoEn
+  i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null,
+  i.origenAutomaticoId ?? null, i.parametrosOrigen == null ? null : JSON.stringify(i.parametrosOrigen),
+  i.creadoEn, i.actualizadoEn
 ];
 
 export const aAtributo = (f: Fila): Atributo => ({
@@ -72,6 +77,7 @@ export const aAtributo = (f: Fila): Atributo => ({
   validaciones: json(f.validaciones, []),
   condicionVisibilidad: json(f.condicion_visibilidad, null),
   condicionObligatorio: json(f.condicion_obligatorio, null),
+  filtrable: b(f.filtrable),
   activo: b(f.activo),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
@@ -82,7 +88,7 @@ export const deAtributo = (a: Atributo): unknown[] => [
   a.obligatorio, a.valorPorDefecto, a.tipoDato, a.listaId, JSON.stringify(a.validaciones),
   a.condicionVisibilidad == null ? null : JSON.stringify(a.condicionVisibilidad),
   a.condicionObligatorio == null ? null : JSON.stringify(a.condicionObligatorio),
-  a.activo, a.creadoEn, a.actualizadoEn
+  a.filtrable ?? false, a.activo, a.creadoEn, a.actualizadoEn
 ];
 
 export const aLista = (f: Fila): Lista => ({
@@ -227,6 +233,21 @@ export const aCategoria = (f: Fila): Categoria => ({
 
 export const deCategoria = (c: Categoria): unknown[] => [
   c.id, c.nombre, c.descripcion, c.activo, c.creadoEn, c.actualizadoEn
+];
+
+export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  tipo: s(f.tipo) as OrigenAutomatico['tipo'],
+  descripcion: s(f.descripcion),
+  configuracion: json<Record<string, string>>(f.configuracion, {}),
+  activo: b(f.activo),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deOrigenAutomatico = (o: OrigenAutomatico): unknown[] => [
+  o.id, o.nombre, o.tipo, o.descripcion, JSON.stringify(o.configuracion), o.activo, o.creadoEn, o.actualizadoEn
 ];
 
 export const aResultadoHistorial = (f: Fila): ResultadoHistorial => ({
