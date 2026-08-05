@@ -76,8 +76,12 @@ export async function crearInfraestructura(
   const metas = new MetaRepositoryDuckDb(db, sync);
   const reglas = new ReglaRepositoryDuckDb(db, sync);
   const periodicidades = crearRepositorioDefinicionesPeriodicidad(db, sync);
-  const responsables = new CatalogoRepositoryDuckDb(db, sync, 'responsables', aResponsable, deResponsable);
-  const categorias = new CatalogoRepositoryDuckDb(db, sync, 'categorias', aCategoria, deCategoria);
+  const responsables = new CatalogoRepositoryDuckDb(
+    db, sync, 'responsables', aResponsable, deResponsable, ['id', 'nombre', 'correo', 'activo', 'creado_en', 'actualizado_en']
+  );
+  const categorias = new CatalogoRepositoryDuckDb(
+    db, sync, 'categorias', aCategoria, deCategoria, ['id', 'nombre', 'descripcion', 'activo', 'creado_en', 'actualizado_en']
+  );
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
   const automatizaciones = new AutomatizacionIndicadorRepositoryDuckDb(db, sync);
   const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryDuckDb(db, sync);

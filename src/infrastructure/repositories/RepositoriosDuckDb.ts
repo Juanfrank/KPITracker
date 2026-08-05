@@ -49,8 +49,18 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
   }
 
   async guardar(indicador: Indicador): Promise<void> {
+    // Columnas explícitas: `VALUES (?, ?, ...)` sin nombrar columnas se liga
+    // por POSICIÓN FÍSICA en la tabla, que para una base de trabajo creada
+    // por una versión anterior no coincide con el orden de este arreglo — las
+    // columnas agregadas después vía ALTER TABLE ADD COLUMN quedan al final
+    // físicamente, sin importar dónde aparezcan en TABLAS.indicadores (ver
+    // esquema.ts). Nombrar las columnas liga por NOMBRE, inmune a ese desfase.
     await this.db.run(
-      `INSERT OR REPLACE INTO indicadores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO indicadores (
+         id, codigo, nombre, definicion, forma_calculo, periodicidad, linea_base, linea_base_periodo_id, meta_global,
+         desagregaciones, estado, responsable, categoria, unidad_medida, periodicidad_personalizada_id, es_calculado,
+         formula, origen_automatico_id, parametros_origen, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deIndicador(indicador)
     );
     this.sync.marcarSucia('indicadores');
@@ -76,8 +86,14 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
   }
 
   async guardar(atributo: Atributo): Promise<void> {
+    // Columnas explícitas por la misma razón que en IndicadorRepositoryDuckDb.guardar
+    // (`atributos` también tuvo una migración aditiva: `filtrable`).
     await this.db.run(
-      `INSERT OR REPLACE INTO atributos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO atributos (
+         id, entidad, nombre, descripcion, grupo, orden, visible, editable, obligatorio, valor_por_defecto,
+         tipo_dato, lista_id, validaciones, condicion_visibilidad, condicion_obligatorio, filtrable, activo,
+         creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deAtributo(atributo)
     );
     this.sync.marcarSucia('atributos');
@@ -110,7 +126,9 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
 
   async guardarValor(valor: ValorAtributoEntidad): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO valores_atributos VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO valores_atributos (
+         atributo_id, entidad_tipo, entidad_id, valor_texto, valor_numero, valor_fecha, valor_booleano
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [valor.atributoId, valor.entidadTipo, valor.entidadId, valor.valorTexto, valor.valorNumero, valor.valorFecha, valor.valorBooleano]
     );
     this.sync.marcarSucia('valores_atributos');
@@ -128,7 +146,12 @@ export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepo
   }
 
   async guardar(lista: Lista): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO listas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', deLista(lista));
+    // Columnas explícitas: `listas` tuvo una migración aditiva (`prefijo`).
+    await this.db.run(
+      `INSERT OR REPLACE INTO listas (id, nombre, descripcion, prefijo, estado, version, orden, jerarquica, creado_en, actualizado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      deLista(lista)
+    );
     this.sync.marcarSucia('listas');
   }
 
@@ -147,7 +170,11 @@ export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepo
   }
 
   async guardarElemento(elemento: ElementoLista): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO elementos_lista VALUES (?, ?, ?, ?, ?, ?, ?, ?)', deElemento(elemento));
+    // Columnas explícitas: `elementos_lista` tuvo una migración aditiva (`nombre`).
+    await this.db.run(
+      'INSERT OR REPLACE INTO elementos_lista (id, lista_id, codigo, nombre, descripcion, orden, padre_codigo, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      deElemento(elemento)
+    );
     this.sync.marcarSucia('elementos_lista');
   }
 
@@ -164,7 +191,14 @@ export class MetaRepositoryDuckDb extends RepositorioBase implements IMetaReposi
   }
 
   async guardar(meta: Meta): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO metas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', deMeta(meta));
+    // Columnas explícitas: `metas` tuvo una migración aditiva (`periodicidad_personalizada_id`).
+    await this.db.run(
+      `INSERT OR REPLACE INTO metas (
+         id, indicador_id, clave_desagregacion, valor, periodicidad_medicion, periodicidad_personalizada_id,
+         metodo_calculo, anio_vigencia, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      deMeta(meta)
+    );
     this.sync.marcarSucia('metas');
   }
 
@@ -183,7 +217,12 @@ export class ReglaRepositoryDuckDb extends RepositorioBase implements IReglaRepo
   }
 
   async guardar(regla: ReglaNegocio): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO reglas VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', deRegla(regla));
+    await this.db.run(
+      `INSERT OR REPLACE INTO reglas (
+         id, nombre, descripcion, tipo, entidad, atributo_objetivo_id, condicion, mensaje_error, activa, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      deRegla(regla)
+    );
     this.sync.marcarSucia('reglas');
   }
 
@@ -301,7 +340,12 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
   }
 
   async registrarVersion(entrada: ResultadoHistorial): Promise<void> {
-    await this.db.run('INSERT INTO resultados_historial VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', deResultadoHistorial(entrada));
+    await this.db.run(
+      `INSERT INTO resultados_historial (
+         id, indicador_id, periodo_id, clave_desagregacion, version, valor, observacion, usuario, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      deResultadoHistorial(entrada)
+    );
     this.sync.marcarSucia('resultados_historial');
   }
 }
@@ -309,7 +353,8 @@ export class ResultadoRepositoryDuckDb extends RepositorioBase implements IResul
 export class AuditoriaRepositoryDuckDb extends RepositorioBase implements IAuditoriaRepository {
   async registrar(registro: RegistroAuditoria): Promise<void> {
     await this.db.run(
-      'INSERT INTO auditoria VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      `INSERT INTO auditoria (id, usuario, fecha_hora, accion, entidad, entidad_id, campo, valor_anterior, valor_nuevo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [registro.id, registro.usuario, registro.fechaHora, registro.accion, registro.entidad,
        registro.entidadId, registro.campo, registro.valorAnterior, registro.valorNuevo]
     );
@@ -357,7 +402,16 @@ export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends
     sync: ParquetSyncService,
     private readonly tabla: string,
     private readonly aEntidad: (fila: Record<string, unknown>) => T,
-    private readonly deEntidad: (item: T) => unknown[]
+    private readonly deEntidad: (item: T) => unknown[],
+    /**
+     * Nombres de columna, en el mismo orden que produce `deEntidad`. Se usan
+     * para nombrar explícitamente las columnas del INSERT: sin esto, `VALUES
+     * (?, ?, ...)` liga por posición física en la tabla, que para una base de
+     * trabajo creada por una versión anterior no coincide con este orden si
+     * la tabla recibió columnas nuevas vía ALTER TABLE ADD COLUMN (quedan al
+     * final físicamente, sin importar dónde aparezcan en esquema.ts).
+     */
+    private readonly columnas: string[]
   ) {
     super(db, sync);
   }
@@ -374,7 +428,7 @@ export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends
   async guardar(item: T): Promise<void> {
     const valores = this.deEntidad(item);
     const marcadores = valores.map(() => '?').join(', ');
-    await this.db.run(`INSERT OR REPLACE INTO ${this.tabla} VALUES (${marcadores})`, valores);
+    await this.db.run(`INSERT OR REPLACE INTO ${this.tabla} (${this.columnas.join(', ')}) VALUES (${marcadores})`, valores);
     this.sync.marcarSucia(this.tabla);
   }
 
@@ -399,7 +453,11 @@ export class AdjuntoRepositoryDuckDb extends RepositorioBase implements IAdjunto
   }
 
   async guardar(adjunto: Adjunto): Promise<void> {
-    await this.db.run('INSERT OR REPLACE INTO adjuntos VALUES (?, ?, ?, ?, ?, ?, ?, ?)', deAdjunto(adjunto));
+    await this.db.run(
+      `INSERT OR REPLACE INTO adjuntos (id, entidad, entidad_id, nombre_archivo, ruta_relativa, tamanio_bytes, comentario, subido_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      deAdjunto(adjunto)
+    );
     this.sync.marcarSucia('adjuntos');
   }
 
@@ -417,7 +475,10 @@ export class AutomatizacionIndicadorRepositoryDuckDb extends RepositorioBase imp
 
   async guardar(config: AutomatizacionIndicador): Promise<void> {
     await this.db.run(
-      `INSERT INTO automatizaciones_indicador VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO automatizaciones_indicador (
+         id, indicador_id, origen_automatico_id, parametros_dinamicos, script, columna_valor,
+         mapeo_columnas, desagregaciones_omitidas, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (indicador_id) DO UPDATE SET
          origen_automatico_id = excluded.origen_automatico_id,
          parametros_dinamicos = excluded.parametros_dinamicos,
@@ -461,7 +522,8 @@ export class AliasDesagregacionOrigenRepositoryDuckDb extends RepositorioBase im
 
   async guardar(alias: AliasDesagregacionOrigen): Promise<void> {
     await this.db.run(
-      `INSERT INTO alias_desagregacion_origen VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO alias_desagregacion_origen (id, lista_id, origen_automatico_id, alias, creado_en, actualizado_en)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (lista_id, origen_automatico_id) DO UPDATE SET alias = excluded.alias, actualizado_en = excluded.actualizado_en`,
       deAliasDesagregacionOrigen(alias)
     );
@@ -478,12 +540,18 @@ export function crearRepositorioDefinicionesPeriodicidad(
   db: Db,
   sync: ParquetSyncService
 ): CatalogoRepositoryDuckDb<DefinicionPeriodicidad> {
-  return new CatalogoRepositoryDuckDb(db, sync, 'periodicidades_personalizadas', aDefinicionPeriodicidad, deDefinicionPeriodicidad);
+  return new CatalogoRepositoryDuckDb(
+    db, sync, 'periodicidades_personalizadas', aDefinicionPeriodicidad, deDefinicionPeriodicidad,
+    ['id', 'nombre', 'descripcion', 'cortes', 'creado_en', 'actualizado_en']
+  );
 }
 
 export function crearRepositorioOrigenesAutomaticos(
   db: Db,
   sync: ParquetSyncService
 ): CatalogoRepositoryDuckDb<OrigenAutomatico> {
-  return new CatalogoRepositoryDuckDb(db, sync, 'origenes_automaticos', aOrigenAutomatico, deOrigenAutomatico);
+  return new CatalogoRepositoryDuckDb(
+    db, sync, 'origenes_automaticos', aOrigenAutomatico, deOrigenAutomatico,
+    ['id', 'nombre', 'tipo', 'descripcion', 'configuracion', 'parametros_generales', 'activo', 'creado_en', 'actualizado_en']
+  );
 }

@@ -256,7 +256,7 @@ export const PARQUET_POR_TABLA: Record<string, string> = {
 // ("Adding columns with constraints not yet supported"), a diferencia de
 // `CREATE TABLE`. Las columnas agregadas aquí llevan DEFAULT pero sin NOT
 // NULL; el valor por defecto de DuckDB ya cubre las filas preexistentes.
-const MIGRACIONES_ADITIVAS: string[] = [
+export const MIGRACIONES_ADITIVAS: string[] = [
   'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS periodicidad_personalizada_id VARCHAR',
   "ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS codigo VARCHAR DEFAULT ''",
   'ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS linea_base_periodo_id VARCHAR',
