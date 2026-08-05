@@ -61,9 +61,9 @@ const CAMPOS_XMLA_OAUTH2: CampoConfig[] = [
   { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default)' }
 ];
 const CAMPOS_XMLA_MICROSOFT: CampoConfig[] = [
-  { clave: 'tenantId', etiqueta: 'Tenant ID (o "organizations")' },
-  { clave: 'clienteId', etiqueta: 'Client ID (app registrada como cliente público)' },
-  { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default offline_access)' }
+  { clave: 'tenantId', etiqueta: 'Tenant ID (opcional; "organizations" por defecto)' },
+  { clave: 'clienteId', etiqueta: 'Client ID (opcional; usa el cliente público de Microsoft por defecto)' },
+  { clave: 'scope', etiqueta: 'Scope (opcional; se infiere del servidor: Power BI o Azure Analysis Services)' }
 ];
 
 const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
@@ -467,7 +467,9 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 <span className="texto-suave">
                   Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele
                   usar Basic. &quot;Microsoft&quot; abre una ventana para iniciar sesión con su propia cuenta al probar la
-                  conexión — útil cuando no hay una app registrada para Client Credentials o se requiere acceso delegado.
+                  conexión — como en DAX Studio o Tabular Editor, no hace falta registrar una app en Azure AD: deje Tenant
+                  ID/Client ID/Scope en blanco y use el cliente público de Microsoft; complételos solo si su organización
+                  exige una app propia (p. ej. por una política de Conditional Access).
                 </span>
               </Campo>
               {(editando.configuracion.autenticacion === 'microsoft'

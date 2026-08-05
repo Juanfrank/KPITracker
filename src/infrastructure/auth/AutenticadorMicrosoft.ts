@@ -17,18 +17,54 @@ import type { OrigenAutomatico } from '@domain/index';
  * nativos (`.../oauth2/nativeclient`), que la ventana intercepta sin
  * necesitar levantar un servidor HTTP local.
  *
- * Campos esperados en `configuracion`: `tenantId` (o "organizations"/
- * "common"), `clienteId` (Application/Client ID registrado en Azure AD
- * como cliente público) y, opcionalmente, `scope` (p. ej.
- * "https://analysis.windows.net/powerbi/api/.default offline_access" para
- * Power BI, o "https://<servidor>.asazure.windows.net/user_impersonation
- * offline_access" para Azure Analysis Services). `offline_access` habilita
- * el refresh token, sin el cual habría que iniciar sesión en cada uso.
+ * Campos esperados en `configuracion`, todos opcionales: `tenantId` (por
+ * defecto "organizations"), `clienteId` (por defecto el cliente público que
+ * Microsoft publica para este propósito — ver `CLIENTE_ID_PUBLICO_POR_DEFECTO`
+ * más abajo, el mismo que usan herramientas como DAX Studio, Tabular Editor
+ * o ALM Toolkit para no requerir que cada usuario registre su propia app en
+ * Azure AD) y `scope` (por defecto se infiere del servidor: Power BI si es
+ * un endpoint XMLA de Power BI, Azure Analysis Services si la URL contiene
+ * "asazure.windows.net"). Solo hace falta llenarlos si la organización
+ * exige una app registrada propia (p. ej. por una política de Conditional
+ * Access que restringe qué clientes pueden autenticarse).
  */
 
 const REDIRECT_URI = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
 const AUTORIDAD_POR_DEFECTO = 'https://login.microsoftonline.com';
-const AMBITO_POR_DEFECTO = 'openid offline_access';
+
+/**
+ * Client ID público (multi-tenant, sin secreto) que Microsoft publica para
+ * clientes nativos que se conectan a Power BI/Azure Analysis Services —
+ * ya tiene los permisos delegados necesarios preconsentidos, por lo que
+ * cualquier aplicación puede usarlo para el flujo interactivo sin que el
+ * usuario/organización tenga que registrar una app propia en Azure AD.
+ * Es el mismo que usan DAX Studio, Tabular Editor y ALM Toolkit.
+ */
+const CLIENTE_ID_PUBLICO_POR_DEFECTO = '871c010f-5e61-4fb1-83ac-98610a7e9110';
+
+const AMBITO_POWER_BI_POR_DEFECTO = 'https://analysis.windows.net/powerbi/api/.default offline_access';
+
+function clienteId(cfg: Record<string, string>): string {
+  return cfg.clienteId || CLIENTE_ID_PUBLICO_POR_DEFECTO;
+}
+
+/**
+ * Scope por defecto cuando el usuario no especifica uno: se infiere del
+ * servidor XMLA configurado — Azure Analysis Services (`*.asazure.windows.net`)
+ * requiere el recurso exacto del servidor; cualquier otro caso (Power BI
+ * Premium/Fabric) usa el scope de la API de Power BI.
+ */
+function ambitoPorDefecto(cfg: Record<string, string>): string {
+  const servidor = cfg.servidor;
+  if (servidor && /\.asazure\.windows\.net/i.test(servidor)) {
+    try {
+      return `${new URL(servidor).origin}/user_impersonation offline_access`;
+    } catch {
+      // URL de servidor no válida: sigue al scope de Power BI por defecto.
+    }
+  }
+  return AMBITO_POWER_BI_POR_DEFECTO;
+}
 
 interface TokenCacheado {
   accessToken: string;
@@ -60,13 +96,12 @@ function tenant(cfg: Record<string, string>): string {
 
 /** Construye la URL de autorización de Azure AD (v2.0) para el flujo interactivo. */
 export function construirUrlAutorizacion(cfg: Record<string, string>, opciones: { state: string; challenge: string }): string {
-  if (!cfg.clienteId) throw new Error('Falta el Client ID de Azure AD para iniciar sesión con Microsoft.');
   const parametros = new URLSearchParams({
-    client_id: cfg.clienteId,
+    client_id: clienteId(cfg),
     response_type: 'code',
     redirect_uri: REDIRECT_URI,
     response_mode: 'query',
-    scope: cfg.scope || AMBITO_POR_DEFECTO,
+    scope: cfg.scope || ambitoPorDefecto(cfg),
     state: opciones.state,
     code_challenge: opciones.challenge,
     code_challenge_method: 'S256',
@@ -115,26 +150,24 @@ async function pedirToken(cfg: Record<string, string>, cuerpo: URLSearchParams):
 
 /** Intercambia el código de autorización (con su code_verifier de PKCE) por un access/refresh token. */
 export function intercambiarCodigoPorToken(cfg: Record<string, string>, codigo: string, verifier: string): Promise<TokenObtenido> {
-  if (!cfg.clienteId) throw new Error('Falta el Client ID de Azure AD para iniciar sesión con Microsoft.');
   const cuerpo = new URLSearchParams({
-    client_id: cfg.clienteId,
+    client_id: clienteId(cfg),
     grant_type: 'authorization_code',
     code: codigo,
     redirect_uri: REDIRECT_URI,
     code_verifier: verifier,
-    scope: cfg.scope || AMBITO_POR_DEFECTO
+    scope: cfg.scope || ambitoPorDefecto(cfg)
   });
   return pedirToken(cfg, cuerpo);
 }
 
 /** Renueva un access token vencido usando el refresh token, sin volver a mostrar la ventana de inicio de sesión. */
 export function renovarToken(cfg: Record<string, string>, refreshToken: string): Promise<TokenObtenido> {
-  if (!cfg.clienteId) throw new Error('Falta el Client ID de Azure AD para iniciar sesión con Microsoft.');
   const cuerpo = new URLSearchParams({
-    client_id: cfg.clienteId,
+    client_id: clienteId(cfg),
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: cfg.scope || AMBITO_POR_DEFECTO
+    scope: cfg.scope || ambitoPorDefecto(cfg)
   });
   return pedirToken(cfg, cuerpo);
 }
@@ -233,8 +266,7 @@ async function persistirRefreshToken(origen: OrigenAutomatico, refreshToken: str
  */
 export async function obtenerTokenMicrosoftInteractivo(origen: OrigenAutomatico, guardarOrigen?: GuardarOrigen): Promise<string> {
   const cfg = origen.configuracion;
-  if (!cfg.clienteId) throw new Error('Falta el Client ID de Azure AD para iniciar sesión con Microsoft.');
-  const clave = origen.id || cfg.clienteId;
+  const clave = origen.id || clienteId(cfg);
 
   const enCache = cache.get(clave);
   if (enCache && enCache.expiraEn > Date.now() + 5000) return enCache.accessToken;

@@ -63,8 +63,38 @@ describe('AutenticadorMicrosoft — PKCE y URL de autorización (puro, sin red)'
     expect(url.pathname).toContain('/organizations/');
   });
 
-  it('exige clienteId para construir la URL de autorización', () => {
-    expect(() => construirUrlAutorizacion({}, { state: 's', challenge: 'c' })).toThrow(/Client ID/);
+  it('usa el cliente público de Microsoft por defecto cuando no se especifica clienteId (igual que DAX Studio/Tabular Editor)', () => {
+    const url = new URL(construirUrlAutorizacion({}, { state: 's', challenge: 'c' }));
+    expect(url.searchParams.get('client_id')).toBe('871c010f-5e61-4fb1-83ac-98610a7e9110');
+  });
+
+  it('respeta un clienteId explícito por sobre el cliente público por defecto', () => {
+    const url = new URL(construirUrlAutorizacion({ clienteId: 'app-propia-123' }, { state: 's', challenge: 'c' }));
+    expect(url.searchParams.get('client_id')).toBe('app-propia-123');
+  });
+
+  it('infiere el scope de Power BI por defecto cuando no hay servidor Azure Analysis Services', () => {
+    const url = new URL(construirUrlAutorizacion(
+      { servidor: 'powerbi://api.powerbi.com/v1.0/myorg/MiWorkspace' },
+      { state: 's', challenge: 'c' }
+    ));
+    expect(url.searchParams.get('scope')).toBe('https://analysis.windows.net/powerbi/api/.default offline_access');
+  });
+
+  it('infiere el scope del recurso de Azure Analysis Services a partir de la URL del servidor', () => {
+    const url = new URL(construirUrlAutorizacion(
+      { servidor: 'https://southcentralus.asazure.windows.net/servers/miservidor' },
+      { state: 's', challenge: 'c' }
+    ));
+    expect(url.searchParams.get('scope')).toBe('https://southcentralus.asazure.windows.net/user_impersonation offline_access');
+  });
+
+  it('respeta un scope explícito por sobre el inferido del servidor', () => {
+    const url = new URL(construirUrlAutorizacion(
+      { servidor: 'https://southcentralus.asazure.windows.net/servers/miservidor', scope: 'scope-personalizado' },
+      { state: 's', challenge: 'c' }
+    ));
+    expect(url.searchParams.get('scope')).toBe('scope-personalizado');
   });
 });
 
