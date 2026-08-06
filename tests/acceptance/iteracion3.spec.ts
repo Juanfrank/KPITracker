@@ -115,6 +115,34 @@ test('un origen XMLA puede configurarse con inicio de sesión interactivo de Mic
   await pagina.getByLabel('Cerrar panel').click();
 });
 
+test('un origen PowerBI (API REST) se configura con dataset/workspace y OAuth2, sin ofrecer Basic', async () => {
+  // Igual que el caso XMLA con Microsoft: no se hace click en "Probar conexión"
+  // (requeriría un dataset real de Power BI). La ejecución real de la API REST
+  // "Execute Queries" contra un servidor HTTP local está cubierta en
+  // tests/integration/aplicacion.test.ts; esta prueba solo verifica que la UI
+  // ofrece el tipo, sus campos propios (datasetId/groupId) y que Basic no es
+  // una opción de autenticación (la API REST de Power BI nunca la admite).
+  await pagina.getByTestId('nav-admin').click();
+  await pagina.getByTestId('nuevo-origen').click();
+  await pagina.getByTestId('origen-nombre').fill('Dataset de Ventas');
+  await pagina.getByTestId('origen-tipo').selectOption('PowerBI');
+  await expect(pagina.getByTestId('origen-powerbi-autenticacion').locator('option', { hasText: 'Basic' })).toHaveCount(0);
+  await pagina.getByTestId('origen-campo-datasetId').fill('11111111-2222-3333-4444-555555555555');
+  await pagina.getByTestId('origen-campo-groupId').fill('66666666-7777-8888-9999-000000000000');
+  await pagina.getByTestId('origen-powerbi-autenticacion').selectOption('oauth2');
+  await pagina.getByTestId('origen-campo-tokenUrl').fill('https://login.microsoftonline.com/mi-tenant/oauth2/v2.0/token');
+  await pagina.getByTestId('origen-campo-clienteId').fill('cid-service-principal');
+  await pagina.getByTestId('origen-campo-clienteSecreto').fill('secreto');
+  await pagina.getByTestId('guardar-origen').click();
+  await expect(pagina.getByTestId('origen-Dataset de Ventas')).toBeVisible();
+
+  await pagina.getByTestId('origen-Dataset de Ventas').click();
+  await expect(pagina.getByTestId('origen-powerbi-autenticacion')).toHaveValue('oauth2');
+  await expect(pagina.getByTestId('origen-campo-datasetId')).toHaveValue('11111111-2222-3333-4444-555555555555');
+  await expect(pagina.getByTestId('origen-campo-groupId')).toHaveValue('66666666-7777-8888-9999-000000000000');
+  await pagina.getByLabel('Cerrar panel').click();
+});
+
 test('la sección Acerca de muestra la versión, el autor y el enlace de soporte', async () => {
   await pagina.getByTestId('nav-acerca-de').click();
   await expect(pagina.getByTestId('acerca-version')).toHaveText(/^\d+\.\d+\.\d+$/);

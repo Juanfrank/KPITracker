@@ -27,7 +27,7 @@ type CampoConfig = { clave: string; etiqueta: string; sensible?: boolean };
 /** Campos de configuración específicos por tipo de origen (clave dentro de `configuracion`, con máscara para credenciales). */
 const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, CampoConfig[]> = {
   XMLA: [
-    { clave: 'servidor', etiqueta: 'URL del servidor XMLA (acepta powerbi://... o https://...)' },
+    { clave: 'servidor', etiqueta: 'URL del servidor XMLA (SSAS on-premise, https://.../msmdpump.dll)' },
     { clave: 'catalogo', etiqueta: 'Catálogo / cubo' }
   ],
   SQL: [
@@ -41,28 +41,34 @@ const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, CampoConfig[]> = {
     { clave: 'url', etiqueta: 'URL base del endpoint' },
     { clave: 'metodo', etiqueta: 'Método (GET/POST)' },
     { clave: 'token', etiqueta: 'Token / API Key', sensible: true }
+  ],
+  PowerBI: [
+    { clave: 'datasetId', etiqueta: 'Dataset Id (GUID del semantic model)' },
+    { clave: 'groupId', etiqueta: 'Workspace Id (GUID, opcional — vacío = "Mi área de trabajo")' },
+    { clave: 'apiBase', etiqueta: 'API base (opcional; nubes soberanas: api.powerbigov.us, api.powerbi.de, api.powerbi.cn)' }
   ]
 };
 
 /**
- * XMLA admite tres formas de autenticación (campo `configuracion.autenticacion`):
- * Basic (usuario/contraseña), OAuth2 vía Client Credentials (app-únicamente,
- * para automatización desatendida) y Microsoft con inicio de sesión
- * interactivo (delegado: el usuario se autentica con su propia cuenta al
- * probar la conexión). Power BI Premium/Fabric XMLA endpoint y Azure
- * Analysis Services ya no aceptan Basic.
+ * XMLA y PowerBI comparten dos de sus tres formas de autenticación (campo
+ * `configuracion.autenticacion`): OAuth2 vía Client Credentials (app-
+ * únicamente, para automatización desatendida) y Microsoft con inicio de
+ * sesión interactivo (delegado: el usuario se autentica con su propia
+ * cuenta al probar la conexión). Basic (usuario/contraseña) es exclusivo de
+ * XMLA — la API REST de Power BI nunca lo admite, y Power BI Premium/Fabric
+ * XMLA/Azure Analysis Services tampoco.
  */
 const CAMPOS_XMLA_BASIC: CampoConfig[] = [
   { clave: 'usuario', etiqueta: 'Usuario' },
   { clave: 'contrasena', etiqueta: 'Contraseña', sensible: true }
 ];
-const CAMPOS_XMLA_OAUTH2: CampoConfig[] = [
+const CAMPOS_OAUTH2: CampoConfig[] = [
   { clave: 'tokenUrl', etiqueta: 'URL del token (token endpoint)' },
   { clave: 'clienteId', etiqueta: 'Client ID' },
   { clave: 'clienteSecreto', etiqueta: 'Client Secret', sensible: true },
   { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default)' }
 ];
-const CAMPOS_XMLA_MICROSOFT: CampoConfig[] = [
+const CAMPOS_MICROSOFT: CampoConfig[] = [
   { clave: 'clienteId', etiqueta: 'Client ID (recomendado: registre su propia app; ver ayuda abajo)' },
   { clave: 'tenantId', etiqueta: 'Tenant ID (opcional; "organizations" por defecto)' },
   { clave: 'scope', etiqueta: 'Scope (opcional; se infiere del servidor: Power BI o Azure Analysis Services)' },
@@ -517,9 +523,12 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
         </button>
       </div>
       <p className="texto-suave">
-        Conexiones externas (XMLA, SQL, API) para obtener resultados de indicadores sin captura manual. XMLA se soporta de
-        mejor esfuerzo (consultas MDX de 2 ejes, autenticación Basic, OAuth2 o Microsoft con inicio de sesión; sin
-        Windows/NTLM).
+        Conexiones externas (XMLA, SQL, API, PowerBI) para obtener resultados de indicadores sin captura manual. XMLA se
+        soporta de mejor esfuerzo (consultas MDX de 2 ejes, autenticación Basic, OAuth2 o Microsoft con inicio de sesión;
+        sin Windows/NTLM) y solo funciona contra SSAS on-premise clásico — Power BI Premium/Fabric y Azure Analysis
+        Services solo son alcanzables con el proveedor propietario MSOLAP (el mismo que usan DAX Studio o Tabular
+        Editor), que esta app no puede replicar. Para un dataset de Power BI en la nube use el tipo &quot;PowerBI&quot;
+        en su lugar: consultas DAX vía la API REST pública &quot;Execute Queries&quot;, que sí es HTTPS+JSON estándar.
       </p>
       <div className="tabla-envoltura">
         <table className="tabla">
@@ -612,6 +621,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               <option value="XMLA">XMLA</option>
               <option value="SQL">SQL</option>
               <option value="API">API</option>
+              <option value="PowerBI">PowerBI (API REST, DAX)</option>
             </select>
           </Campo>
           <Campo etiqueta="Descripción">
@@ -629,24 +639,24 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               />
             </Campo>
           ))}
-          {editando.tipo === 'XMLA' && (
+          {(editando.tipo === 'XMLA' || editando.tipo === 'PowerBI') && (
             <>
               <Campo etiqueta="Autenticación">
                 <select
-                  value={editando.configuracion.autenticacion || 'basic'}
+                  value={editando.configuracion.autenticacion || (editando.tipo === 'XMLA' ? 'basic' : 'microsoft')}
                   onChange={(e) =>
                     setEditando({ ...editando, configuracion: { ...editando.configuracion, autenticacion: e.target.value } })
                   }
-                  data-testid="origen-xmla-autenticacion"
+                  data-testid={editando.tipo === 'XMLA' ? 'origen-xmla-autenticacion' : 'origen-powerbi-autenticacion'}
                 >
-                  <option value="basic">Basic (usuario/contraseña)</option>
+                  {editando.tipo === 'XMLA' && <option value="basic">Basic (usuario/contraseña)</option>}
                   <option value="oauth2">OAuth2 (Client Credentials, app-únicamente)</option>
                   <option value="microsoft">Microsoft (iniciar sesión, delegado)</option>
                 </select>
                 <span className="texto-suave">
-                  Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele
-                  usar Basic. &quot;Microsoft&quot; abre una ventana para iniciar sesión con su propia cuenta al probar la
-                  conexión, como en DAX Studio o Tabular Editor.
+                  {editando.tipo === 'PowerBI'
+                    ? 'La API REST de Power BI solo admite OAuth2 o Microsoft (nunca Basic). "Microsoft" abre una ventana para iniciar sesión con su propia cuenta al probar la conexión, como en DAX Studio o Tabular Editor.'
+                    : 'Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele usar Basic. "Microsoft" abre una ventana para iniciar sesión con su propia cuenta al probar la conexión, como en DAX Studio o Tabular Editor.'}
                 </span>
               </Campo>
               {editando.configuracion.autenticacion === 'microsoft' && (
@@ -663,9 +673,9 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 </div>
               )}
               {(editando.configuracion.autenticacion === 'microsoft'
-                ? CAMPOS_XMLA_MICROSOFT
+                ? CAMPOS_MICROSOFT
                 : editando.configuracion.autenticacion === 'oauth2'
-                  ? CAMPOS_XMLA_OAUTH2
+                  ? CAMPOS_OAUTH2
                   : CAMPOS_XMLA_BASIC
               ).map((campo) => (
                 <Campo key={campo.clave} etiqueta={campo.etiqueta}>
@@ -686,7 +696,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               {probando ? 'Probando…' : 'Probar conexión'}
             </button>
           </div>
-          {editando.tipo === 'XMLA' && editando.configuracion.autenticacion === 'microsoft' && (
+          {(editando.tipo === 'XMLA' || editando.tipo === 'PowerBI') && editando.configuracion.autenticacion === 'microsoft' && (
             <p className="texto-suave" style={{ margin: 0 }}>
               &quot;Probar conexión&quot; abrirá una ventana para iniciar sesión con Microsoft la primera vez (y cada vez que
               la sesión guardada haya vencido); las siguientes veces se reutiliza el token en silencio.
@@ -708,7 +718,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               rows={4}
               value={scriptPrueba}
               onChange={(e) => setScriptPrueba(e.target.value)}
-              placeholder="p. ej. SELECT TOP 10 * FROM Ventas"
+              placeholder={editando.tipo === 'PowerBI' ? "p. ej. EVALUATE TOPN(10, 'Ventas')" : 'p. ej. SELECT TOP 10 * FROM Ventas'}
               data-testid="origen-script-prueba"
             />
           </Campo>

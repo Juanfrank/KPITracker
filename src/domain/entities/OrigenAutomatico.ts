@@ -1,5 +1,19 @@
-/** Tipo de conexión del origen automático de resultados. */
-export type TipoOrigenAutomatico = 'XMLA' | 'SQL' | 'API';
+/**
+ * Tipo de conexión del origen automático de resultados. `XMLA` es un cliente
+ * SOAP crudo de mejor esfuerzo: sirve contra SSAS on-premise clásico
+ * (gateway `msmdpump.dll`, que sí habla XMLA/SOAP plano sobre HTTP), pero
+ * NO contra Power BI Premium/Fabric ni Azure Analysis Services — esos
+ * exponen "un endpoint XMLA" solo como una convención de nombre de conexión
+ * que el proveedor propietario MSOLAP traduce a su protocolo nativo
+ * (documentado por Microsoft: "client applications don't communicate
+ * directly with the XMLA endpoint... they use client libraries as an
+ * abstraction layer"); un POST SOAP crudo a esa URL nunca completa la sesión
+ * y falla (típicamente HTTP 404). `PowerBI` es el tipo correcto para
+ * datasets/semantic models de Power BI en la nube: usa la API REST pública
+ * "Execute Queries" (DAX, HTTPS+JSON estándar, documentada), que sí es
+ * alcanzable con un cliente HTTP de mejor esfuerzo — ver ConectorPowerBI.
+ */
+export type TipoOrigenAutomatico = 'XMLA' | 'SQL' | 'API' | 'PowerBI';
 
 /**
  * De dónde se toma el valor de un parámetro general (relativo al período)

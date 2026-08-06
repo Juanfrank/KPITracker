@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { componerAplicacion } from '../../src/main/composicion';
@@ -954,5 +955,193 @@ describe('Composition root — XMLA envía el SOAPAction correcto por operación
     } finally {
       servidor.close();
     }
+  });
+});
+
+/**
+ * A diferencia de XMLA (que necesita el proveedor propietario MSOLAP, ver
+ * ConectorXmla), la API REST "Execute Queries" de Power BI es HTTPS+JSON
+ * estándar — así que, a diferencia del origen "PowerBI" contra el host real
+ * `api.powerbi.com`, sí se puede probar de punta a punta contra un servidor
+ * HTTP local real, sin mocks, gracias a `configuracion.apiBase`.
+ */
+describe('Composition root — PowerBI (API REST "Execute Queries")', () => {
+  function crearServidorToken(handlerExtra: (req: IncomingMessage, res: ServerResponse) => void) {
+    return createServer((req, res) => {
+      if (req.url === '/token') {
+        const trozos: Buffer[] = [];
+        req.on('data', (d) => trozos.push(d));
+        req.on('end', () => {
+          const parametros = new URLSearchParams(Buffer.concat(trozos).toString('utf-8'));
+          const credencialesOk = parametros.get('grant_type') === 'client_credentials'
+            && parametros.get('client_id') === 'cid-pbi'
+            && parametros.get('client_secret') === 'secreto-pbi';
+          res.setHeader('Content-Type', 'application/json');
+          if (!credencialesOk) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'invalid_client' }));
+            return;
+          }
+          res.end(JSON.stringify({ access_token: 'token-powerbi-123', expires_in: 3600 }));
+        });
+        return;
+      }
+      handlerExtra(req, res);
+    });
+  }
+
+  async function levantar(servidor: ReturnType<typeof createServer>): Promise<number> {
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    return typeof direccion === 'object' && direccion ? direccion.port : 0;
+  }
+
+  it('"origenes:probar" obtiene un token OAuth2 real y ejecuta la consulta DAX de prueba contra "Mi área de trabajo"', async () => {
+    const servidor = crearServidorToken((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/v1.0/myorg/datasets/dataset-abc/executeQueries' && req.headers.authorization === 'Bearer token-powerbi-123') {
+        res.end(JSON.stringify({ results: [{ tables: [{ rows: [{ '[Value]': 1 }] }] }] }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: { message: 'No encontrado' } }));
+    });
+    const puerto = await levantar(servidor);
+
+    try {
+      const resultado = await app.manejadores['origenes:probar']({
+        id: 'origen-pbi', nombre: 'Power BI dataset', tipo: 'PowerBI', descripcion: '',
+        configuracion: {
+          apiBase: `http://127.0.0.1:${puerto}/v1.0/myorg`,
+          datasetId: 'dataset-abc',
+          autenticacion: 'oauth2',
+          tokenUrl: `http://127.0.0.1:${puerto}/token`,
+          clienteId: 'cid-pbi',
+          clienteSecreto: 'secreto-pbi'
+        },
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      expect(resultado.ok).toBe(true);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('"origenes:probarCodigo" ejecuta un DAX real (con workspace) y devuelve filas/columnas tabulares', async () => {
+    const capturado: { cuerpo: { queries?: { query: string }[] } | null } = { cuerpo: null };
+    const servidor = crearServidorToken((req, res) => {
+      if (req.url !== '/v1.0/myorg/groups/grupo-1/datasets/dataset-xyz/executeQueries') {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      const trozos: Buffer[] = [];
+      req.on('data', (d) => trozos.push(d));
+      req.on('end', () => {
+        capturado.cuerpo = JSON.parse(Buffer.concat(trozos).toString('utf-8')) as { queries?: { query: string }[] };
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          results: [{ tables: [{ rows: [{ Producto: 'A', Ventas: 10 }, { Producto: 'B', Ventas: 20 }] }] }]
+        }));
+      });
+    });
+    const puerto = await levantar(servidor);
+
+    try {
+      const resultado = await app.manejadores['origenes:probarCodigo']({
+        origen: {
+          id: 'origen-pbi-2', nombre: 'Power BI dataset con workspace', tipo: 'PowerBI', descripcion: '',
+          configuracion: {
+            apiBase: `http://127.0.0.1:${puerto}/v1.0/myorg`,
+            datasetId: 'dataset-xyz',
+            groupId: 'grupo-1',
+            autenticacion: 'oauth2',
+            tokenUrl: `http://127.0.0.1:${puerto}/token`,
+            clienteId: 'cid-pbi',
+            clienteSecreto: 'secreto-pbi'
+          },
+          parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+        },
+        script: "EVALUATE 'Ventas'"
+      });
+      expect(resultado.columnas.sort()).toEqual(['Producto', 'Ventas']);
+      expect(resultado.filas).toHaveLength(2);
+      expect(resultado.totalFilas).toBe(2);
+      expect(resultado.filas[0]?.Producto).toBe('A');
+      expect(resultado.filas[1]?.Ventas).toBe('20');
+      expect(capturado.cuerpo?.queries?.[0]?.query).toBe("EVALUATE 'Ventas'");
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('sin datasetId, "origenes:probar" falla explícito sin intentar la conexión', async () => {
+    const resultado = await app.manejadores['origenes:probar']({
+      id: 'origen-pbi-sin-dataset', nombre: 'Power BI sin dataset', tipo: 'PowerBI', descripcion: '',
+      configuracion: { autenticacion: 'oauth2', tokenUrl: 'http://127.0.0.1:1/token', clienteId: 'x', clienteSecreto: 'y' },
+      parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('datasetId');
+  });
+
+  it('sin autenticación configurada, "origenes:probar" falla con un mensaje claro (la API REST no admite Basic)', async () => {
+    const resultado = await app.manejadores['origenes:probar']({
+      id: 'origen-pbi-sin-auth', nombre: 'Power BI sin autenticación', tipo: 'PowerBI', descripcion: '',
+      configuracion: { datasetId: 'dataset-abc' },
+      parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toMatch(/no admite Basic/);
+  });
+
+  it('un error real de la API de Power BI (p. ej. dataset inexistente) se propaga con su mensaje, no como error de transporte genérico', async () => {
+    const servidor = crearServidorToken((req, res) => {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: { code: 'DatasetNotFound', message: 'El dataset especificado no existe.' } }));
+    });
+    const puerto = await levantar(servidor);
+
+    try {
+      const resultado = await app.manejadores['origenes:probar']({
+        id: 'origen-pbi-404', nombre: 'Power BI dataset inexistente', tipo: 'PowerBI', descripcion: '',
+        configuracion: {
+          apiBase: `http://127.0.0.1:${puerto}/v1.0/myorg`,
+          datasetId: 'no-existe',
+          autenticacion: 'oauth2',
+          tokenUrl: `http://127.0.0.1:${puerto}/token`,
+          clienteId: 'cid-pbi',
+          clienteSecreto: 'secreto-pbi'
+        },
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      expect(resultado.ok).toBe(false);
+      expect(resultado.mensaje).toContain('El dataset especificado no existe.');
+    } finally {
+      servidor.close();
+    }
+  });
+});
+
+describe('Composition root — XMLA rechaza endpoints solo alcanzables por MSOLAP (powerbi://, asazure.windows.net)', () => {
+  it('un servidor powerbi:// falla de inmediato con un mensaje que redirige al tipo PowerBI, sin intentar la conexión', async () => {
+    const resultado = await app.manejadores['origenes:probar']({
+      id: 'origen-xmla-powerbi', nombre: 'XMLA apuntando a Power BI', tipo: 'XMLA', descripcion: '',
+      configuracion: { servidor: 'powerbi://api.powerbi.com/v1.0/myorg/MiWorkspace' },
+      parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('tipo "PowerBI"');
+  });
+
+  it('un servidor *.asazure.windows.net falla de inmediato con un mensaje explícito', async () => {
+    const resultado = await app.manejadores['origenes:probar']({
+      id: 'origen-xmla-asazure', nombre: 'XMLA apuntando a Azure AS', tipo: 'XMLA', descripcion: '',
+      configuracion: { servidor: 'https://miservidor.asazure.windows.net/servers/miservidor' },
+      parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    expect(resultado.ok).toBe(false);
+    expect(resultado.mensaje).toContain('Azure Analysis Services');
   });
 });

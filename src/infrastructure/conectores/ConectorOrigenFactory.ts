@@ -3,21 +3,24 @@ import type { OrigenAutomatico } from '@domain/index';
 import { ConectorApi } from './ConectorApi';
 import { ConectorSql } from './ConectorSql';
 import { ConectorXmla } from './ConectorXmla';
+import { ConectorPowerBI } from './ConectorPowerBI';
 import type { GuardarOrigen } from '../auth/AutenticadorMicrosoft';
 
-/** Despacha al conector concreto (API/SQL/XMLA) según el tipo del origen. */
+/** Despacha al conector concreto (API/SQL/XMLA/PowerBI) según el tipo del origen. */
 export class ConectorOrigenFactory implements IConectorOrigen {
   private readonly api = new ConectorApi();
   private readonly sqlServer = new ConectorSql();
   private readonly xmla: ConectorXmla;
+  private readonly powerBI: ConectorPowerBI;
 
   /**
-   * `guardarOrigen` persiste de vuelta el origen (usado por XMLA con
-   * autenticación Microsoft interactiva, para guardar el refresh token
+   * `guardarOrigen` persiste de vuelta el origen (usado por XMLA y PowerBI
+   * con autenticación Microsoft interactiva, para guardar el refresh token
    * cifrado tras un login exitoso y no pedirlo de nuevo en cada sesión).
    */
   constructor(guardarOrigen?: GuardarOrigen) {
     this.xmla = new ConectorXmla(guardarOrigen);
+    this.powerBI = new ConectorPowerBI(guardarOrigen);
   }
 
   private conectorPara(tipo: OrigenAutomatico['tipo']): Pick<IConectorOrigen, 'probar' | 'ejecutar'> {
@@ -28,6 +31,8 @@ export class ConectorOrigenFactory implements IConectorOrigen {
         return this.sqlServer;
       case 'XMLA':
         return this.xmla;
+      case 'PowerBI':
+        return this.powerBI;
     }
   }
 
