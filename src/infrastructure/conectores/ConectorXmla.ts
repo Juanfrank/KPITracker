@@ -138,8 +138,22 @@ async function cabeceraAutenticacion(origen: OrigenAutomatico, guardarOrigen?: G
   return {};
 }
 
+/**
+ * `powerbi://api.powerbi.com/v1.0/myorg/<workspace>` es la convención que
+ * usan las herramientas de Microsoft (SSMS, DAX Studio, Tabular Editor)
+ * para el endpoint XMLA de Power BI Premium/PPU/Fabric — el proveedor
+ * MSOLAP la traduce internamente a una conexión HTTPS real al mismo host y
+ * ruta. Este cliente SOAP crudo no tiene ese proveedor: sin esta
+ * normalización, `new URL('powerbi://...')` parsea sin error pero con
+ * `protocol !== 'https:'`, y la petición cae al branch HTTP plano (puerto
+ * 80), que Power BI no atiende — la conexión simplemente falla.
+ */
+export function normalizarEndpointXmla(servidor: string): string {
+  return /^powerbi:\/\//i.test(servidor) ? servidor.replace(/^powerbi:\/\//i, 'https://') : servidor;
+}
+
 async function enviarSoap(origen: OrigenAutomatico, sobreXml: string, guardarOrigen?: GuardarOrigen): Promise<string> {
-  const endpoint = origen.configuracion.servidor ?? '';
+  const endpoint = normalizarEndpointXmla(origen.configuracion.servidor ?? '');
   const auth = await cabeceraAutenticacion(origen, guardarOrigen);
   const cabeceras: Record<string, string> = {
     'Content-Type': 'text/xml; charset=utf-8',

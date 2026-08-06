@@ -27,7 +27,7 @@ type CampoConfig = { clave: string; etiqueta: string; sensible?: boolean };
 /** Campos de configuración específicos por tipo de origen (clave dentro de `configuracion`, con máscara para credenciales). */
 const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, CampoConfig[]> = {
   XMLA: [
-    { clave: 'servidor', etiqueta: 'URL del servidor XMLA' },
+    { clave: 'servidor', etiqueta: 'URL del servidor XMLA (acepta powerbi://... o https://...)' },
     { clave: 'catalogo', etiqueta: 'Catálogo / cubo' }
   ],
   SQL: [
