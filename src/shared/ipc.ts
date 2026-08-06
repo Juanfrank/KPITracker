@@ -12,6 +12,17 @@ import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@applicatio
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 
+/** Filas máximas que devuelve `origenes:probarCodigo` — tope de VISUALIZACIÓN, aplicado tras ejecutar la consulta completa. */
+export const LIMITE_FILAS_PRUEBA_ORIGEN = 100;
+
+/** Resultado de "Probar código": igual que ResultadoTabular pero truncado, con el conteo real y si se recortó. */
+export interface ResultadoPruebaCodigo {
+  columnas: string[];
+  filas: Record<string, string>[];
+  totalFilas: number;
+  truncado: boolean;
+}
+
 /**
  * Contrato IPC tipado entre renderer y main. Cada canal define su petición
  * y respuesta; el preload solo expone los canales aquí declarados.
@@ -72,6 +83,13 @@ export interface CanalesIpc {
   'origenes:eliminar': { req: { id: string }; res: void };
   /** Prueba la conectividad/credenciales del origen (aún no guardado o ya guardado) sin ejecutar ningún script. */
   'origenes:probar': { req: OrigenAutomatico; res: ResultadoPrueba };
+  /**
+   * Ejecuta de verdad un script/consulta contra el origen y devuelve una vista previa
+   * del resultado (tabla o error), a diferencia de `origenes:probar` que solo valida
+   * credenciales. Topeado a LIMITE_FILAS_PRUEBA_ORIGEN filas — recorte de
+   * VISUALIZACIÓN aplicado después de traer el resultado completo.
+   */
+  'origenes:probarCodigo': { req: { origen: OrigenAutomatico; script: string }; res: ResultadoPruebaCodigo };
 
   'listas:aliasOrigen': { req: { listaId: string }; res: AliasDesagregacionOrigen[] };
   'listas:guardarAliasOrigen': { req: AliasDesagregacionOrigen; res: AliasDesagregacionOrigen };
@@ -149,7 +167,7 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
-  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:probar',
+  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:probar', 'origenes:probarCodigo',
   'listas:aliasOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
   'automatizacion:obtener', 'automatizacion:guardar', 'automatizacion:eliminar',
   'automatizacion:ejecutarPrueba', 'automatizacion:validarColumna', 'automatizacion:agregarElementosFaltantes',

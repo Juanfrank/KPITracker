@@ -745,6 +745,74 @@ describe('Composition root — orígenes automáticos', () => {
       servidor.close();
     }
   });
+
+  it('origenes:probarCodigo ejecuta el script real y devuelve la vista previa sin recortar cuando hay pocas filas', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([{ id: '1', total: '10' }, { id: '2', total: '20' }]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+    try {
+      const origen = {
+        id: '', nombre: 'Origen de prueba de código', tipo: 'API' as const, descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, creadoEn: '', actualizadoEn: ''
+      };
+      const resultado = await app.manejadores['origenes:probarCodigo']({ origen, script: '' });
+      expect(resultado.columnas.sort()).toEqual(['id', 'total']);
+      expect(resultado.totalFilas).toBe(2);
+      expect(resultado.filas).toHaveLength(2);
+      expect(resultado.truncado).toBe(false);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('origenes:probarCodigo recorta a 100 filas de visualización cuando el origen devuelve más', async () => {
+    const servidor = createServer((_req, res) => {
+      const filas = Array.from({ length: 150 }, (_, i) => ({ id: String(i), total: String(i * 10) }));
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(filas));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+    try {
+      const origen = {
+        id: '', nombre: 'Origen de 150 filas', tipo: 'API' as const, descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, creadoEn: '', actualizadoEn: ''
+      };
+      const resultado = await app.manejadores['origenes:probarCodigo']({ origen, script: '' });
+      expect(resultado.totalFilas).toBe(150);
+      expect(resultado.filas).toHaveLength(100);
+      expect(resultado.truncado).toBe(true);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('origenes:probarCodigo propaga un error legible cuando el origen falla', async () => {
+    const servidor = createServer((_req, res) => {
+      res.statusCode = 500;
+      res.end('boom');
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+    try {
+      const origen = {
+        id: '', nombre: 'Origen que falla', tipo: 'API' as const, descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, creadoEn: '', actualizadoEn: ''
+      };
+      await expect(app.manejadores['origenes:probarCodigo']({ origen, script: '' })).rejects.toThrow();
+    } finally {
+      servidor.close();
+    }
+  });
 });
 
 describe('Composition root — XMLA con autenticación OAuth2 (Client Credentials)', () => {

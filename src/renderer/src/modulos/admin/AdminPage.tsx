@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, TipoOrigenAutomatico } from '@domain/index';
 import { ejemploParaFuente } from '@domain/index';
+import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
@@ -334,6 +335,10 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
   const [editando, setEditando] = useState<OrigenAutomatico | null>(null);
   const [probando, setProbando] = useState(false);
   const [resultadoPrueba, setResultadoPrueba] = useState<{ ok: boolean; mensaje: string } | null>(null);
+  const [scriptPrueba, setScriptPrueba] = useState('');
+  const [probandoCodigo, setProbandoCodigo] = useState(false);
+  const [resultadoCodigo, setResultadoCodigo] = useState<ResultadoPruebaCodigo | null>(null);
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
 
   const cargar = useCallback(async (): Promise<void> => {
     setItems(await invocar('origenes:listar', undefined));
@@ -360,6 +365,26 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       setResultadoPrueba({ ok: false, mensaje: (error as Error).message });
     } finally {
       setProbando(false);
+    }
+  };
+
+  /**
+   * A diferencia de "Probar conexión" (solo valida credenciales), ejecuta de
+   * verdad el script/consulta ingresado contra el origen y muestra el
+   * resultado real (tabla o error) — útil para validar un SELECT/consulta
+   * antes de usarlo en la automatización de un indicador.
+   */
+  const probarCodigo = async (): Promise<void> => {
+    if (!editando || !scriptPrueba.trim()) return;
+    setProbandoCodigo(true);
+    setResultadoCodigo(null);
+    setErrorCodigo(null);
+    try {
+      setResultadoCodigo(await invocar('origenes:probarCodigo', { origen: editando, script: scriptPrueba }));
+    } catch (error) {
+      setErrorCodigo((error as Error).message);
+    } finally {
+      setProbandoCodigo(false);
     }
   };
 
@@ -407,7 +432,10 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar origen automático' : 'Nuevo origen automático'}
-          alCerrar={() => { setEditando(null); setResultadoPrueba(null); }}
+          alCerrar={() => {
+            setEditando(null); setResultadoPrueba(null);
+            setScriptPrueba(''); setResultadoCodigo(null); setErrorCodigo(null);
+          }}
           pie={
             <>
               {editando.id && (
@@ -424,7 +452,15 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => { setEditando(null); setResultadoPrueba(null); }}>Cancelar</button>
+              <button
+                className="boton"
+                onClick={() => {
+                  setEditando(null); setResultadoPrueba(null);
+                  setScriptPrueba(''); setResultadoCodigo(null); setErrorCodigo(null);
+                }}
+              >
+                Cancelar
+              </button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-origen">Guardar</button>
             </>
           }
@@ -525,6 +561,65 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
             <div className={`aviso ${resultadoPrueba.ok ? 'exito' : 'error'}`} data-testid="origen-resultado-prueba">
               {resultadoPrueba.mensaje}
             </div>
+          )}
+
+          <h4 style={{ margin: '8px 0 0' }}>Probar código</h4>
+          <p className="texto-suave" style={{ margin: 0 }}>
+            A diferencia de &quot;Probar conexión&quot; (solo valida credenciales), ejecuta de verdad el código ingresado
+            (p. ej. un SELECT en SQL) y muestra el resultado real, para validarlo antes de usarlo en un indicador.
+          </p>
+          <Campo etiqueta="Código de prueba">
+            <textarea
+              rows={4}
+              value={scriptPrueba}
+              onChange={(e) => setScriptPrueba(e.target.value)}
+              placeholder="p. ej. SELECT TOP 10 * FROM Ventas"
+              data-testid="origen-script-prueba"
+            />
+          </Campo>
+          <div className="toolbar">
+            <button
+              className="boton"
+              onClick={() => void probarCodigo()}
+              disabled={probandoCodigo || !scriptPrueba.trim()}
+              data-testid="origen-probar-codigo"
+            >
+              {probandoCodigo ? 'Probando…' : 'Probar código'}
+            </button>
+          </div>
+          {errorCodigo && (
+            <div className="aviso error" data-testid="origen-resultado-codigo">{errorCodigo}</div>
+          )}
+          {resultadoCodigo && (
+            resultadoCodigo.totalFilas === 0 ? (
+              <Vacio mensaje="La consulta no devolvió filas." />
+            ) : (
+              <>
+                <div className="tabla-envoltura">
+                  <table className="tabla" data-testid="origen-tabla-codigo">
+                    <thead>
+                      <tr>
+                        {resultadoCodigo.columnas.map((c) => <th key={c}>{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resultadoCodigo.filas.map((fila, i) => (
+                        <tr key={i}>
+                          {resultadoCodigo.columnas.map((c) => <td key={c}>{fila[c]}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {resultadoCodigo.truncado && (
+                  <p className="texto-suave" style={{ margin: 0 }}>
+                    Mostrando 100 de {resultadoCodigo.totalFilas} filas. El límite es solo de visualización: la consulta se
+                    ejecuta y se transfiere completa antes de recortarse, así que evite probar consultas sin filtros sobre
+                    tablas muy grandes.
+                  </p>
+                )}
+              </>
+            )
           )}
 
           <h4 style={{ margin: '8px 0 0' }}>Parámetros generales del período</h4>

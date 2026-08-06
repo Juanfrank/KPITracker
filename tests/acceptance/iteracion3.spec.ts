@@ -81,6 +81,18 @@ test('probar la conexión de un origen automático informa el resultado', async 
   await expect(pagina.getByTestId('origen-API institucional')).toBeVisible();
 });
 
+test('probar código de un origen automático ejecuta el script y muestra el resultado o el error', async () => {
+  await pagina.getByTestId('nav-admin').click();
+  await pagina.getByTestId('origen-API institucional').click();
+  await expect(pagina.getByTestId('origen-probar-codigo')).toBeDisabled();
+  await pagina.getByTestId('origen-script-prueba').fill('/no-existe');
+  await expect(pagina.getByTestId('origen-probar-codigo')).toBeEnabled();
+  await pagina.getByTestId('origen-probar-codigo').click();
+  // El origen apunta a un puerto sin servidor: falla de forma determinística, sin depender de la red real.
+  await expect(pagina.getByTestId('origen-resultado-codigo')).toBeVisible();
+  await pagina.getByLabel('Cerrar panel').click();
+});
+
 test('un origen XMLA puede configurarse con inicio de sesión interactivo de Microsoft', async () => {
   // No se hace click en "Probar conexión": abriría una ventana real de login de
   // Microsoft que nunca se completaría en este entorno. La cobertura del

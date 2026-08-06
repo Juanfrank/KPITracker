@@ -12,6 +12,7 @@ import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion'
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
 import { ServicioAutomatizacionIndicador } from '@application/use-cases/ServicioAutomatizacionIndicador';
+import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
 import type { CanalesIpc, NombreCanal } from '@shared/ipc';
 
 export interface Aplicacion {
@@ -111,6 +112,15 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'origenes:guardar': (origen) => origenesAutomaticos.guardar(origen),
     'origenes:eliminar': ({ id }) => origenesAutomaticos.eliminar(id),
     'origenes:probar': (origen) => infra.conectorOrigen.probar(origen),
+    'origenes:probarCodigo': async ({ origen, script }) => {
+      const r = await infra.conectorOrigen.ejecutar(origen, script);
+      return {
+        columnas: r.columnas,
+        filas: r.filas.slice(0, LIMITE_FILAS_PRUEBA_ORIGEN),
+        totalFilas: r.filas.length,
+        truncado: r.filas.length > LIMITE_FILAS_PRUEBA_ORIGEN
+      };
+    },
 
     'listas:aliasOrigen': ({ listaId }) => listas.listarAliasOrigen(listaId),
     'listas:guardarAliasOrigen': (alias) => listas.guardarAliasOrigen(alias),
