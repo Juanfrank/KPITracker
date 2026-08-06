@@ -233,4 +233,11 @@ export interface IArchivoService {
   seleccionarArchivo(filtros?: { nombre: string; extensiones: string[] }[]): Promise<string | null>;
   /** Lee un archivo de hoja de cálculo (xlsx/xls/csv) y devuelve columnas + filas de la primera pestaña. */
   leerHojaCalculo(rutaArchivo: string): Promise<{ columnas: string[]; filas: Record<string, string>[] }>;
+  /** Abre un diálogo nativo de guardado (p. ej. para exportar un respaldo); null si el usuario cancela. */
+  seleccionarDestino(opciones: {
+    nombreSugerido: string;
+    filtros?: { nombre: string; extensiones: string[] }[];
+  }): Promise<string | null>;
+  escribirTexto(ruta: string, contenido: string): Promise<void>;
+  leerTexto(ruta: string): Promise<string>;
 }

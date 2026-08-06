@@ -29,8 +29,8 @@ export interface Aplicacion {
  * concretas y las cablea (inyección de dependencias manual y explícita).
  * Devuelve el mapa completo de manejadores IPC tipados.
  */
-export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
-  const infra = await crearInfraestructura(dataDir);
+export async function componerAplicacion(dataDir: string, appVersion?: string): Promise<Aplicacion> {
+  const infra = await crearInfraestructura(dataDir, { appVersion });
   const tipos = crearRegistroTiposBase();
   const reglasFechaLimite = crearRegistroReglasFechaLimite();
 
@@ -186,6 +186,25 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
 
     'portable:exportar': async () => ({ json: await infra.configPortable.exportar() }),
     'portable:importar': ({ json }) => infra.configPortable.importar(json),
+
+    'respaldo:exportar': async () => {
+      const json = await infra.respaldoPerfil.exportar();
+      const ruta = await infra.archivos.seleccionarDestino({
+        nombreSugerido: `respaldo-kpitracker-${new Date().toISOString().slice(0, 10)}.json`,
+        filtros: [{ nombre: 'Respaldo KPITracker', extensiones: ['json'] }]
+      });
+      if (!ruta) return { ruta: null };
+      await infra.archivos.escribirTexto(ruta, json);
+      return { ruta };
+    },
+    'respaldo:seleccionar': async () => {
+      const ruta = await infra.archivos.seleccionarArchivo([{ nombre: 'Respaldo KPITracker', extensiones: ['json'] }]);
+      if (!ruta) return null;
+      const resumen = infra.respaldoPerfil.leer(await infra.archivos.leerTexto(ruta));
+      return { ruta, resumen };
+    },
+    'respaldo:importar': async ({ ruta, seleccion }) =>
+      infra.respaldoPerfil.importar(await infra.archivos.leerTexto(ruta), seleccion),
 
     'tipos:listar': async () =>
       tipos.listar().map((t) => ({ tipo: String(t.tipo), etiqueta: t.etiqueta, editorHint: t.editorHint })),

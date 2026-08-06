@@ -134,7 +134,7 @@ async function crearVentana(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  aplicacion = await componerAplicacion(directorioDatos());
+  aplicacion = await componerAplicacion(directorioDatos(), app.getVersion());
   registrarIpc();
   await crearVentana();
   iniciarNotificaciones(aplicacion);

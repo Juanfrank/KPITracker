@@ -11,6 +11,7 @@ import type {
 import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@application/use-cases/ServicioSeguimiento';
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
+import type { ResultadoImportacionRespaldo, ResumenRespaldo, SeleccionRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
 
 /** Filas máximas que devuelve `origenes:probarCodigo` — tope de VISUALIZACIÓN, aplicado tras ejecutar la consulta completa. */
 export const LIMITE_FILAS_PRUEBA_ORIGEN = 100;
@@ -151,6 +152,15 @@ export interface CanalesIpc {
   'portable:exportar': { req: void; res: { json: string } };
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };
 
+  /**
+   * Respaldo/importación selectiva de perfil (Batch N) — siempre opera
+   * sobre el perfil ACTIVO; complementa, sin reemplazar, `portable:*`.
+   */
+  'respaldo:exportar': { req: void; res: { ruta: string | null } };
+  /** Abre el diálogo de apertura, lee y valida el archivo; devuelve la ruta (para pasarla luego a `respaldo:importar`) + el resumen para armar el selector. */
+  'respaldo:seleccionar': { req: void; res: { ruta: string; resumen: ResumenRespaldo } | null };
+  'respaldo:importar': { req: { ruta: string; seleccion: SeleccionRespaldo }; res: ResultadoImportacionRespaldo };
+
   'tipos:listar': { req: void; res: Array<{ tipo: string; etiqueta: string; editorHint: string }> };
 
   'adjuntos:listar': { req: { entidad: EntidadAdjunto; entidadId: string }; res: Adjunto[] };
@@ -206,6 +216,7 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'exportacion:regenerar', 'exportacion:ruta',
   'auditoria:consultar',
   'portable:exportar', 'portable:importar',
+  'respaldo:exportar', 'respaldo:seleccionar', 'respaldo:importar',
   'tipos:listar',
   'adjuntos:listar', 'adjuntos:subir', 'adjuntos:abrir', 'adjuntos:eliminar',
   'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo', 'sistema:info'

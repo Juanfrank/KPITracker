@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, stat, unlink } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { dialog, shell } from 'electron';
 import ExcelJS from 'exceljs';
@@ -76,5 +76,25 @@ export class ArchivoService implements IArchivoService {
     });
 
     return { columnas, filas };
+  }
+
+  async seleccionarDestino(opciones: {
+    nombreSugerido: string;
+    filtros?: { nombre: string; extensiones: string[] }[];
+  }): Promise<string | null> {
+    const resultado = await dialog.showSaveDialog({
+      defaultPath: opciones.nombreSugerido,
+      filters: opciones.filtros?.map((f) => ({ name: f.nombre, extensions: f.extensiones }))
+    });
+    if (resultado.canceled || !resultado.filePath) return null;
+    return resultado.filePath;
+  }
+
+  async escribirTexto(ruta: string, contenido: string): Promise<void> {
+    await writeFile(ruta, contenido, 'utf-8');
+  }
+
+  async leerTexto(ruta: string): Promise<string> {
+    return readFile(ruta, 'utf-8');
   }
 }

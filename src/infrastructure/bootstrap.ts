@@ -13,6 +13,7 @@ import { aCategoria, aResponsable, deCategoria, deResponsable } from './reposito
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
+import { RespaldoPerfilService } from './perfiles/RespaldoPerfilService';
 import { GeneradorUuid, RelojSistema } from './soporte/servicios';
 import { ArchivoService } from './soporte/ArchivoService';
 import { ConectorOrigenFactory } from './conectores/ConectorOrigenFactory';
@@ -41,6 +42,7 @@ export interface Infraestructura {
   auditoria: AuditoriaRepositoryDuckDb;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
+  respaldoPerfil: RespaldoPerfilService;
   archivos: ArchivoService;
   cerrar(): Promise<void>;
 }
@@ -48,6 +50,8 @@ export interface Infraestructura {
 export interface OpcionesInfraestructura {
   /** Debounce de sincronización Parquet/export (0 en tests). */
   debounceMs?: number;
+  /** Versión de la app (p. ej. `app.getVersion()`), incluida en los respaldos exportados. */
+  appVersion?: string;
 }
 
 /**
@@ -95,6 +99,13 @@ export async function crearInfraestructura(
   const configPortable = new ConfigPortableService(
     configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
   );
+  const respaldoPerfil = new RespaldoPerfilService(
+    {
+      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias,
+      origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen
+    },
+    opciones.appVersion ?? null
+  );
   const archivos = new ArchivoService(rutas);
 
   return {
@@ -121,6 +132,7 @@ export async function crearInfraestructura(
     auditoria,
     exportacion,
     configPortable,
+    respaldoPerfil,
     archivos,
     async cerrar() {
       await sync.sincronizar();
