@@ -34,6 +34,8 @@ export interface Atributo {
   /** Si es true, el valor de este atributo se ofrece como filtro en el tablero de Seguimiento. */
   filtrable: boolean;
   activo: boolean;
+  /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `activo`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

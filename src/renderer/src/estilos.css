@@ -359,6 +359,25 @@ table.tabla tbody tr.seleccionada {
   background: var(--primario-suave);
 }
 
+/* Ítem con borrado lógico (bloqueado por estar en uso): atenuado y sin click de edición. */
+table.tabla tbody tr.fila-eliminada {
+  opacity: 0.5;
+}
+
+table.tabla tbody tr.fila-eliminada:hover {
+  background: transparent;
+}
+
+.etiqueta-eliminado {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radio-sm);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--peligro-suave);
+  color: var(--peligro);
+}
+
 /* ============ Grilla de captura (hoja de cálculo) ============ */
 .grilla-captura td.celda-editable {
   padding: 0;

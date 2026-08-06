@@ -44,6 +44,7 @@ const TABLAS: Record<string, string> = {
     nombre VARCHAR NOT NULL,
     correo VARCHAR,
     activo BOOLEAN NOT NULL DEFAULT true,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -52,6 +53,7 @@ const TABLAS: Record<string, string> = {
     nombre VARCHAR NOT NULL,
     descripcion VARCHAR NOT NULL DEFAULT '',
     activo BOOLEAN NOT NULL DEFAULT true,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -73,6 +75,7 @@ const TABLAS: Record<string, string> = {
     condicion_obligatorio VARCHAR,
     filtrable BOOLEAN NOT NULL DEFAULT false,
     activo BOOLEAN NOT NULL DEFAULT true,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -84,6 +87,7 @@ const TABLAS: Record<string, string> = {
     configuracion VARCHAR NOT NULL DEFAULT '{}',
     parametros_generales VARCHAR NOT NULL DEFAULT '[]',
     activo BOOLEAN NOT NULL DEFAULT true,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -118,6 +122,7 @@ const TABLAS: Record<string, string> = {
     version INTEGER NOT NULL DEFAULT 1,
     orden INTEGER NOT NULL DEFAULT 0,
     jerarquica BOOLEAN NOT NULL DEFAULT false,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -153,6 +158,7 @@ const TABLAS: Record<string, string> = {
     condicion VARCHAR NOT NULL,
     mensaje_error VARCHAR,
     activa BOOLEAN NOT NULL DEFAULT true,
+    eliminado BOOLEAN NOT NULL DEFAULT false,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL
   )`,
@@ -275,7 +281,15 @@ export const MIGRACIONES_ADITIVAS: string[] = [
   // nombre visible; al introducir `nombre` como campo separado, se
   // completa una sola vez desde el valor previo de `descripcion` para no
   // perder las etiquetas ya cargadas (idempotente: no hace nada una vez migrado).
-  "UPDATE elementos_lista SET nombre = descripcion WHERE (nombre IS NULL OR nombre = '') AND descripcion IS NOT NULL AND descripcion != ''"
+  "UPDATE elementos_lista SET nombre = descripcion WHERE (nombre IS NULL OR nombre = '') AND descripcion IS NOT NULL AND descripcion != ''",
+  // Borrado lógico (bloqueado por estar en uso), distinto del `activo`/`activa`/`estado`
+  // que el usuario alterna manualmente — ver ServicioX.eliminar()/restaurar().
+  'ALTER TABLE atributos ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  'ALTER TABLE listas ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  'ALTER TABLE reglas ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  'ALTER TABLE responsables ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  'ALTER TABLE categorias ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  'ALTER TABLE origenes_automaticos ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false'
 ];
 
 export async function crearEsquema(db: Db): Promise<void> {

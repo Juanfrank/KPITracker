@@ -63,19 +63,23 @@ export interface ValorAtributoEntidad {
 }
 
 export interface IAtributoRepository {
-  listar(entidad?: string): Promise<Atributo[]>;
+  listar(entidad?: string, incluirEliminados?: boolean): Promise<Atributo[]>;
   obtener(id: string): Promise<Atributo | null>;
   guardar(atributo: Atributo): Promise<void>;
-  eliminar(id: string): Promise<void>;
+  /** Marca (o desmarca) el borrado lógico: distinto del hard-delete, que se retiró para esta entidad. */
+  marcarEliminado(id: string, eliminado: boolean): Promise<void>;
   obtenerValores(entidadTipo: string, entidadId: string): Promise<ValorAtributoEntidad[]>;
   guardarValor(valor: ValorAtributoEntidad): Promise<void>;
+  /** Entidades con un valor capturado para este atributo — usado por la verificación de referencias antes de eliminar. */
+  listarEntidadesConValor(atributoId: string): Promise<ValorAtributoEntidad[]>;
 }
 
 export interface IListaRepository {
-  listar(): Promise<Lista[]>;
+  listar(incluirEliminados?: boolean): Promise<Lista[]>;
   obtener(id: string): Promise<Lista | null>;
   guardar(lista: Lista): Promise<void>;
-  eliminar(id: string): Promise<void>;
+  /** Marca (o desmarca) el borrado lógico: distinto del hard-delete, que se retiró para esta entidad. */
+  marcarEliminado(id: string, eliminado: boolean): Promise<void>;
   listarElementos(listaId: string): Promise<ElementoLista[]>;
   guardarElemento(elemento: ElementoLista): Promise<void>;
   eliminarElemento(id: string): Promise<void>;
@@ -88,9 +92,11 @@ export interface IMetaRepository {
 }
 
 export interface IReglaRepository {
-  listar(entidad?: string): Promise<ReglaNegocio[]>;
+  listar(entidad?: string, incluirEliminados?: boolean): Promise<ReglaNegocio[]>;
+  obtener(id: string): Promise<ReglaNegocio | null>;
   guardar(regla: ReglaNegocio): Promise<void>;
-  eliminar(id: string): Promise<void>;
+  /** Marca (o desmarca) el borrado lógico: distinto del hard-delete, que se retiró para esta entidad. */
+  marcarEliminado(id: string, eliminado: boolean): Promise<void>;
 }
 
 export interface IDefinicionPeriodicidadRepository {
@@ -100,12 +106,18 @@ export interface IDefinicionPeriodicidadRepository {
   eliminar(id: string): Promise<void>;
 }
 
-/** Catálogo simple (CRUD homogéneo); implementado por un único repositorio genérico en infraestructura. */
+/**
+ * Catálogo simple (CRUD homogéneo) que soporta borrado lógico; implementado
+ * por `CatalogoRepositoryDuckDb` en infraestructura con `soportaEliminado:
+ * true`. `periodicidades_personalizadas` sigue con hard-delete (interfaz
+ * separada `IDefinicionPeriodicidadRepository`), fuera de esta.
+ */
 export interface ICatalogoRepository<T extends { readonly id: string }> {
-  listar(): Promise<T[]>;
+  listar(incluirEliminados?: boolean): Promise<T[]>;
   obtener(id: string): Promise<T | null>;
   guardar(item: T): Promise<void>;
-  eliminar(id: string): Promise<void>;
+  /** Marca (o desmarca) el borrado lógico: distinto del hard-delete, que se retiró para esta entidad. */
+  marcarEliminado(id: string, eliminado: boolean): Promise<void>;
 }
 
 export type IResponsableRepository = ICatalogoRepository<Responsable>;
@@ -172,6 +184,8 @@ export interface IAdjuntoRepository {
 
 export interface IAutomatizacionIndicadorRepository {
   obtenerPorIndicador(indicadorId: string): Promise<AutomatizacionIndicador | null>;
+  /** Todas las automatizaciones configuradas, sin filtrar por indicador — usado por la verificación de referencias y el respaldo. */
+  listarTodas(): Promise<AutomatizacionIndicador[]>;
   guardar(config: AutomatizacionIndicador): Promise<void>;
   eliminar(indicadorId: string): Promise<void>;
 }
@@ -179,6 +193,8 @@ export interface IAutomatizacionIndicadorRepository {
 export interface IAliasDesagregacionOrigenRepository {
   listarPorLista(listaId: string): Promise<AliasDesagregacionOrigen[]>;
   listarPorOrigen(origenAutomaticoId: string): Promise<AliasDesagregacionOrigen[]>;
+  /** Todos los alias registrados, sin filtrar — usado por el respaldo. */
+  listarTodos(): Promise<AliasDesagregacionOrigen[]>;
   obtener(listaId: string, origenAutomaticoId: string): Promise<AliasDesagregacionOrigen | null>;
   guardar(alias: AliasDesagregacionOrigen): Promise<void>;
   eliminar(id: string): Promise<void>;

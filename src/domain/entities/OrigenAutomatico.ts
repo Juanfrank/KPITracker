@@ -43,6 +43,8 @@ export interface OrigenAutomatico {
   configuracion: Record<string, string>;
   parametrosGenerales: ParametroGeneral[];
   activo: boolean;
+  /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `activo`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

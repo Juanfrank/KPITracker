@@ -65,6 +65,7 @@ function listaVacia(): Lista {
     version: 1,
     orden: 0,
     jerarquica: false,
+    eliminado: false,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -85,21 +86,24 @@ export function ListasPage(): React.JSX.Element {
   const [elementos, setElementos] = useState<ElementoLista[]>([]);
   const [editando, setEditando] = useState<Lista | null>(null);
   const [filtro, setFiltro] = useState('');
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
   // Cola de guardado por fila: evita que dos ediciones casi simultáneas del
   // mismo elemento (p. ej. código y luego nombre) se pisen entre sí si sus
   // respuestas de red llegan en un orden distinto al que se dispararon.
   const colasGuardadoElemento = useRef(new Map<string, Promise<unknown>>());
 
   const cargar = useCallback(async (): Promise<void> => {
-    const datos = await invocar('listas:listar', undefined);
+    const datos = await invocar('listas:listar', { incluirEliminados: mostrarEliminados });
     setListas(datos);
-  }, []);
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
 
   const seleccionar = async (lista: Lista): Promise<void> => {
+    if (lista.eliminado) return;
     setSeleccionada(lista);
     setElementos(await invocar('listas:elementos', { listaId: lista.id }));
   };
@@ -110,6 +114,24 @@ export function ListasPage(): React.JSX.Element {
     setEditando(null);
     await cargar();
     await seleccionar(guardada);
+  };
+
+  const eliminarLista = async (id: string): Promise<void> => {
+    try {
+      await invocar('listas:eliminar', { id });
+      setEditando(null);
+      setSeleccionada(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurarLista = async (id: string): Promise<void> => {
+    await invocar('listas:restaurar', { id });
+    await cargar();
   };
 
   const agregarElemento = async (): Promise<void> => {
@@ -202,6 +224,17 @@ export function ListasPage(): React.JSX.Element {
       />
       <div className="toolbar">
         <input type="search" placeholder="Filtrar listas…" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
+        <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="listas-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16, alignItems: 'start' }}>
         <div className="tabla-envoltura">
@@ -211,29 +244,46 @@ export function ListasPage(): React.JSX.Element {
                 <th>Nombre</th>
                 <th>Estado</th>
                 <th>v</th>
+                <th style={{ width: 90 }} />
               </tr>
             </thead>
             <tbody>
               {filtradas.map((l) => (
                 <tr
                   key={l.id}
-                  className={seleccionada?.id === l.id ? 'seleccionada' : ''}
+                  className={[seleccionada?.id === l.id ? 'seleccionada' : '', l.eliminado ? 'fila-eliminada' : ''].filter(Boolean).join(' ')}
                   onClick={() => void seleccionar(l)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: l.eliminado ? 'default' : 'pointer' }}
                   data-testid={`lista-${l.nombre}`}
                 >
                   <td>
                     {l.nombre} {l.jerarquica && <span className="texto-suave">(jerárquica)</span>}
                   </td>
                   <td>
-                    <span className={`chip ${l.estado === 'Activa' ? 'completo' : 'noaplica'}`}>{l.estado}</span>
+                    {l.eliminado ? (
+                      <span className="etiqueta-eliminado">Eliminado</span>
+                    ) : (
+                      <span className={`chip ${l.estado === 'Activa' ? 'completo' : 'noaplica'}`}>{l.estado}</span>
+                    )}
                   </td>
                   <td className="texto-suave">{l.version}</td>
+                  <td>
+                    {l.eliminado && (
+                      <button
+                        className="boton sutil"
+                        title="Restaurar"
+                        onClick={(e) => { e.stopPropagation(); void restaurarLista(l.id); }}
+                        data-testid={`restaurar-${l.id}`}
+                      >
+                        Restaurar
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={3}>
+                  <td colSpan={4}>
                     <Vacio mensaje="Sin listas" detalle="Cree la primera lista de selección." />
                   </td>
                 </tr>
@@ -371,10 +421,10 @@ export function ListasPage(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar lista' : 'Nueva lista'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
           pie={
             <>
-              <button className="boton" onClick={() => setEditando(null)}>
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>
                 Cancelar
               </button>
               <button className="boton primario" onClick={() => void guardarLista()} data-testid="guardar-lista">
@@ -383,6 +433,11 @@ export function ListasPage(): React.JSX.Element {
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="lista-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <Campo etiqueta="Nombre" obligatorio>
             <input
               type="text"
@@ -440,16 +495,7 @@ export function ListasPage(): React.JSX.Element {
           </label>
           {editando.id && <SeccionAliasOrigen listaId={editando.id} />}
           {editando.id && (
-            <button
-              className="boton peligro"
-              onClick={() => {
-                void invocar('listas:eliminar', { id: editando.id }).then(() => {
-                  setEditando(null);
-                  setSeleccionada(null);
-                  void cargar();
-                });
-              }}
-            >
+            <button className="boton peligro" onClick={() => void eliminarLista(editando.id)}>
               Eliminar lista
             </button>
           )}

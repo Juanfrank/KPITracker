@@ -24,7 +24,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
 function reglaValidacionCruzada(parcial: Partial<ReglaNegocio> & { condicion: ReglaNegocio['condicion'] }): ReglaNegocio {
   return {
     id: '', nombre: 'Regla', descripcion: '', tipo: 'ValidacionCruzada', entidad: 'Indicador',
-    atributoObjetivoId: null, mensajeError: null, activa: true, creadoEn: '', actualizadoEn: '',
+    atributoObjetivoId: null, mensajeError: null, activa: true, eliminado: false, creadoEn: '', actualizadoEn: '',
     ...parcial
   };
 }
@@ -106,10 +106,10 @@ describe('Composition root — catálogos', () => {
 
   it('CRUD de responsables y categorías vía IPC', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Juan Pérez', correo: 'juan@example.org', activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Juan Pérez', correo: 'juan@example.org', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const categoria = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Estratégico', descripcion: '', activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
@@ -158,7 +158,7 @@ describe('Composition root — periodicidad personalizada en Recolección', () =
 describe('Composition root — advertencias de validación cruzada en Recolección', () => {
   it('advierte cuando el resultado General es menor que el máximo de sus desagregaciones', async () => {
     const lista = await app.manejadores['listas:guardar']({
-      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     await app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
 
@@ -211,10 +211,10 @@ describe('Composition root — configuración portable v1 → v2', () => {
 describe('Composition root — exportación analítica resuelve nombres de catálogo', () => {
   it('ResultadosAnalitico.parquet muestra el nombre del responsable y la categoría, no sus ids', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'María Gómez', correo: null, activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'María Gómez', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const categoria = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Prioritario', descripcion: '', activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Prioritario', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const guardado = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ responsable: responsable.id, categoria: categoria.id }),
@@ -267,10 +267,10 @@ describe('Composition root — código único de indicador', () => {
 describe('Composition root — reasignación masiva de responsable/categoría', () => {
   it('reasigna responsable y categoría a varios indicadores sin tocar los campos no especificados', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Ana', correo: null, activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const categoriaOriginal = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Original', descripcion: '', activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Original', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const i1 = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ categoria: categoriaOriginal.id }), valores: []
@@ -289,7 +289,7 @@ describe('Composition root — reasignación masiva de responsable/categoría', 
 
   it('permite quitar una asignación pasando null explícitamente', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Beto', correo: null, activo: true, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Beto', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const i1 = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ responsable: responsable.id }), valores: []
@@ -466,7 +466,7 @@ describe('Composition root — comentario del levantamiento', () => {
 
 describe('Composition root — prefijo de lista y nombre de elemento', () => {
   it('rechaza un prefijo vacío o con caracteres no alfabéticos', async () => {
-    const base = { id: '', nombre: 'Sexo', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: '' };
+    const base = { id: '', nombre: 'Sexo', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: '' };
     await expect(app.manejadores['listas:guardar']({ ...base, prefijo: '' })).rejects.toThrow(/prefijo/);
     await expect(app.manejadores['listas:guardar']({ ...base, prefijo: 'SEXO-1' })).rejects.toThrow(/alfabético/);
     await expect(app.manejadores['listas:guardar']({ ...base, prefijo: 'SEXO 1' })).rejects.toThrow(/alfabético/);
@@ -474,20 +474,20 @@ describe('Composition root — prefijo de lista y nombre de elemento', () => {
 
   it('normaliza un prefijo en minúsculas a mayúsculas', async () => {
     const guardada = await app.manejadores['listas:guardar']({
-      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'sexo', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'sexo', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(guardada.prefijo).toBe('SEXO');
   });
 
   it('rechaza dos listas con el mismo prefijo', async () => {
-    const base = { id: '', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: '' };
+    const base = { id: '', descripcion: '', estado: 'Activa' as const, version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: '' };
     await app.manejadores['listas:guardar']({ ...base, nombre: 'Sexo', prefijo: 'SEXO' });
     await expect(app.manejadores['listas:guardar']({ ...base, nombre: 'Sexo 2', prefijo: 'SEXO' })).rejects.toThrow(/prefijo/);
   });
 
   it('autogenera el código del elemento a partir del prefijo y exige nombre', async () => {
     const lista = await app.manejadores['listas:guardar']({
-      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     await expect(
       app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: `${lista.prefijo}-01`, nombre: '', descripcion: '', orden: 1, padreCodigo: null, activo: true })
@@ -578,7 +578,7 @@ describe('Composition root — atributos filtrables en Seguimiento', () => {
       id: '', entidad: 'Indicador', nombre: 'Prioridad', descripcion: '', grupo: 'General', orden: 1,
       visible: true, editable: true, obligatorio: false, valorPorDefecto: null, tipoDato: TipoDato.ShortText,
       listaId: null, validaciones: [], condicionVisibilidad: null, condicionObligatorio: null, filtrable: true,
-      activo: true, creadoEn: '', actualizadoEn: ''
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const guardado = await app.manejadores['indicadores:guardar']({
       indicador: indicador(),
@@ -595,7 +595,7 @@ describe('Composition root — atributos filtrables en Seguimiento', () => {
       id: '', entidad: 'Indicador', nombre: 'Interno', descripcion: '', grupo: 'General', orden: 1,
       visible: true, editable: true, obligatorio: false, valorPorDefecto: null, tipoDato: TipoDato.ShortText,
       listaId: null, validaciones: [], condicionVisibilidad: null, condicionObligatorio: null, filtrable: false,
-      activo: true, creadoEn: '', actualizadoEn: ''
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
     const tablero = await app.manejadores['seguimiento:tablero'](undefined);
@@ -609,7 +609,7 @@ describe('Composition root — orígenes automáticos', () => {
     const origen = await app.manejadores['origenes:guardar']({
       id: '', nombre: 'API institucional', tipo: 'API', descripcion: '',
       configuracion: { url: 'https://ejemplo.local/api', metodo: 'GET' }, parametrosGenerales: [],
-      activo: true, creadoEn: '', actualizadoEn: ''
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(origen.id).not.toBe('');
     expect(await app.manejadores['origenes:listar'](undefined)).toHaveLength(1);
@@ -630,7 +630,7 @@ describe('Composition root — orígenes automáticos', () => {
     const origen = await app.manejadores['origenes:guardar']({
       id: '', nombre: 'Origen sin columna de valor', tipo: 'API', descripcion: '',
       configuracion: { url: 'http://127.0.0.1:9', metodo: 'GET' }, parametrosGenerales: [],
-      activo: true, creadoEn: '', actualizadoEn: ''
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
     await app.manejadores['automatizacion:guardar']({
@@ -661,12 +661,12 @@ describe('Composition root — orígenes automáticos', () => {
       const origen = await app.manejadores['origenes:guardar']({
         id: '', nombre: 'API local de prueba', tipo: 'API', descripcion: '',
         configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' },
-        parametrosGenerales: [{ nombre: 'anio', fuente: 'Anio' }], activo: true, creadoEn: '', actualizadoEn: ''
+        parametrosGenerales: [{ nombre: 'anio', fuente: 'Anio' }], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
 
       const lista = await app.manejadores['listas:guardar']({
         id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SEXO', estado: 'Activa', version: 1, orden: 1,
-        jerarquica: false, creadoEn: '', actualizadoEn: ''
+        jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
       await app.manejadores['listas:guardarElemento']({
         id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true
@@ -717,11 +717,11 @@ describe('Composition root — orígenes automáticos', () => {
       const origen = await app.manejadores['origenes:guardar']({
         id: '', nombre: 'API sin mapeo de desagregación', tipo: 'API', descripcion: '',
         configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
-        activo: true, creadoEn: '', actualizadoEn: ''
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
       const lista = await app.manejadores['listas:guardar']({
         id: '', nombre: 'Provincia', descripcion: '', prefijo: 'PROV', estado: 'Activa', version: 1, orden: 1,
-        jerarquica: false, creadoEn: '', actualizadoEn: ''
+        jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
       const guardado = await app.manejadores['indicadores:guardar']({
         indicador: indicador({ desagregaciones: [lista.id] }), valores: []
@@ -758,7 +758,7 @@ describe('Composition root — orígenes automáticos', () => {
       const origen = {
         id: '', nombre: 'Origen de prueba de código', tipo: 'API' as const, descripcion: '',
         configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
-        activo: true, creadoEn: '', actualizadoEn: ''
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       };
       const resultado = await app.manejadores['origenes:probarCodigo']({ origen, script: '' });
       expect(resultado.columnas.sort()).toEqual(['id', 'total']);
@@ -783,7 +783,7 @@ describe('Composition root — orígenes automáticos', () => {
       const origen = {
         id: '', nombre: 'Origen de 150 filas', tipo: 'API' as const, descripcion: '',
         configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
-        activo: true, creadoEn: '', actualizadoEn: ''
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       };
       const resultado = await app.manejadores['origenes:probarCodigo']({ origen, script: '' });
       expect(resultado.totalFilas).toBe(150);
@@ -806,7 +806,7 @@ describe('Composition root — orígenes automáticos', () => {
       const origen = {
         id: '', nombre: 'Origen que falla', tipo: 'API' as const, descripcion: '',
         configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
-        activo: true, creadoEn: '', actualizadoEn: ''
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       };
       await expect(app.manejadores['origenes:probarCodigo']({ origen, script: '' })).rejects.toThrow();
     } finally {
@@ -866,7 +866,7 @@ describe('Composition root — XMLA con autenticación OAuth2 (Client Credential
           clienteId: 'cid-valido',
           clienteSecreto: 'secreto-valido'
         },
-        parametrosGenerales: [], activo: true, creadoEn: '', actualizadoEn: ''
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
       expect(resultado.ok).toBe(true);
     } finally {
@@ -899,7 +899,7 @@ describe('Composition root — XMLA con autenticación OAuth2 (Client Credential
           clienteId: 'cid-malo',
           clienteSecreto: 'secreto-malo'
         },
-        parametrosGenerales: [], activo: true, creadoEn: '', actualizadoEn: ''
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       });
       expect(resultado.ok).toBe(false);
       expect(resultado.mensaje).toContain('servidor de token');

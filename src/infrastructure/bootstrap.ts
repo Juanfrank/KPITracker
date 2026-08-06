@@ -77,10 +77,12 @@ export async function crearInfraestructura(
   const reglas = new ReglaRepositoryDuckDb(db, sync);
   const periodicidades = crearRepositorioDefinicionesPeriodicidad(db, sync);
   const responsables = new CatalogoRepositoryDuckDb(
-    db, sync, 'responsables', aResponsable, deResponsable, ['id', 'nombre', 'correo', 'activo', 'creado_en', 'actualizado_en']
+    db, sync, 'responsables', aResponsable, deResponsable,
+    ['id', 'nombre', 'correo', 'activo', 'eliminado', 'creado_en', 'actualizado_en'], true
   );
   const categorias = new CatalogoRepositoryDuckDb(
-    db, sync, 'categorias', aCategoria, deCategoria, ['id', 'nombre', 'descripcion', 'activo', 'creado_en', 'actualizado_en']
+    db, sync, 'categorias', aCategoria, deCategoria,
+    ['id', 'nombre', 'descripcion', 'activo', 'eliminado', 'creado_en', 'actualizado_en'], true
   );
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
   const automatizaciones = new AutomatizacionIndicadorRepositoryDuckDb(db, sync);

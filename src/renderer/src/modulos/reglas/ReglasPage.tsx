@@ -27,6 +27,7 @@ function reglaVacia(): ReglaNegocio {
     condicion: { op: 'eq', args: [{ attr: '' }, { literal: '' }] },
     mensajeError: null,
     activa: true,
+    eliminado: false,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -48,14 +49,16 @@ export function ReglasPage(): React.JSX.Element {
   const [modoAvanzado, setModoAvanzado] = useState(false);
   const [jsonAvanzado, setJsonAvanzado] = useState('');
   const [errorJson, setErrorJson] = useState<string | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
     const [reglasIndicador, reglasRecoleccion] = await Promise.all([
-      invocar('reglas:listar', { entidad: 'Indicador' }),
-      invocar('reglas:listar', { entidad: 'Recoleccion' })
+      invocar('reglas:listar', { entidad: 'Indicador', incluirEliminados: mostrarEliminados }),
+      invocar('reglas:listar', { entidad: 'Recoleccion', incluirEliminados: mostrarEliminados })
     ]);
     setReglas([...reglasIndicador, ...reglasRecoleccion]);
-  }, []);
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
@@ -72,10 +75,28 @@ export function ReglasPage(): React.JSX.Element {
   }, [atributos, elementosPorLista]);
 
   const abrir = (regla: ReglaNegocio): void => {
+    if (regla.eliminado) return;
     setEditando(regla);
     setModoAvanzado(false);
     setJsonAvanzado(JSON.stringify(regla.condicion, null, 2));
     setErrorJson(null);
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('reglas:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('reglas:restaurar', { id });
+    await cargar();
   };
 
   const guardar = async (): Promise<void> => {
@@ -113,9 +134,21 @@ export function ReglasPage(): React.JSX.Element {
         titulo="Reglas de Negocio"
         descripcion="Reglas condicionales declarativas: visibilidad, obligatoriedad y validaciones cruzadas. Se evalúan con el motor de reglas, sin lógica codificada."
         acciones={
-          <button className="boton primario" onClick={() => abrir(reglaVacia())} data-testid="nueva-regla">
-            <Icono nombre="mas" /> Nueva regla
-          </button>
+          <>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={mostrarEliminados}
+                onChange={(e) => setMostrarEliminados(e.target.checked)}
+                style={{ width: 'auto' }}
+                data-testid="reglas-mostrar-eliminados"
+              />
+              Mostrar eliminados
+            </label>
+            <button className="boton primario" onClick={() => abrir(reglaVacia())} data-testid="nueva-regla">
+              <Icono nombre="mas" /> Nueva regla
+            </button>
+          </>
         }
       />
       <div className="tabla-envoltura">
@@ -127,21 +160,40 @@ export function ReglasPage(): React.JSX.Element {
               <th>Tipo</th>
               <th>Condición</th>
               <th>Activa</th>
+              <th style={{ width: 90 }} />
             </tr>
           </thead>
           <tbody>
             {reglas.map((r) => (
-              <tr key={r.id} onClick={() => abrir(r)} style={{ cursor: 'pointer' }} data-testid={`regla-${r.nombre}`}>
-                <td><strong>{r.nombre}</strong></td>
+              <tr
+                key={r.id}
+                className={r.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => abrir(r)}
+                style={{ cursor: r.eliminado ? 'default' : 'pointer' }}
+                data-testid={`regla-${r.nombre}`}
+              >
+                <td><strong>{r.nombre}</strong> {r.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
                 <td>{r.entidad}</td>
                 <td>{r.tipo}</td>
                 <td>{explicarCondicion(r.condicion)}</td>
                 <td>{r.activa ? 'Sí' : 'No'}</td>
+                <td>
+                  {r.eliminado && (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(r.id); }}
+                      data-testid={`restaurar-${r.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {reglas.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <Vacio
                     icono="✓"
                     mensaje="Sin reglas condicionales"
@@ -157,28 +209,25 @@ export function ReglasPage(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar regla' : 'Nueva regla'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
           pie={
             <>
               {editando.id && (
-                <button
-                  className="boton peligro"
-                  onClick={() => {
-                    void invocar('reglas:eliminar', { id: editando.id }).then(() => {
-                      setEditando(null);
-                      void cargar();
-                    });
-                  }}
-                >
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
                   Eliminar
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-regla">Guardar</button>
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="regla-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <Campo etiqueta="Nombre" obligatorio>
             <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="regla-nombre" />
           </Campo>

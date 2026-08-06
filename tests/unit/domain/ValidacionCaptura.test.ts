@@ -6,7 +6,7 @@ import type { ReglaNegocio } from '@domain/entities/ReglaNegocio';
 function regla(parcial: Partial<ReglaNegocio> & { condicion: ReglaNegocio['condicion'] }): ReglaNegocio {
   return {
     id: 'r1', nombre: 'Regla', descripcion: '', tipo: 'ValidacionCruzada', entidad: 'Recoleccion',
-    atributoObjetivoId: null, mensajeError: null, activa: true,
+    atributoObjetivoId: null, mensajeError: null, activa: true, eliminado: false,
     creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial
   };

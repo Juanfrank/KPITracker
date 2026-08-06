@@ -24,6 +24,7 @@ function atributoVacio(): Atributo {
     condicionObligatorio: null,
     filtrable: false,
     activo: true,
+    eliminado: false,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -51,10 +52,12 @@ export function AtributosPage(): React.JSX.Element {
   const [tipos, setTipos] = useState<Array<{ tipo: string; etiqueta: string }>>([]);
   const [listas, setListas] = useState<Lista[]>([]);
   const [editando, setEditando] = useState<Atributo | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setAtributos(await invocar('atributos:listar', { entidad: 'Indicador' }));
-  }, []);
+    setAtributos(await invocar('atributos:listar', { entidad: 'Indicador', incluirEliminados: mostrarEliminados }));
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
@@ -66,6 +69,23 @@ export function AtributosPage(): React.JSX.Element {
     if (!editando) return;
     await invocar('atributos:guardar', editando);
     setEditando(null);
+    await cargar();
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('atributos:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('atributos:restaurar', { id });
     await cargar();
   };
 
@@ -88,9 +108,21 @@ export function AtributosPage(): React.JSX.Element {
         titulo="Configuración de Atributos"
         descripcion="Atributos dinámicos de los indicadores: no están fijos en el código. Pueden crearse, agruparse, reordenarse, ocultarse y validarse."
         acciones={
-          <button className="boton primario" onClick={() => setEditando({ ...atributoVacio(), orden: atributos.length + 1 })} data-testid="nuevo-atributo">
-            <Icono nombre="mas" /> Nuevo atributo
-          </button>
+          <>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={mostrarEliminados}
+                onChange={(e) => setMostrarEliminados(e.target.checked)}
+                style={{ width: 'auto' }}
+                data-testid="atributos-mostrar-eliminados"
+              />
+              Mostrar eliminados
+            </label>
+            <button className="boton primario" onClick={() => setEditando({ ...atributoVacio(), orden: atributos.length + 1 })} data-testid="nuevo-atributo">
+              <Icono nombre="mas" /> Nuevo atributo
+            </button>
+          </>
         }
       />
       {grupos.length === 0 && (
@@ -117,10 +149,10 @@ export function AtributosPage(): React.JSX.Element {
                   .filter((a) => a.grupo === grupo)
                   .sort((a, b) => a.orden - b.orden)
                   .map((a) => (
-                    <tr key={a.id} style={{ opacity: a.activo ? 1 : 0.5 }}>
+                    <tr key={a.id} className={a.eliminado ? 'fila-eliminada' : undefined} style={{ opacity: !a.eliminado && !a.activo ? 0.5 : undefined }}>
                       <td className="texto-suave">{a.orden}</td>
                       <td>
-                        <strong>{a.nombre}</strong>
+                        <strong>{a.nombre}</strong> {a.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}
                         {a.descripcion && <div className="texto-suave">{a.descripcion}</div>}
                       </td>
                       <td>{tipos.find((t) => t.tipo === a.tipoDato)?.etiqueta ?? a.tipoDato}</td>
@@ -128,13 +160,19 @@ export function AtributosPage(): React.JSX.Element {
                       <td>{a.obligatorio || a.condicionObligatorio ? (a.condicionObligatorio ? 'Condicional' : 'Sí') : 'No'}</td>
                       <td className="texto-suave">{a.validaciones.length > 0 ? `${a.validaciones.length} regla(s)` : '—'}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: 2 }}>
-                          <button className="boton sutil" title="Subir" onClick={() => void mover(a, -1)}>▲</button>
-                          <button className="boton sutil" title="Bajar" onClick={() => void mover(a, 1)}>▼</button>
-                          <button className="boton sutil" title="Editar" onClick={() => setEditando(a)}>
-                            <Icono nombre="atributo" tamano={14} />
+                        {a.eliminado ? (
+                          <button className="boton sutil" title="Restaurar" onClick={() => void restaurar(a.id)} data-testid={`restaurar-${a.id}`}>
+                            Restaurar
                           </button>
-                        </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            <button className="boton sutil" title="Subir" onClick={() => void mover(a, -1)}>▲</button>
+                            <button className="boton sutil" title="Bajar" onClick={() => void mover(a, 1)}>▼</button>
+                            <button className="boton sutil" title="Editar" onClick={() => setEditando(a)}>
+                              <Icono nombre="atributo" tamano={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -147,28 +185,25 @@ export function AtributosPage(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar atributo' : 'Nuevo atributo'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
           pie={
             <>
               {editando.id && (
-                <button
-                  className="boton peligro"
-                  onClick={() => {
-                    void invocar('atributos:eliminar', { id: editando.id }).then(() => {
-                      setEditando(null);
-                      void cargar();
-                    });
-                  }}
-                >
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
                   Eliminar
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-atributo">Guardar</button>
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="atributo-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <div className="fila-form c2">
             <Campo etiqueta="Nombre" obligatorio>
               <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} data-testid="atributo-nombre" autoFocus />

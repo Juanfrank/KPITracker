@@ -19,6 +19,8 @@ export interface ReglaNegocio {
   condicion: Condicion;
   mensajeError: string | null;
   activa: boolean;
+  /** Marca de borrado lógico: distinta de `activa`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

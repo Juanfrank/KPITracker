@@ -7,18 +7,18 @@ import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basico
 import { Icono } from '../../componentes/Icono';
 
 function responsableVacio(): Responsable {
-  return { id: '', nombre: '', correo: null, activo: true, creadoEn: '', actualizadoEn: '' };
+  return { id: '', nombre: '', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
 }
 
 function categoriaVacia(): Categoria {
-  return { id: '', nombre: '', descripcion: '', activo: true, creadoEn: '', actualizadoEn: '' };
+  return { id: '', nombre: '', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
 }
 
 function origenVacio(): OrigenAutomatico {
   return {
     id: '', nombre: '', tipo: 'API', descripcion: '', configuracion: {},
     parametrosGenerales: [{ nombre: 'periodo', fuente: 'PeriodoId' }],
-    activo: true, creadoEn: '', actualizadoEn: ''
+    activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
   };
 }
 
@@ -141,10 +141,12 @@ function EditorParametrosGenerales({
 function SeccionResponsables(): React.JSX.Element {
   const [items, setItems] = useState<Responsable[]>([]);
   const [editando, setEditando] = useState<Responsable | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setItems(await invocar('responsables:listar', undefined));
-  }, []);
+    setItems(await invocar('responsables:listar', { incluirEliminados: mostrarEliminados }));
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
@@ -157,11 +159,38 @@ function SeccionResponsables(): React.JSX.Element {
     await cargar();
   };
 
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('responsables:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('responsables:restaurar', { id });
+    await cargar();
+  };
+
   return (
     <div className="tarjeta">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Responsables</h3>
         <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="responsables-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
         <button className="boton primario" onClick={() => setEditando(responsableVacio())} data-testid="nuevo-responsable">
           <Icono nombre="mas" /> Responsable
         </button>
@@ -173,19 +202,38 @@ function SeccionResponsables(): React.JSX.Element {
               <th>Nombre</th>
               <th>Correo</th>
               <th>Activo</th>
+              <th style={{ width: 90 }} />
             </tr>
           </thead>
           <tbody>
             {items.map((r) => (
-              <tr key={r.id} onClick={() => setEditando(r)} style={{ cursor: 'pointer' }} data-testid={`responsable-${r.nombre}`}>
-                <td>{r.nombre}</td>
+              <tr
+                key={r.id}
+                className={r.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => !r.eliminado && setEditando(r)}
+                style={{ cursor: r.eliminado ? 'default' : 'pointer' }}
+                data-testid={`responsable-${r.nombre}`}
+              >
+                <td>{r.nombre} {r.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
                 <td className="texto-suave">{r.correo ?? '—'}</td>
                 <td>{r.activo ? 'Sí' : 'No'}</td>
+                <td>
+                  {r.eliminado && (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(r.id); }}
+                      data-testid={`restaurar-${r.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={3}>
+                <td colSpan={4}>
                   <Vacio mensaje="Sin responsables" detalle="Créelos para asignarlos a indicadores." />
                 </td>
               </tr>
@@ -196,28 +244,25 @@ function SeccionResponsables(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar responsable' : 'Nuevo responsable'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
           pie={
             <>
               {editando.id && (
-                <button
-                  className="boton peligro"
-                  onClick={() => {
-                    void invocar('responsables:eliminar', { id: editando.id }).then(() => {
-                      setEditando(null);
-                      void cargar();
-                    });
-                  }}
-                >
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
                   Eliminar
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-responsable">Guardar</button>
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="responsable-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <Campo etiqueta="Nombre" obligatorio>
             <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="responsable-nombre" />
           </Campo>
@@ -237,10 +282,12 @@ function SeccionResponsables(): React.JSX.Element {
 function SeccionCategorias(): React.JSX.Element {
   const [items, setItems] = useState<Categoria[]>([]);
   const [editando, setEditando] = useState<Categoria | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setItems(await invocar('categorias:listar', undefined));
-  }, []);
+    setItems(await invocar('categorias:listar', { incluirEliminados: mostrarEliminados }));
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
@@ -253,11 +300,38 @@ function SeccionCategorias(): React.JSX.Element {
     await cargar();
   };
 
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('categorias:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('categorias:restaurar', { id });
+    await cargar();
+  };
+
   return (
     <div className="tarjeta">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Categorías</h3>
         <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="categorias-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
         <button className="boton primario" onClick={() => setEditando(categoriaVacia())} data-testid="nueva-categoria">
           <Icono nombre="mas" /> Categoría
         </button>
@@ -269,19 +343,38 @@ function SeccionCategorias(): React.JSX.Element {
               <th>Nombre</th>
               <th>Descripción</th>
               <th>Activa</th>
+              <th style={{ width: 90 }} />
             </tr>
           </thead>
           <tbody>
             {items.map((c) => (
-              <tr key={c.id} onClick={() => setEditando(c)} style={{ cursor: 'pointer' }} data-testid={`categoria-${c.nombre}`}>
-                <td>{c.nombre}</td>
+              <tr
+                key={c.id}
+                className={c.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => !c.eliminado && setEditando(c)}
+                style={{ cursor: c.eliminado ? 'default' : 'pointer' }}
+                data-testid={`categoria-${c.nombre}`}
+              >
+                <td>{c.nombre} {c.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
                 <td className="texto-suave">{c.descripcion || '—'}</td>
                 <td>{c.activo ? 'Sí' : 'No'}</td>
+                <td>
+                  {c.eliminado && (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(c.id); }}
+                      data-testid={`restaurar-${c.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={3}>
+                <td colSpan={4}>
                   <Vacio mensaje="Sin categorías" detalle="Créelas para clasificar indicadores." />
                 </td>
               </tr>
@@ -292,28 +385,25 @@ function SeccionCategorias(): React.JSX.Element {
       {editando && (
         <PanelLateral
           titulo={editando.id ? 'Editar categoría' : 'Nueva categoría'}
-          alCerrar={() => setEditando(null)}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
           pie={
             <>
               {editando.id && (
-                <button
-                  className="boton peligro"
-                  onClick={() => {
-                    void invocar('categorias:eliminar', { id: editando.id }).then(() => {
-                      setEditando(null);
-                      void cargar();
-                    });
-                  }}
-                >
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
                   Eliminar
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => setEditando(null)}>Cancelar</button>
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-categoria">Guardar</button>
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="categoria-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <Campo etiqueta="Nombre" obligatorio>
             <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="categoria-nombre" />
           </Campo>
@@ -339,10 +429,12 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
   const [probandoCodigo, setProbandoCodigo] = useState(false);
   const [resultadoCodigo, setResultadoCodigo] = useState<ResultadoPruebaCodigo | null>(null);
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setItems(await invocar('origenes:listar', undefined));
-  }, []);
+    setItems(await invocar('origenes:listar', { incluirEliminados: mostrarEliminados }));
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
@@ -352,6 +444,23 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
     if (!editando) return;
     await invocar('origenes:guardar', editando);
     setEditando(null);
+    await cargar();
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('origenes:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('origenes:restaurar', { id });
     await cargar();
   };
 
@@ -393,6 +502,16 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Orígenes automáticos</h3>
         <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="origenes-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
         <button className="boton primario" onClick={() => setEditando(origenVacio())} data-testid="nuevo-origen">
           <Icono nombre="mas" /> Origen
         </button>
@@ -409,19 +528,38 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               <th>Nombre</th>
               <th>Tipo</th>
               <th>Activo</th>
+              <th style={{ width: 90 }} />
             </tr>
           </thead>
           <tbody>
             {items.map((o) => (
-              <tr key={o.id} onClick={() => setEditando(o)} style={{ cursor: 'pointer' }} data-testid={`origen-${o.nombre}`}>
-                <td>{o.nombre}</td>
+              <tr
+                key={o.id}
+                className={o.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => !o.eliminado && setEditando(o)}
+                style={{ cursor: o.eliminado ? 'default' : 'pointer' }}
+                data-testid={`origen-${o.nombre}`}
+              >
+                <td>{o.nombre} {o.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
                 <td className="texto-suave">{o.tipo}</td>
                 <td>{o.activo ? 'Sí' : 'No'}</td>
+                <td>
+                  {o.eliminado && (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(o.id); }}
+                      data-testid={`restaurar-${o.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={3}>
+                <td colSpan={4}>
                   <Vacio mensaje="Sin orígenes automáticos" detalle="Créelos para asignarlos a indicadores." />
                 </td>
               </tr>
@@ -433,21 +571,13 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
         <PanelLateral
           titulo={editando.id ? 'Editar origen automático' : 'Nuevo origen automático'}
           alCerrar={() => {
-            setEditando(null); setResultadoPrueba(null);
+            setEditando(null); setResultadoPrueba(null); setErrores([]);
             setScriptPrueba(''); setResultadoCodigo(null); setErrorCodigo(null);
           }}
           pie={
             <>
               {editando.id && (
-                <button
-                  className="boton peligro"
-                  onClick={() => {
-                    void invocar('origenes:eliminar', { id: editando.id }).then(() => {
-                      setEditando(null);
-                      void cargar();
-                    });
-                  }}
-                >
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
                   Eliminar
                 </button>
               )}
@@ -455,7 +585,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               <button
                 className="boton"
                 onClick={() => {
-                  setEditando(null); setResultadoPrueba(null);
+                  setEditando(null); setResultadoPrueba(null); setErrores([]);
                   setScriptPrueba(''); setResultadoCodigo(null); setErrorCodigo(null);
                 }}
               >
@@ -465,6 +595,11 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
             </>
           }
         >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="origen-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
           <Campo etiqueta="Nombre" obligatorio>
             <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="origen-nombre" />
           </Campo>

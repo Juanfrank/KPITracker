@@ -45,15 +45,19 @@ export interface CanalesIpc {
     res: ResultadoImportacionIndicadores;
   };
 
-  'atributos:listar': { req: { entidad?: string } | void; res: Atributo[] };
+  'atributos:listar': { req: { entidad?: string; incluirEliminados?: boolean } | void; res: Atributo[] };
   'atributos:guardar': { req: Atributo; res: Atributo };
+  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el atributo está en uso. */
   'atributos:eliminar': { req: { id: string }; res: void };
+  'atributos:restaurar': { req: { id: string }; res: void };
   'atributos:valores': { req: { entidadTipo: string; entidadId: string }; res: ValorAtributoEntidad[] };
   'atributos:guardarValor': { req: ValorAtributoEntidad; res: void };
 
-  'listas:listar': { req: void; res: Lista[] };
+  'listas:listar': { req: { incluirEliminados?: boolean } | void; res: Lista[] };
   'listas:guardar': { req: Lista; res: Lista };
+  /** Borrado lógico: rechaza (con el detalle de qué la usa) si la lista está en uso. */
   'listas:eliminar': { req: { id: string }; res: void };
+  'listas:restaurar': { req: { id: string }; res: void };
   'listas:elementos': { req: { listaId: string }; res: ElementoLista[] };
   'listas:guardarElemento': { req: ElementoLista; res: ElementoLista };
   'listas:eliminarElemento': { req: { id: string }; res: void };
@@ -62,25 +66,32 @@ export interface CanalesIpc {
   'metas:guardar': { req: Meta; res: Meta };
   'metas:eliminar': { req: { id: string }; res: void };
 
-  'reglas:listar': { req: { entidad?: string } | void; res: ReglaNegocio[] };
+  'reglas:listar': { req: { entidad?: string; incluirEliminados?: boolean } | void; res: ReglaNegocio[] };
   'reglas:guardar': { req: ReglaNegocio; res: ReglaNegocio };
   'reglas:eliminar': { req: { id: string }; res: void };
+  'reglas:restaurar': { req: { id: string }; res: void };
 
   'periodicidades:listar': { req: void; res: DefinicionPeriodicidad[] };
   'periodicidades:guardar': { req: DefinicionPeriodicidad; res: DefinicionPeriodicidad };
   'periodicidades:eliminar': { req: { id: string }; res: void };
 
-  'responsables:listar': { req: void; res: Responsable[] };
+  'responsables:listar': { req: { incluirEliminados?: boolean } | void; res: Responsable[] };
   'responsables:guardar': { req: Responsable; res: Responsable };
+  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el responsable está en uso. */
   'responsables:eliminar': { req: { id: string }; res: void };
+  'responsables:restaurar': { req: { id: string }; res: void };
 
-  'categorias:listar': { req: void; res: Categoria[] };
+  'categorias:listar': { req: { incluirEliminados?: boolean } | void; res: Categoria[] };
   'categorias:guardar': { req: Categoria; res: Categoria };
+  /** Borrado lógico: rechaza (con el detalle de qué la usa) si la categoría está en uso. */
   'categorias:eliminar': { req: { id: string }; res: void };
+  'categorias:restaurar': { req: { id: string }; res: void };
 
-  'origenes:listar': { req: void; res: OrigenAutomatico[] };
+  'origenes:listar': { req: { incluirEliminados?: boolean } | void; res: OrigenAutomatico[] };
   'origenes:guardar': { req: OrigenAutomatico; res: OrigenAutomatico };
+  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el origen está en uso. */
   'origenes:eliminar': { req: { id: string }; res: void };
+  'origenes:restaurar': { req: { id: string }; res: void };
   /** Prueba la conectividad/credenciales del origen (aún no guardado o ya guardado) sin ejecutar ningún script. */
   'origenes:probar': { req: OrigenAutomatico; res: ResultadoPrueba };
   /**
@@ -177,14 +188,15 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'config:obtener', 'config:guardar', 'config:reglasFechaLimite',
   'indicadores:listar', 'indicadores:obtener', 'indicadores:guardar', 'indicadores:eliminar',
   'indicadores:reasignarMasivo', 'indicadores:importarExcel',
-  'atributos:listar', 'atributos:guardar', 'atributos:eliminar', 'atributos:valores', 'atributos:guardarValor',
-  'listas:listar', 'listas:guardar', 'listas:eliminar', 'listas:elementos', 'listas:guardarElemento', 'listas:eliminarElemento',
+  'atributos:listar', 'atributos:guardar', 'atributos:eliminar', 'atributos:restaurar', 'atributos:valores', 'atributos:guardarValor',
+  'listas:listar', 'listas:guardar', 'listas:eliminar', 'listas:restaurar',
+  'listas:elementos', 'listas:guardarElemento', 'listas:eliminarElemento',
   'metas:listar', 'metas:guardar', 'metas:eliminar',
-  'reglas:listar', 'reglas:guardar', 'reglas:eliminar',
+  'reglas:listar', 'reglas:guardar', 'reglas:eliminar', 'reglas:restaurar',
   'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
-  'responsables:listar', 'responsables:guardar', 'responsables:eliminar',
-  'categorias:listar', 'categorias:guardar', 'categorias:eliminar',
-  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:probar', 'origenes:probarCodigo',
+  'responsables:listar', 'responsables:guardar', 'responsables:eliminar', 'responsables:restaurar',
+  'categorias:listar', 'categorias:guardar', 'categorias:eliminar', 'categorias:restaurar',
+  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:restaurar', 'origenes:probar', 'origenes:probarCodigo',
   'listas:aliasOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
   'automatizacion:obtener', 'automatizacion:guardar', 'automatizacion:eliminar',
   'automatizacion:ejecutarPrueba', 'automatizacion:validarColumna', 'automatizacion:agregarElementosFaltantes',
@@ -204,7 +216,15 @@ export type RespuestaIpc<T> =
   | { ok: true; datos: T }
   | { ok: false; error: string; detalles?: string[] };
 
-/** API expuesta al renderer por el preload (window.api). */
+/**
+ * API expuesta al renderer por el preload (window.api). Devuelve el sobre
+ * `RespuestaIpc` completo (nunca lanza) — quien construye y lanza el `Error`
+ * final es `src/renderer/src/api.ts`, ya en el "main world" de la página.
+ * Necesario porque `contextBridge` clona excepciones lanzadas dentro del
+ * mundo aislado del preload solo con sus propiedades estándar (`message`):
+ * propiedades propias como `detalles` (usada para listar qué bloquea un
+ * borrado) se pierden si el `throw` ocurre del lado del preload.
+ */
 export interface ApiRenderer {
-  invocar<C extends NombreCanal>(canal: C, payload: CanalesIpc[C]['req']): Promise<CanalesIpc[C]['res']>;
+  invocar<C extends NombreCanal>(canal: C, payload: CanalesIpc[C]['req']): Promise<RespuestaIpc<CanalesIpc[C]['res']>>;
 }

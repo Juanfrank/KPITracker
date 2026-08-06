@@ -10,7 +10,7 @@ import type { ValorAtributo } from '@domain/data-types/TypeDescriptor';
 function regla(parcial: Partial<ReglaNegocio> & { condicion: ReglaNegocio['condicion'] }): ReglaNegocio {
   return {
     id: 'r1', nombre: 'Regla', descripcion: '', tipo: 'ValidacionCruzada', entidad: 'Indicador',
-    atributoObjetivoId: null, mensajeError: null, activa: true,
+    atributoObjetivoId: null, mensajeError: null, activa: true, eliminado: false,
     creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial
   };
@@ -34,6 +34,7 @@ function atributo(parcial: Partial<Atributo> & { id: string }): Atributo {
     condicionObligatorio: null,
     filtrable: false,
     activo: true,
+    eliminado: false,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial

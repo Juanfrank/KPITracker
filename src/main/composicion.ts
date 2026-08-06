@@ -7,6 +7,7 @@ import {
   ServicioAtributos, ServicioIndicadores, ServicioListas, ServicioMetas, ServicioReglas
 } from '@application/use-cases/ServicioCatalogos';
 import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalogoGenerico';
+import { referenciasDeCategoria, referenciasDeOrigen, referenciasDeResponsable } from '@application/use-cases/referencias';
 import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodicidades';
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
@@ -42,14 +43,26 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
 
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
   const indicadores = new ServicioIndicadores(ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos);
-  const atributos = new ServicioAtributos(ctx, infra.atributos);
-  const listas = new ServicioListas(ctx, infra.listas, infra.aliasDesagregacionOrigen);
+  const atributos = new ServicioAtributos(ctx, infra.atributos, infra.reglas, infra.automatizaciones, infra.indicadores);
+  const listas = new ServicioListas(
+    ctx, infra.listas, infra.aliasDesagregacionOrigen, infra.atributos, infra.indicadores, infra.automatizaciones
+  );
   const metas = new ServicioMetas(ctx, infra.metas, infra.periodicidades);
   const reglas = new ServicioReglas(ctx, infra.reglas);
   const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
-  const responsables = new ServicioCatalogoGenerico(ctx, infra.responsables, 'Responsable');
-  const categorias = new ServicioCatalogoGenerico(ctx, infra.categorias, 'Categoria');
-  const origenesAutomaticos = new ServicioCatalogoGenerico(ctx, infra.origenesAutomaticos, 'OrigenAutomatico');
+  const responsables = new ServicioCatalogoGenerico(
+    ctx, infra.responsables, 'Responsable', (id) => referenciasDeResponsable({ indicadores: infra.indicadores }, id)
+  );
+  const categorias = new ServicioCatalogoGenerico(
+    ctx, infra.categorias, 'Categoria', (id) => referenciasDeCategoria({ indicadores: infra.indicadores }, id)
+  );
+  const origenesAutomaticos = new ServicioCatalogoGenerico(
+    ctx, infra.origenesAutomaticos, 'OrigenAutomatico',
+    (id) => referenciasDeOrigen(
+      { automatizaciones: infra.automatizaciones, aliasDesagregacionOrigen: infra.aliasDesagregacionOrigen, indicadores: infra.indicadores },
+      id
+    )
+  );
   const recoleccion = new ServicioRecoleccion(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos,
     infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen
@@ -77,15 +90,17 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
       indicadores.reasignarMasivo(ids, { responsable, categoria }),
     'indicadores:importarExcel': ({ filas, mapeo }) => indicadores.importarExcel(filas, mapeo),
 
-    'atributos:listar': (payload) => atributos.listar(payload?.entidad),
+    'atributos:listar': (payload) => atributos.listar(payload?.entidad, payload?.incluirEliminados),
     'atributos:guardar': (atributo) => atributos.guardar(atributo),
     'atributos:eliminar': ({ id }) => atributos.eliminar(id),
+    'atributos:restaurar': ({ id }) => atributos.restaurar(id),
     'atributos:valores': ({ entidadTipo, entidadId }) => atributos.obtenerValores(entidadTipo, entidadId),
     'atributos:guardarValor': (valor) => atributos.guardarValor(valor),
 
-    'listas:listar': () => listas.listar(),
+    'listas:listar': (payload) => listas.listar(payload?.incluirEliminados),
     'listas:guardar': (lista) => listas.guardar(lista),
     'listas:eliminar': ({ id }) => listas.eliminar(id),
+    'listas:restaurar': ({ id }) => listas.restaurar(id),
     'listas:elementos': ({ listaId }) => listas.listarElementos(listaId),
     'listas:guardarElemento': (elemento) => listas.guardarElemento(elemento),
     'listas:eliminarElemento': ({ id }) => listas.eliminarElemento(id),
@@ -94,25 +109,29 @@ export async function componerAplicacion(dataDir: string): Promise<Aplicacion> {
     'metas:guardar': (meta) => metas.guardar(meta),
     'metas:eliminar': ({ id }) => metas.eliminar(id),
 
-    'reglas:listar': (payload) => reglas.listar(payload?.entidad),
+    'reglas:listar': (payload) => reglas.listar(payload?.entidad, payload?.incluirEliminados),
     'reglas:guardar': (regla) => reglas.guardar(regla),
     'reglas:eliminar': ({ id }) => reglas.eliminar(id),
+    'reglas:restaurar': ({ id }) => reglas.restaurar(id),
 
     'periodicidades:listar': () => periodicidades.listar(),
     'periodicidades:guardar': (definicion) => periodicidades.guardar(definicion),
     'periodicidades:eliminar': ({ id }) => periodicidades.eliminar(id),
 
-    'responsables:listar': () => responsables.listar(),
+    'responsables:listar': (payload) => responsables.listar(payload?.incluirEliminados),
     'responsables:guardar': (responsable) => responsables.guardar(responsable),
     'responsables:eliminar': ({ id }) => responsables.eliminar(id),
+    'responsables:restaurar': ({ id }) => responsables.restaurar(id),
 
-    'categorias:listar': () => categorias.listar(),
+    'categorias:listar': (payload) => categorias.listar(payload?.incluirEliminados),
     'categorias:guardar': (categoria) => categorias.guardar(categoria),
     'categorias:eliminar': ({ id }) => categorias.eliminar(id),
+    'categorias:restaurar': ({ id }) => categorias.restaurar(id),
 
-    'origenes:listar': () => origenesAutomaticos.listar(),
+    'origenes:listar': (payload) => origenesAutomaticos.listar(payload?.incluirEliminados),
     'origenes:guardar': (origen) => origenesAutomaticos.guardar(origen),
     'origenes:eliminar': ({ id }) => origenesAutomaticos.eliminar(id),
+    'origenes:restaurar': ({ id }) => origenesAutomaticos.restaurar(id),
     'origenes:probar': (origen) => infra.conectorOrigen.probar(origen),
     'origenes:probarCodigo': async ({ origen, script }) => {
       const r = await infra.conectorOrigen.ejecutar(origen, script);

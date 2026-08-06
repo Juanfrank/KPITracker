@@ -21,7 +21,7 @@ function atributo(id: string, nombre: string): Atributo {
     id, entidad: 'Indicador', nombre, descripcion: '', grupo: 'General', orden: 1,
     visible: true, editable: true, obligatorio: false, valorPorDefecto: null,
     tipoDato: TipoDato.ShortText, listaId: null, validaciones: [],
-    condicionVisibilidad: null, condicionObligatorio: null, filtrable: false, activo: true,
+    condicionVisibilidad: null, condicionObligatorio: null, filtrable: false, activo: true, eliminado: false,
     creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z'
   };
 }

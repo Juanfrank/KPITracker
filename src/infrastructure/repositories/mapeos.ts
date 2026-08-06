@@ -81,6 +81,7 @@ export const aAtributo = (f: Fila): Atributo => ({
   condicionObligatorio: json(f.condicion_obligatorio, null),
   filtrable: b(f.filtrable),
   activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -90,7 +91,7 @@ export const deAtributo = (a: Atributo): unknown[] => [
   a.obligatorio, a.valorPorDefecto, a.tipoDato, a.listaId, JSON.stringify(a.validaciones),
   a.condicionVisibilidad == null ? null : JSON.stringify(a.condicionVisibilidad),
   a.condicionObligatorio == null ? null : JSON.stringify(a.condicionObligatorio),
-  a.filtrable ?? false, a.activo, a.creadoEn, a.actualizadoEn
+  a.filtrable ?? false, a.activo, a.eliminado ?? false, a.creadoEn, a.actualizadoEn
 ];
 
 export const aLista = (f: Fila): Lista => ({
@@ -102,12 +103,14 @@ export const aLista = (f: Fila): Lista => ({
   version: n(f.version),
   orden: n(f.orden),
   jerarquica: b(f.jerarquica),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deLista = (l: Lista): unknown[] => [
-  l.id, l.nombre, l.descripcion, l.prefijo ?? '', l.estado, l.version, l.orden, l.jerarquica, l.creadoEn, l.actualizadoEn
+  l.id, l.nombre, l.descripcion, l.prefijo ?? '', l.estado, l.version, l.orden, l.jerarquica,
+  l.eliminado ?? false, l.creadoEn, l.actualizadoEn
 ];
 
 export const aElemento = (f: Fila): ElementoLista => ({
@@ -153,13 +156,14 @@ export const aRegla = (f: Fila): ReglaNegocio => ({
   condicion: json(f.condicion, { op: 'and', args: [] }),
   mensajeError: sn(f.mensaje_error),
   activa: b(f.activa),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deRegla = (r: ReglaNegocio): unknown[] => [
   r.id, r.nombre, r.descripcion, r.tipo, r.entidad, r.atributoObjetivoId,
-  JSON.stringify(r.condicion), r.mensajeError, r.activa, r.creadoEn, r.actualizadoEn
+  JSON.stringify(r.condicion), r.mensajeError, r.activa, r.eliminado ?? false, r.creadoEn, r.actualizadoEn
 ];
 
 export const aResultado = (f: Fila): Resultado => ({
@@ -216,12 +220,13 @@ export const aResponsable = (f: Fila): Responsable => ({
   nombre: s(f.nombre),
   correo: sn(f.correo),
   activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deResponsable = (r: Responsable): unknown[] => [
-  r.id, r.nombre, r.correo, r.activo, r.creadoEn, r.actualizadoEn
+  r.id, r.nombre, r.correo, r.activo, r.eliminado ?? false, r.creadoEn, r.actualizadoEn
 ];
 
 export const aCategoria = (f: Fila): Categoria => ({
@@ -229,12 +234,13 @@ export const aCategoria = (f: Fila): Categoria => ({
   nombre: s(f.nombre),
   descripcion: s(f.descripcion),
   activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deCategoria = (c: Categoria): unknown[] => [
-  c.id, c.nombre, c.descripcion, c.activo, c.creadoEn, c.actualizadoEn
+  c.id, c.nombre, c.descripcion, c.activo, c.eliminado ?? false, c.creadoEn, c.actualizadoEn
 ];
 
 export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
@@ -245,13 +251,14 @@ export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
   configuracion: json<Record<string, string>>(f.configuracion, {}),
   parametrosGenerales: json<ParametroGeneral[]>(f.parametros_generales, []),
   activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deOrigenAutomatico = (o: OrigenAutomatico): unknown[] => [
   o.id, o.nombre, o.tipo, o.descripcion, JSON.stringify(o.configuracion),
-  JSON.stringify(o.parametrosGenerales ?? []), o.activo, o.creadoEn, o.actualizadoEn
+  JSON.stringify(o.parametrosGenerales ?? []), o.activo, o.eliminado ?? false, o.creadoEn, o.actualizadoEn
 ];
 
 export const aAutomatizacionIndicador = (f: Fila): AutomatizacionIndicador => ({

@@ -31,6 +31,26 @@ abstract class RepositorioBase {
   ) {}
 }
 
+/**
+ * Filtro NULL-safe para excluir ítems con borrado lógico: `eliminado` es una
+ * columna agregada vía `ALTER TABLE ADD COLUMN` (sin `NOT NULL`, DuckDB no lo
+ * permite ahí), así que filas preexistentes a la migración pueden tenerla en
+ * NULL — deben tratarse como "no eliminado".
+ */
+const FILTRO_NO_ELIMINADO = '(eliminado = false OR eliminado IS NULL)';
+
+function aValorAtributoEntidad(f: Record<string, unknown>): ValorAtributoEntidad {
+  return {
+    atributoId: String(f.atributo_id),
+    entidadTipo: String(f.entidad_tipo),
+    entidadId: String(f.entidad_id),
+    valorTexto: f.valor_texto == null ? null : String(f.valor_texto),
+    valorNumero: f.valor_numero == null ? null : Number(f.valor_numero),
+    valorFecha: f.valor_fecha == null ? null : String(f.valor_fecha),
+    valorBooleano: f.valor_booleano == null ? null : Boolean(f.valor_booleano)
+  };
+}
+
 export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndicadorRepository {
   async listar(): Promise<Indicador[]> {
     return (await this.db.all('SELECT * FROM indicadores ORDER BY nombre')).map(aIndicador);
@@ -73,10 +93,14 @@ export class IndicadorRepositoryDuckDb extends RepositorioBase implements IIndic
 }
 
 export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtributoRepository {
-  async listar(entidad?: string): Promise<Atributo[]> {
+  async listar(entidad?: string, incluirEliminados = false): Promise<Atributo[]> {
+    const filtroEliminado = incluirEliminados ? 'TRUE' : FILTRO_NO_ELIMINADO;
     const filas = entidad
-      ? await this.db.all('SELECT * FROM atributos WHERE entidad = ? ORDER BY grupo, orden', [entidad])
-      : await this.db.all('SELECT * FROM atributos ORDER BY grupo, orden');
+      ? await this.db.all(
+          `SELECT * FROM atributos WHERE entidad = ? AND ${filtroEliminado} ORDER BY grupo, orden`,
+          [entidad]
+        )
+      : await this.db.all(`SELECT * FROM atributos WHERE ${filtroEliminado} ORDER BY grupo, orden`);
     return filas.map(aAtributo);
   }
 
@@ -92,20 +116,21 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
       `INSERT OR REPLACE INTO atributos (
          id, entidad, nombre, descripcion, grupo, orden, visible, editable, obligatorio, valor_por_defecto,
          tipo_dato, lista_id, validaciones, condicion_visibilidad, condicion_obligatorio, filtrable, activo,
-         creado_en, actualizado_en
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         eliminado, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deAtributo(atributo)
     );
     this.sync.marcarSucia('atributos');
   }
 
-  async eliminar(id: string): Promise<void> {
-    await this.db.transaccion([
-      { sql: 'DELETE FROM atributos WHERE id = ?', valores: [id] },
-      { sql: 'DELETE FROM valores_atributos WHERE atributo_id = ?', valores: [id] }
-    ]);
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    // Sin cascada: los valores capturados (`valores_atributos`) se conservan
+    // intactos para poder restaurar el atributo sin perder datos históricos.
+    await this.db.run(
+      'UPDATE atributos SET eliminado = ?, activo = ?, actualizado_en = ? WHERE id = ?',
+      [eliminado, !eliminado, new Date().toISOString(), id]
+    );
     this.sync.marcarSucia('atributos');
-    this.sync.marcarSucia('valores_atributos');
   }
 
   async obtenerValores(entidadTipo: string, entidadId: string): Promise<ValorAtributoEntidad[]> {
@@ -113,15 +138,12 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
       'SELECT * FROM valores_atributos WHERE entidad_tipo = ? AND entidad_id = ?',
       [entidadTipo, entidadId]
     );
-    return filas.map((f) => ({
-      atributoId: String(f.atributo_id),
-      entidadTipo: String(f.entidad_tipo),
-      entidadId: String(f.entidad_id),
-      valorTexto: f.valor_texto == null ? null : String(f.valor_texto),
-      valorNumero: f.valor_numero == null ? null : Number(f.valor_numero),
-      valorFecha: f.valor_fecha == null ? null : String(f.valor_fecha),
-      valorBooleano: f.valor_booleano == null ? null : Boolean(f.valor_booleano)
-    }));
+    return filas.map(aValorAtributoEntidad);
+  }
+
+  async listarEntidadesConValor(atributoId: string): Promise<ValorAtributoEntidad[]> {
+    const filas = await this.db.all('SELECT * FROM valores_atributos WHERE atributo_id = ?', [atributoId]);
+    return filas.map(aValorAtributoEntidad);
   }
 
   async guardarValor(valor: ValorAtributoEntidad): Promise<void> {
@@ -136,8 +158,9 @@ export class AtributoRepositoryDuckDb extends RepositorioBase implements IAtribu
 }
 
 export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepository {
-  async listar(): Promise<Lista[]> {
-    return (await this.db.all('SELECT * FROM listas ORDER BY orden, nombre')).map(aLista);
+  async listar(incluirEliminados = false): Promise<Lista[]> {
+    const filtroEliminado = incluirEliminados ? 'TRUE' : FILTRO_NO_ELIMINADO;
+    return (await this.db.all(`SELECT * FROM listas WHERE ${filtroEliminado} ORDER BY orden, nombre`)).map(aLista);
   }
 
   async obtener(id: string): Promise<Lista | null> {
@@ -148,20 +171,21 @@ export class ListaRepositoryDuckDb extends RepositorioBase implements IListaRepo
   async guardar(lista: Lista): Promise<void> {
     // Columnas explícitas: `listas` tuvo una migración aditiva (`prefijo`).
     await this.db.run(
-      `INSERT OR REPLACE INTO listas (id, nombre, descripcion, prefijo, estado, version, orden, jerarquica, creado_en, actualizado_en)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO listas (id, nombre, descripcion, prefijo, estado, version, orden, jerarquica, eliminado, creado_en, actualizado_en)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deLista(lista)
     );
     this.sync.marcarSucia('listas');
   }
 
-  async eliminar(id: string): Promise<void> {
-    await this.db.transaccion([
-      { sql: 'DELETE FROM listas WHERE id = ?', valores: [id] },
-      { sql: 'DELETE FROM elementos_lista WHERE lista_id = ?', valores: [id] }
-    ]);
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    // Sin cascada: los elementos de la lista se conservan intactos para
+    // poder restaurar la lista sin perder datos.
+    await this.db.run(
+      'UPDATE listas SET eliminado = ?, estado = ?, actualizado_en = ? WHERE id = ?',
+      [eliminado, eliminado ? 'Inactiva' : 'Activa', new Date().toISOString(), id]
+    );
     this.sync.marcarSucia('listas');
-    this.sync.marcarSucia('elementos_lista');
   }
 
   async listarElementos(listaId: string): Promise<ElementoLista[]> {
@@ -209,25 +233,37 @@ export class MetaRepositoryDuckDb extends RepositorioBase implements IMetaReposi
 }
 
 export class ReglaRepositoryDuckDb extends RepositorioBase implements IReglaRepository {
-  async listar(entidad?: string): Promise<ReglaNegocio[]> {
+  async listar(entidad?: string, incluirEliminados = false): Promise<ReglaNegocio[]> {
+    const filtroEliminado = incluirEliminados ? 'TRUE' : FILTRO_NO_ELIMINADO;
     const filas = entidad
-      ? await this.db.all('SELECT * FROM reglas WHERE entidad = ? ORDER BY nombre', [entidad])
-      : await this.db.all('SELECT * FROM reglas ORDER BY nombre');
+      ? await this.db.all(
+          `SELECT * FROM reglas WHERE entidad = ? AND ${filtroEliminado} ORDER BY nombre`,
+          [entidad]
+        )
+      : await this.db.all(`SELECT * FROM reglas WHERE ${filtroEliminado} ORDER BY nombre`);
     return filas.map(aRegla);
+  }
+
+  async obtener(id: string): Promise<ReglaNegocio | null> {
+    const fila = await this.db.uno('SELECT * FROM reglas WHERE id = ?', [id]);
+    return fila ? aRegla(fila) : null;
   }
 
   async guardar(regla: ReglaNegocio): Promise<void> {
     await this.db.run(
       `INSERT OR REPLACE INTO reglas (
-         id, nombre, descripcion, tipo, entidad, atributo_objetivo_id, condicion, mensaje_error, activa, creado_en, actualizado_en
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         id, nombre, descripcion, tipo, entidad, atributo_objetivo_id, condicion, mensaje_error, activa, eliminado, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       deRegla(regla)
     );
     this.sync.marcarSucia('reglas');
   }
 
-  async eliminar(id: string): Promise<void> {
-    await this.db.run('DELETE FROM reglas WHERE id = ?', [id]);
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    await this.db.run(
+      'UPDATE reglas SET eliminado = ?, activa = ?, actualizado_en = ? WHERE id = ?',
+      [eliminado, !eliminado, new Date().toISOString(), id]
+    );
     this.sync.marcarSucia('reglas');
   }
 }
@@ -411,13 +447,24 @@ export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends
      * la tabla recibió columnas nuevas vía ALTER TABLE ADD COLUMN (quedan al
      * final físicamente, sin importar dónde aparezcan en esquema.ts).
      */
-    private readonly columnas: string[]
+    private readonly columnas: string[],
+    /**
+     * `true` para tablas que tienen la columna `eliminado` (borrado lógico
+     * bloqueado por uso, ver Batch M): `responsables`, `categorias`,
+     * `origenes_automaticos`. `periodicidades_personalizadas` queda en
+     * `false` (sigue con hard-delete vía `eliminar`).
+     */
+    private readonly soportaEliminado: boolean = false
   ) {
     super(db, sync);
   }
 
-  async listar(): Promise<T[]> {
-    return (await this.db.all(`SELECT * FROM ${this.tabla} ORDER BY nombre`)).map(this.aEntidad);
+  async listar(incluirEliminados = false): Promise<T[]> {
+    if (!this.soportaEliminado) {
+      return (await this.db.all(`SELECT * FROM ${this.tabla} ORDER BY nombre`)).map(this.aEntidad);
+    }
+    const filtroEliminado = incluirEliminados ? 'TRUE' : FILTRO_NO_ELIMINADO;
+    return (await this.db.all(`SELECT * FROM ${this.tabla} WHERE ${filtroEliminado} ORDER BY nombre`)).map(this.aEntidad);
   }
 
   async obtener(id: string): Promise<T | null> {
@@ -432,8 +479,20 @@ export class CatalogoRepositoryDuckDb<T extends { readonly id: string }> extends
     this.sync.marcarSucia(this.tabla);
   }
 
+  /** Hard-delete: solo lo usa `periodicidades_personalizadas` (`soportaEliminado: false`). */
   async eliminar(id: string): Promise<void> {
     await this.db.run(`DELETE FROM ${this.tabla} WHERE id = ?`, [id]);
+    this.sync.marcarSucia(this.tabla);
+  }
+
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    if (!this.soportaEliminado) {
+      throw new Error(`La tabla "${this.tabla}" no soporta borrado lógico.`);
+    }
+    await this.db.run(
+      `UPDATE ${this.tabla} SET eliminado = ?, activo = ?, actualizado_en = ? WHERE id = ?`,
+      [eliminado, !eliminado, new Date().toISOString(), id]
+    );
     this.sync.marcarSucia(this.tabla);
   }
 }
@@ -473,6 +532,10 @@ export class AutomatizacionIndicadorRepositoryDuckDb extends RepositorioBase imp
     return fila ? aAutomatizacionIndicador(fila) : null;
   }
 
+  async listarTodas(): Promise<AutomatizacionIndicador[]> {
+    return (await this.db.all('SELECT * FROM automatizaciones_indicador ORDER BY indicador_id')).map(aAutomatizacionIndicador);
+  }
+
   async guardar(config: AutomatizacionIndicador): Promise<void> {
     await this.db.run(
       `INSERT INTO automatizaciones_indicador (
@@ -510,6 +573,10 @@ export class AliasDesagregacionOrigenRepositoryDuckDb extends RepositorioBase im
       [origenAutomaticoId]
     );
     return filas.map(aAliasDesagregacionOrigen);
+  }
+
+  async listarTodos(): Promise<AliasDesagregacionOrigen[]> {
+    return (await this.db.all('SELECT * FROM alias_desagregacion_origen ORDER BY alias')).map(aAliasDesagregacionOrigen);
   }
 
   async obtener(listaId: string, origenAutomaticoId: string): Promise<AliasDesagregacionOrigen | null> {
@@ -552,6 +619,7 @@ export function crearRepositorioOrigenesAutomaticos(
 ): CatalogoRepositoryDuckDb<OrigenAutomatico> {
   return new CatalogoRepositoryDuckDb(
     db, sync, 'origenes_automaticos', aOrigenAutomatico, deOrigenAutomatico,
-    ['id', 'nombre', 'tipo', 'descripcion', 'configuracion', 'parametros_generales', 'activo', 'creado_en', 'actualizado_en']
+    ['id', 'nombre', 'tipo', 'descripcion', 'configuracion', 'parametros_generales', 'activo', 'eliminado', 'creado_en', 'actualizado_en'],
+    true
   );
 }

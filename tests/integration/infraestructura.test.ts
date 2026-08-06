@@ -45,6 +45,7 @@ function lista(id: string): Lista {
     version: 1,
     orden: 1,
     jerarquica: false,
+    eliminado: false,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z'
   };

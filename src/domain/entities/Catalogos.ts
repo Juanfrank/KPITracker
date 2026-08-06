@@ -4,6 +4,8 @@ export interface Responsable {
   nombre: string;
   correo: string | null;
   activo: boolean;
+  /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `activo`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }
@@ -14,6 +16,8 @@ export interface Categoria {
   nombre: string;
   descripcion: string;
   activo: boolean;
+  /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `activo`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

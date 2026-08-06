@@ -11,6 +11,8 @@ export interface Lista {
   orden: number;
   /** true cuando la lista es jerárquica (elementos con padre). */
   jerarquica: boolean;
+  /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `estado`, que el usuario alterna manualmente. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

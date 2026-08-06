@@ -2,16 +2,18 @@ import type {
   AliasDesagregacionOrigen, Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
 } from '@domain/index';
 import {
-  EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos, construirContextoIndicador,
-  signosAgrupacionBalanceados
+  EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
+  construirContextoIndicador, signosAgrupacionBalanceados
 } from '@domain/index';
 import type {
-  IAliasDesagregacionOrigenRepository, IAtributoRepository, IDefinicionPeriodicidadRepository,
-  IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository, ValorAtributoEntidad
+  IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository,
+  IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository,
+  ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { mapaValoresDesdeEntidad } from './valoresEav';
+import { referenciasDeAtributo, referenciasDeLista, referenciasDeRegla } from './referencias';
 
 /** Mapeo de campos de Indicador -> nombre de columna del archivo importado (undefined = no mapeado). */
 export interface MapeoImportacionIndicadores {
@@ -254,13 +256,16 @@ export class ServicioIndicadores extends ServicioBase {
 export class ServicioAtributos extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
-    private readonly repo: IAtributoRepository
+    private readonly repo: IAtributoRepository,
+    private readonly reglasRepo: IReglaRepository,
+    private readonly automatizacionesRepo: IAutomatizacionIndicadorRepository,
+    private readonly indicadoresRepo: IIndicadorRepository
   ) {
     super(ctx);
   }
 
-  listar(entidad?: string): Promise<Atributo[]> {
-    return this.repo.listar(entidad);
+  listar(entidad?: string, incluirEliminados = false): Promise<Atributo[]> {
+    return this.repo.listar(entidad, incluirEliminados);
   }
 
   async guardar(atributo: Atributo): Promise<Atributo> {
@@ -277,8 +282,24 @@ export class ServicioAtributos extends ServicioBase {
   }
 
   async eliminar(id: string): Promise<void> {
-    await this.repo.eliminar(id);
-    await this.auditar('Eliminar', 'Atributo', id);
+    const atributo = await this.repo.obtener(id);
+    if (!atributo) throw new EntidadNoEncontradaError('Atributo', id);
+    const referencias = await referenciasDeAtributo(
+      { reglas: this.reglasRepo, automatizaciones: this.automatizacionesRepo, atributos: this.repo, indicadores: this.indicadoresRepo },
+      id
+    );
+    if (referencias.length > 0) {
+      throw new ValidacionError(`No se puede eliminar "${atributo.nombre}": está en uso.`, referencias);
+    }
+    await this.repo.marcarEliminado(id, true);
+    await this.auditar('Eliminar', 'Atributo', id, null, null, atributo.nombre);
+  }
+
+  async restaurar(id: string): Promise<void> {
+    const atributo = await this.repo.obtener(id);
+    if (!atributo) throw new EntidadNoEncontradaError('Atributo', id);
+    await this.repo.marcarEliminado(id, false);
+    await this.auditar('Restaurar', 'Atributo', id, null, null, atributo.nombre);
   }
 
   obtenerValores(entidadTipo: string, entidadId: string): Promise<ValorAtributoEntidad[]> {
@@ -298,13 +319,16 @@ export class ServicioListas extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
     private readonly repo: IListaRepository,
-    private readonly aliasRepo: IAliasDesagregacionOrigenRepository
+    private readonly aliasRepo: IAliasDesagregacionOrigenRepository,
+    private readonly atributosRepo: IAtributoRepository,
+    private readonly indicadoresRepo: IIndicadorRepository,
+    private readonly automatizacionesRepo: IAutomatizacionIndicadorRepository
   ) {
     super(ctx);
   }
 
-  listar(): Promise<Lista[]> {
-    return this.repo.listar();
+  listar(incluirEliminados = false): Promise<Lista[]> {
+    return this.repo.listar(incluirEliminados);
   }
 
   async guardar(lista: Lista): Promise<Lista> {
@@ -329,8 +353,29 @@ export class ServicioListas extends ServicioBase {
   }
 
   async eliminar(id: string): Promise<void> {
-    await this.repo.eliminar(id);
-    await this.auditar('Eliminar', 'Lista', id);
+    const lista = await this.repo.obtener(id);
+    if (!lista) throw new EntidadNoEncontradaError('Lista', id);
+    const referencias = await referenciasDeLista(
+      {
+        indicadores: this.indicadoresRepo,
+        atributos: this.atributosRepo,
+        aliasDesagregacionOrigen: this.aliasRepo,
+        automatizaciones: this.automatizacionesRepo
+      },
+      id
+    );
+    if (referencias.length > 0) {
+      throw new ValidacionError(`No se puede eliminar "${lista.nombre}": está en uso.`, referencias);
+    }
+    await this.repo.marcarEliminado(id, true);
+    await this.auditar('Eliminar', 'Lista', id, null, null, lista.nombre);
+  }
+
+  async restaurar(id: string): Promise<void> {
+    const lista = await this.repo.obtener(id);
+    if (!lista) throw new EntidadNoEncontradaError('Lista', id);
+    await this.repo.marcarEliminado(id, false);
+    await this.auditar('Restaurar', 'Lista', id, null, null, lista.nombre);
   }
 
   listarElementos(listaId: string): Promise<ElementoLista[]> {
@@ -426,8 +471,8 @@ export class ServicioReglas extends ServicioBase {
     super(ctx);
   }
 
-  listar(entidad?: string): Promise<ReglaNegocio[]> {
-    return this.repo.listar(entidad);
+  listar(entidad?: string, incluirEliminados = false): Promise<ReglaNegocio[]> {
+    return this.repo.listar(entidad, incluirEliminados);
   }
 
   async guardar(regla: ReglaNegocio): Promise<ReglaNegocio> {
@@ -445,7 +490,20 @@ export class ServicioReglas extends ServicioBase {
   }
 
   async eliminar(id: string): Promise<void> {
-    await this.repo.eliminar(id);
-    await this.auditar('Eliminar', 'ReglaNegocio', id);
+    const regla = await this.repo.obtener(id);
+    if (!regla) throw new EntidadNoEncontradaError('ReglaNegocio', id);
+    const referencias = await referenciasDeRegla();
+    if (referencias.length > 0) {
+      throw new ValidacionError(`No se puede eliminar "${regla.nombre}": está en uso.`, referencias);
+    }
+    await this.repo.marcarEliminado(id, true);
+    await this.auditar('Eliminar', 'ReglaNegocio', id, null, null, regla.nombre);
+  }
+
+  async restaurar(id: string): Promise<void> {
+    const regla = await this.repo.obtener(id);
+    if (!regla) throw new EntidadNoEncontradaError('ReglaNegocio', id);
+    await this.repo.marcarEliminado(id, false);
+    await this.auditar('Restaurar', 'ReglaNegocio', id, null, null, regla.nombre);
   }
 }
