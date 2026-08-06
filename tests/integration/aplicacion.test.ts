@@ -908,3 +908,51 @@ describe('Composition root — XMLA con autenticación OAuth2 (Client Credential
     }
   });
 });
+
+describe('Composition root — XMLA envía el SOAPAction correcto por operación', () => {
+  it('"origenes:probar" (Discover) y "origenes:probarCodigo" (Execute) usan cada uno su propio SOAPAction', async () => {
+    const soapActionsRecibidas: string[] = [];
+    const servidor = createServer((req, res) => {
+      soapActionsRecibidas.push(req.headers.soapaction as string);
+      res.setHeader('Content-Type', 'text/xml; charset=utf-8');
+      if (req.url === '/xmla-discover') {
+        res.end('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><DiscoverResponse/></soap:Body></soap:Envelope>');
+        return;
+      }
+      // Respuesta Execute mínima con un dataset de 2 ejes (1 columna, 1 fila) para no fallar al aplanar.
+      res.end(`<?xml version="1.0"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body><ExecuteResponse><return><root>
+            <Axes>
+              <Axis name="Axis0"><Tuples><Tuple><Member Hierarchy="[Measures]"><Caption>Total</Caption></Member></Tuple></Tuples></Axis>
+              <Axis name="Axis1"><Tuples><Tuple><Member Hierarchy="[Dim]"><Caption>Fila1</Caption></Member></Tuple></Tuples></Axis>
+            </Axes>
+            <CellData><Cell CellOrdinal="0"><Value>42</Value></Cell></CellData>
+          </root></return></ExecuteResponse></soap:Body>
+        </soap:Envelope>`);
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const origenBase = {
+        id: 'origen-xmla-soapaction', nombre: 'XMLA soapaction', tipo: 'XMLA' as const, descripcion: '',
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      };
+      await app.manejadores['origenes:probar']({
+        ...origenBase, configuracion: { servidor: `http://127.0.0.1:${puerto}/xmla-discover` }
+      });
+      await app.manejadores['origenes:probarCodigo']({
+        origen: { ...origenBase, configuracion: { servidor: `http://127.0.0.1:${puerto}/xmla-execute` } },
+        script: 'SELECT {[Measures].[Total]} ON 0, {[Dim].[Fila1]} ON 1 FROM [Modelo]'
+      });
+
+      expect(soapActionsRecibidas).toHaveLength(2);
+      expect(soapActionsRecibidas[0]).toBe('"urn:schemas-microsoft-com:xml-analysis:Discover"');
+      expect(soapActionsRecibidas[1]).toBe('"urn:schemas-microsoft-com:xml-analysis:Execute"');
+    } finally {
+      servidor.close();
+    }
+  });
+});

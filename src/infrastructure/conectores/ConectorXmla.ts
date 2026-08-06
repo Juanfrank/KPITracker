@@ -152,12 +152,22 @@ export function normalizarEndpointXmla(servidor: string): string {
   return /^powerbi:\/\//i.test(servidor) ? servidor.replace(/^powerbi:\/\//i, 'https://') : servidor;
 }
 
-async function enviarSoap(origen: OrigenAutomatico, sobreXml: string, guardarOrigen?: GuardarOrigen): Promise<string> {
+async function enviarSoap(
+  origen: OrigenAutomatico,
+  sobreXml: string,
+  accion: 'Discover' | 'Execute',
+  guardarOrigen?: GuardarOrigen
+): Promise<string> {
   const endpoint = normalizarEndpointXmla(origen.configuracion.servidor ?? '');
   const auth = await cabeceraAutenticacion(origen, guardarOrigen);
   const cabeceras: Record<string, string> = {
     'Content-Type': 'text/xml; charset=utf-8',
-    SOAPAction: `"${NS_XMLA}:Execute"`,
+    // Debe identificar la operación real del sobre SOAP (Discover vs Execute):
+    // el gateway XMLA de Power BI la usa para enrutar la petición, a
+    // diferencia de un listener SSAS on-prem típico que es más laxo y la
+    // ignora — un valor incorrecto aquí puede fallar como 404 en Power BI
+    // aunque el cuerpo del sobre esté bien formado.
+    SOAPAction: `"${NS_XMLA}:${accion}"`,
     'Content-Length': String(Buffer.byteLength(sobreXml)),
     ...auth
   };
@@ -207,7 +217,7 @@ export class ConectorXmla implements Pick<IConectorOrigen, 'probar' | 'ejecutar'
   async probar(origen: OrigenAutomatico): Promise<ResultadoPrueba> {
     if (!origen.configuracion.servidor) return { ok: false, mensaje: 'Falta la URL del servidor XMLA.' };
     try {
-      const respuesta = await enviarSoap(origen, SOBRE_DISCOVER, this.guardarOrigen);
+      const respuesta = await enviarSoap(origen, SOBRE_DISCOVER, 'Discover', this.guardarOrigen);
       if (/soap:Fault|<Fault/i.test(respuesta)) return { ok: false, mensaje: textoFalla(respuesta) };
       return { ok: true, mensaje: 'Conexión XMLA exitosa (DISCOVER_DATASOURCES).' };
     } catch (error) {
@@ -216,7 +226,7 @@ export class ConectorXmla implements Pick<IConectorOrigen, 'probar' | 'ejecutar'
   }
 
   async ejecutar(origen: OrigenAutomatico, script: string): Promise<ResultadoTabular> {
-    const respuesta = await enviarSoap(origen, sobreExecute(origen.configuracion.catalogo, script), this.guardarOrigen);
+    const respuesta = await enviarSoap(origen, sobreExecute(origen.configuracion.catalogo, script), 'Execute', this.guardarOrigen);
     if (/soap:Fault|<Fault/i.test(respuesta)) throw new Error(textoFalla(respuesta));
     return this.aplanar(respuesta);
   }
