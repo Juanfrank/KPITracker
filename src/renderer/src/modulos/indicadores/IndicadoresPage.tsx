@@ -93,6 +93,10 @@ export function IndicadoresPage(): React.JSX.Element {
   const [editando, setEditando] = useState<Indicador | null>(null);
   const [valoresAttr, setValoresAttr] = useState<Map<string, string>>(new Map());
   const [metas, setMetas] = useState<Meta[]>([]);
+  // Metas capturadas mientras el indicador todavía no existe (sin id) — no hay a qué "indicadorId"
+  // persistirlas todavía, así que viven solo en el renderer hasta que `guardar()` resuelve el id real,
+  // mismo patrón que `valoresAttr` para los atributos dinámicos.
+  const [metasPendientes, setMetasPendientes] = useState<Meta[]>([]);
   const [errores, setErrores] = useState<string[]>([]);
   const [filtro, setFiltro] = useState('');
   const [anioInicial, setAnioInicial] = useState<number>(new Date().getFullYear());
@@ -147,20 +151,32 @@ export function IndicadoresPage(): React.JSX.Element {
       }
       setValoresAttr(mapa);
       setMetas(metasIndicador);
+      setMetasPendientes([]);
     } else {
       setValoresAttr(new Map());
       setMetas([]);
+      setMetasPendientes([]);
     }
   };
 
   const guardar = async (): Promise<void> => {
     if (!editando) return;
+    const esNuevo = !editando.id;
     const valores = atributos
       .filter((a) => valoresAttr.has(a.id))
       .map((a) => construirValorEntidad(a, valoresAttr.get(a.id) ?? '', editando.id));
     try {
-      await invocar('indicadores:guardar', { indicador: editando, valores });
+      const guardado = await invocar('indicadores:guardar', { indicador: editando, valores });
+      if (esNuevo && metasPendientes.length > 0) {
+        // Recién ahora existe un indicadorId real: se persisten las metas capturadas
+        // localmente durante la creación, una por una, igual que si se hubieran
+        // agregado tras guardar y reabrir el indicador para editarlo.
+        for (const m of metasPendientes) {
+          await invocar('metas:guardar', { ...m, indicadorId: guardado.id });
+        }
+      }
       setEditando(null);
+      setMetasPendientes([]);
       await cargar();
     } catch (error) {
       const e = error as Error & { detalles?: string[] };
@@ -168,26 +184,46 @@ export function IndicadoresPage(): React.JSX.Element {
     }
   };
 
-  const agregarMeta = async (): Promise<void> => {
-    if (!editando?.id) return;
-    const nueva = await invocar('metas:guardar', {
-      id: '',
-      indicadorId: editando.id,
+  function metaVacia(indicador: Indicador): Meta {
+    return {
+      id: crypto.randomUUID(),
+      indicadorId: indicador.id,
       claveDesagregacion: 'GENERAL',
-      valor: editando.metaGlobal ?? 0,
-      periodicidadMedicion: editando.periodicidad,
-      periodicidadPersonalizadaId: editando.periodicidad === Periodicidad.Personalizada ? editando.periodicidadPersonalizadaId : null,
+      valor: indicador.metaGlobal ?? 0,
+      periodicidadMedicion: indicador.periodicidad,
+      periodicidadPersonalizadaId: indicador.periodicidad === Periodicidad.Personalizada ? indicador.periodicidadPersonalizadaId : null,
       metodoCalculo: 'Promedio',
       anioVigencia: new Date().getFullYear(),
       creadoEn: '',
       actualizadoEn: ''
-    });
+    };
+  }
+
+  const agregarMeta = async (): Promise<void> => {
+    if (!editando) return;
+    if (!editando.id) {
+      setMetasPendientes([...metasPendientes, metaVacia(editando)]);
+      return;
+    }
+    const nueva = await invocar('metas:guardar', { ...metaVacia(editando), id: '' });
     setMetas([...metas, nueva]);
   };
 
   const actualizarMeta = async (meta: Meta): Promise<void> => {
+    if (!editando?.id) {
+      setMetasPendientes((previas) => previas.map((m) => (m.id === meta.id ? meta : m)));
+      return;
+    }
     await invocar('metas:guardar', meta);
     setMetas((previas) => previas.map((m) => (m.id === meta.id ? meta : m)));
+  };
+
+  const eliminarMeta = (meta: Meta): void => {
+    if (!editando?.id) {
+      setMetasPendientes((previas) => previas.filter((m) => m.id !== meta.id));
+      return;
+    }
+    void invocar('metas:eliminar', { id: meta.id }).then(() => setMetas((prev) => prev.filter((x) => x.id !== meta.id)));
   };
 
   const filtrados = indicadores.filter((i) =>
@@ -519,79 +555,76 @@ export function IndicadoresPage(): React.JSX.Element {
             </>
           )}
 
-          {editando.id && (
-            <>
-              <div className="toolbar" style={{ marginTop: 8 }}>
-                <h4 style={{ margin: 0 }}>Metas</h4>
-                <div className="separador" />
-                <button className="boton" onClick={() => void agregarMeta()}>
-                  <Icono nombre="mas" tamano={14} /> Meta
+          <>
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <h4 style={{ margin: 0 }}>Metas</h4>
+              <div className="separador" />
+              <button className="boton" onClick={() => void agregarMeta()} data-testid="agregar-meta">
+                <Icono nombre="mas" tamano={14} /> Meta
+              </button>
+            </div>
+            {!editando.id && (
+              <p className="texto-suave" style={{ margin: 0 }}>
+                Se guardarán junto con el indicador al hacer clic en "Guardar".
+              </p>
+            )}
+            {(editando.id ? metas : metasPendientes).map((m) => (
+              <div key={m.id} className="tarjeta" style={{ padding: 12, display: 'grid', gap: 8 }}>
+                <div className="fila-form c3">
+                  <Campo etiqueta="Valor">
+                    <input type="number" value={m.valor} onChange={(e) => void actualizarMeta({ ...m, valor: Number(e.target.value) })} />
+                  </Campo>
+                  <Campo etiqueta="Año">
+                    <input type="number" value={m.anioVigencia} onChange={(e) => void actualizarMeta({ ...m, anioVigencia: Number(e.target.value) })} />
+                  </Campo>
+                  <Campo etiqueta="Método">
+                    <select value={m.metodoCalculo} onChange={(e) => void actualizarMeta({ ...m, metodoCalculo: e.target.value as Meta['metodoCalculo'] })}>
+                      {METODOS_CALCULO.map((mc) => <option key={mc} value={mc}>{mc}</option>)}
+                    </select>
+                  </Campo>
+                </div>
+                <div className="fila-form c2">
+                  <Campo etiqueta="Periodicidad de medición">
+                    <select
+                      value={m.periodicidadMedicion}
+                      onChange={(e) => {
+                        const periodicidadMedicion = e.target.value as Periodicidad;
+                        void actualizarMeta({
+                          ...m,
+                          periodicidadMedicion,
+                          periodicidadPersonalizadaId: periodicidadMedicion === Periodicidad.Personalizada ? m.periodicidadPersonalizadaId : null
+                        });
+                      }}
+                    >
+                      {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </Campo>
+                  <Campo etiqueta="Desagregación (clave)">
+                    <input
+                      type="text"
+                      value={m.claveDesagregacion}
+                      placeholder="GENERAL o lista=codigo|…"
+                      onChange={(e) => void actualizarMeta({ ...m, claveDesagregacion: e.target.value || 'GENERAL' })}
+                    />
+                  </Campo>
+                </div>
+                {m.periodicidadMedicion === Periodicidad.Personalizada && (
+                  <Campo etiqueta="Definición de periodicidad personalizada">
+                    <select
+                      value={m.periodicidadPersonalizadaId ?? ''}
+                      onChange={(e) => void actualizarMeta({ ...m, periodicidadPersonalizadaId: e.target.value || null })}
+                    >
+                      <option value="">— seleccionar —</option>
+                      {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                    </select>
+                  </Campo>
+                )}
+                <button className="boton peligro" style={{ justifySelf: 'start' }} onClick={() => eliminarMeta(m)}>
+                  Eliminar meta
                 </button>
               </div>
-              {metas.map((m) => (
-                <div key={m.id} className="tarjeta" style={{ padding: 12, display: 'grid', gap: 8 }}>
-                  <div className="fila-form c3">
-                    <Campo etiqueta="Valor">
-                      <input type="number" value={m.valor} onChange={(e) => void actualizarMeta({ ...m, valor: Number(e.target.value) })} />
-                    </Campo>
-                    <Campo etiqueta="Año">
-                      <input type="number" value={m.anioVigencia} onChange={(e) => void actualizarMeta({ ...m, anioVigencia: Number(e.target.value) })} />
-                    </Campo>
-                    <Campo etiqueta="Método">
-                      <select value={m.metodoCalculo} onChange={(e) => void actualizarMeta({ ...m, metodoCalculo: e.target.value as Meta['metodoCalculo'] })}>
-                        {METODOS_CALCULO.map((mc) => <option key={mc} value={mc}>{mc}</option>)}
-                      </select>
-                    </Campo>
-                  </div>
-                  <div className="fila-form c2">
-                    <Campo etiqueta="Periodicidad de medición">
-                      <select
-                        value={m.periodicidadMedicion}
-                        onChange={(e) => {
-                          const periodicidadMedicion = e.target.value as Periodicidad;
-                          void actualizarMeta({
-                            ...m,
-                            periodicidadMedicion,
-                            periodicidadPersonalizadaId: periodicidadMedicion === Periodicidad.Personalizada ? m.periodicidadPersonalizadaId : null
-                          });
-                        }}
-                      >
-                        {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </Campo>
-                    <Campo etiqueta="Desagregación (clave)">
-                      <input
-                        type="text"
-                        value={m.claveDesagregacion}
-                        placeholder="GENERAL o lista=codigo|…"
-                        onChange={(e) => void actualizarMeta({ ...m, claveDesagregacion: e.target.value || 'GENERAL' })}
-                      />
-                    </Campo>
-                  </div>
-                  {m.periodicidadMedicion === Periodicidad.Personalizada && (
-                    <Campo etiqueta="Definición de periodicidad personalizada">
-                      <select
-                        value={m.periodicidadPersonalizadaId ?? ''}
-                        onChange={(e) => void actualizarMeta({ ...m, periodicidadPersonalizadaId: e.target.value || null })}
-                      >
-                        <option value="">— seleccionar —</option>
-                        {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                      </select>
-                    </Campo>
-                  )}
-                  <button
-                    className="boton peligro"
-                    style={{ justifySelf: 'start' }}
-                    onClick={() => {
-                      void invocar('metas:eliminar', { id: m.id }).then(() => setMetas((prev) => prev.filter((x) => x.id !== m.id)));
-                    }}
-                  >
-                    Eliminar meta
-                  </button>
-                </div>
-              ))}
-            </>
-          )}
+            ))}
+          </>
         </PanelLateral>
       )}
 
