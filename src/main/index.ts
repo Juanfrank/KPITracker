@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { componerAplicacion } from './composicion';
 import type { Aplicacion } from './composicion';
 import { NOMBRES_CANALES } from '@shared/ipc';
-import type { RespuestaIpc } from '@shared/ipc';
+import type { CanalesIpc, NombreCanal, RespuestaIpc } from '@shared/ipc';
 import { ValidacionError } from '@domain/index';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 
@@ -12,6 +12,30 @@ let temporizadorNotificaciones: ReturnType<typeof setInterval> | null = null;
 const yaNotificados = new Set<string>();
 
 const INTERVALO_NOTIFICACIONES_MS = 60 * 60 * 1000; // cada hora
+
+const AUTOR = 'Juan Francisco Medina';
+const LICENCIA = 'MIT';
+const URL_SOPORTE = 'https://github.com/Juanfrank/KPITracker';
+
+/**
+ * Manejadores que no dependen de una `Aplicacion` concreta (no son
+ * por-perfil): metadatos estáticos de la app, o —más adelante— la gestión
+ * de perfiles, que se ejecuta *entre* instancias de `Aplicacion`. Se
+ * consultan antes que `aplicacion.manejadores` en `registrarIpc`.
+ */
+type ManejadoresLocales = { [C in NombreCanal]?: (payload: CanalesIpc[C]['req']) => Promise<CanalesIpc[C]['res']> };
+const manejadoresLocales: ManejadoresLocales = {
+  'sistema:info': async () => ({
+    nombre: app.getName(),
+    version: app.getVersion(),
+    autor: AUTOR,
+    licencia: LICENCIA,
+    urlSoporte: URL_SOPORTE,
+    electron: process.versions.electron,
+    node: process.versions.node,
+    chrome: process.versions.chrome
+  })
+};
 
 /**
  * Revisa el tablero de seguimiento y dispara notificaciones del sistema
@@ -47,11 +71,24 @@ function directorioDatos(): string {
   return process.env.KPITRACKER_DATA_DIR ?? join(app.getPath('userData'), 'Data');
 }
 
-function registrarIpc(aplicacionActual: Aplicacion): void {
+/**
+ * Registra todos los canales UNA sola vez, al arranque. Cada handler
+ * resuelve `aplicacion` (variable de módulo) en el momento de la llamada
+ * en vez de capturar una instantánea — así tolera que `aplicacion` se
+ * reemplace en caliente (cambio de perfil) sin volver a registrar
+ * handlers, lo que Electron rechaza con "Attempted to register a second
+ * handler" si se intenta.
+ */
+function registrarIpc(): void {
   for (const canal of NOMBRES_CANALES) {
     ipcMain.handle(canal, async (_evento, payload: unknown): Promise<RespuestaIpc<unknown>> => {
       try {
-        const manejador = aplicacionActual.manejadores[canal] as (p: unknown) => Promise<unknown>;
+        const local = manejadoresLocales[canal] as ((p: unknown) => Promise<unknown>) | undefined;
+        if (local) return { ok: true, datos: await local(payload) };
+        if (!aplicacion) return { ok: false, error: 'La aplicación no está lista (cambiando de perfil).' };
+        const manejadores = aplicacion.manejadores as Record<string, (p: unknown) => Promise<unknown>>;
+        const manejador = manejadores[canal];
+        if (!manejador) return { ok: false, error: `Canal no implementado: ${canal}.` };
         const datos = await manejador(payload);
         return { ok: true, datos };
       } catch (error) {
@@ -98,7 +135,7 @@ async function crearVentana(): Promise<void> {
 
 app.whenReady().then(async () => {
   aplicacion = await componerAplicacion(directorioDatos());
-  registrarIpc(aplicacion);
+  registrarIpc();
   await crearVentana();
   iniciarNotificaciones(aplicacion);
 

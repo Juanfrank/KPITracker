@@ -115,6 +115,13 @@ test('un origen XMLA puede configurarse con inicio de sesión interactivo de Mic
   await pagina.getByLabel('Cerrar panel').click();
 });
 
+test('la sección Acerca de muestra la versión, el autor y el enlace de soporte', async () => {
+  await pagina.getByTestId('nav-acerca-de').click();
+  await expect(pagina.getByTestId('acerca-version')).toHaveText(/^\d+\.\d+\.\d+$/);
+  await expect(pagina.getByText('Juan Francisco Medina')).toBeVisible();
+  await expect(pagina.getByTestId('acerca-soporte')).toHaveAttribute('href', 'https://github.com/Juanfrank/KPITracker');
+});
+
 test('configurar la obtención automática de un indicador desde el modal habilita el botón en Recolección', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('indicador-Cumplimiento de plazos').click();

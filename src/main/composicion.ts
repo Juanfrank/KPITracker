@@ -13,11 +13,13 @@ import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento'
 import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
 import { ServicioAutomatizacionIndicador } from '@application/use-cases/ServicioAutomatizacionIndicador';
 import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
-import type { CanalesIpc, NombreCanal } from '@shared/ipc';
+import type { CanalesIpc, CanalLocal, NombreCanal } from '@shared/ipc';
 
 export interface Aplicacion {
   infra: Infraestructura;
-  manejadores: { [C in NombreCanal]: (payload: CanalesIpc[C]['req']) => Promise<CanalesIpc[C]['res']> };
+  manejadores: {
+    [C in Exclude<NombreCanal, CanalLocal>]: (payload: CanalesIpc[C]['req']) => Promise<CanalesIpc[C]['res']>;
+  };
   cerrar(): Promise<void>;
 }
 

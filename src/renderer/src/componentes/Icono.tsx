@@ -20,7 +20,8 @@ const RUTAS: Record<string, string> = {
   flecha: 'M9 6l6 6-6 6',
   subir: 'M12 20V6m0 0l-5 5m5-5l5 5M4 20h16',
   historial: 'M3 12a9 9 0 109-9M3 12h5m-5 0V7M12 7v5l3 3',
-  adjunto: 'M17 7l-8.5 8.5a3 3 0 004.24 4.24L21 11.5a5 5 0 00-7.07-7.07L6 11.5'
+  adjunto: 'M17 7l-8.5 8.5a3 3 0 004.24 4.24L21 11.5a5 5 0 00-7.07-7.07L6 11.5',
+  informacion: 'M12 16v-4m0-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z'
 };
 
 export function Icono({ nombre, tamano = 17 }: { nombre: string; tamano?: number }): React.JSX.Element {

@@ -152,9 +152,26 @@ export interface CanalesIpc {
     res: string | null;
   };
   'sistema:leerHojaCalculo': { req: { rutaArchivo: string }; res: { columnas: string[]; filas: Record<string, string>[] } };
+  /** Metadatos estáticos de la aplicación (versión, autor, soporte) para la sección "Acerca de". */
+  'sistema:info': {
+    req: void;
+    res: {
+      nombre: string; version: string; autor: string; licencia: string; urlSoporte: string;
+      electron: string; node: string; chrome: string;
+    };
+  };
 }
 
 export type NombreCanal = keyof CanalesIpc;
+
+/**
+ * Canales que NO dependen de una `Aplicacion` concreta (no son por-perfil):
+ * se resuelven en `src/main/index.ts` como "manejadores locales", nunca en
+ * el mapa `Aplicacion.manejadores` del composition root. Mantenerlos aquí
+ * permite excluirlos del tipo que exige implementar cada canal en
+ * `composicion.ts`.
+ */
+export type CanalLocal = 'sistema:info';
 
 export const NOMBRES_CANALES: NombreCanal[] = [
   'config:obtener', 'config:guardar', 'config:reglasFechaLimite',
@@ -179,7 +196,7 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'portable:exportar', 'portable:importar',
   'tipos:listar',
   'adjuntos:listar', 'adjuntos:subir', 'adjuntos:abrir', 'adjuntos:eliminar',
-  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo'
+  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo', 'sistema:info'
 ];
 
 /** Respuesta serializada por IPC: éxito con datos o error de negocio legible. */
