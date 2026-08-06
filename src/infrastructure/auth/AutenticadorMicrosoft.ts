@@ -17,35 +17,55 @@ import type { OrigenAutomatico } from '@domain/index';
  * nativos (`.../oauth2/nativeclient`), que la ventana intercepta sin
  * necesitar levantar un servidor HTTP local.
  *
- * Campos esperados en `configuracion`, todos opcionales: `tenantId` (por
- * defecto "organizations"), `clienteId` (por defecto el cliente público que
- * Microsoft publica para este propósito — ver `CLIENTE_ID_PUBLICO_POR_DEFECTO`
- * más abajo, el mismo que usan herramientas como DAX Studio, Tabular Editor
- * o ALM Toolkit para no requerir que cada usuario registre su propia app en
- * Azure AD) y `scope` (por defecto se infiere del servidor: Power BI si es
- * un endpoint XMLA de Power BI, Azure Analysis Services si la URL contiene
- * "asazure.windows.net"). Solo hace falta llenarlos si la organización
- * exige una app registrada propia (p. ej. por una política de Conditional
- * Access que restringe qué clientes pueden autenticarse).
+ * Campos esperados en `configuracion`: `clienteId` es, en la práctica,
+ * obligatorio — ver la nota debajo sobre `CLIENTE_ID_INTENTO_POR_DEFECTO`.
+ * `tenantId` (por defecto "organizations"), `scope` (por defecto se infiere
+ * del servidor: Power BI si es un endpoint XMLA de Power BI, Azure Analysis
+ * Services si la URL contiene "asazure.windows.net") y `redirectUri` (por
+ * defecto la URI fija que Azure AD ofrece para clientes nativos, ver
+ * REDIRECT_URI_POR_DEFECTO) son opcionales.
+ *
+ * Sobre el Client ID: Azure AD exige que la redirect URI usada en el login
+ * esté registrada explícitamente en la app de Azure AD correspondiente al
+ * Client ID — no existe un "cliente público universal" preconfigurado con
+ * cualquier redirect URI que a uno se le ocurra usar. Lo más confiable es
+ * que cada organización registre su propia app (gratis, ~5 minutos en Azure
+ * Portal → Registros de aplicaciones → Nueva → plataforma "Aplicaciones
+ * móviles y de escritorio" → agregar la redirect URI sugerida
+ * "https://login.microsoftonline.com/common/oauth2/nativeclient" → en API
+ * permissions agregar Power BI Service o Azure Analysis Services con el
+ * scope user_impersonation/delegado y dar consentimiento). Como intento
+ * best-effort cuando no se especifica un Client ID, se usa el de Azure CLI
+ * (ver abajo) porque suele tener registradas varias redirect URIs comunes,
+ * pero NO está garantizado para todos los tenants (algunas organizaciones
+ * lo bloquean por política): si falla con "AADSTS50011" u otro error de
+ * consentimiento/registro, hay que registrar una app propia.
  */
 
-const REDIRECT_URI = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
+const REDIRECT_URI_POR_DEFECTO = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
 const AUTORIDAD_POR_DEFECTO = 'https://login.microsoftonline.com';
 
 /**
- * Client ID público (multi-tenant, sin secreto) que Microsoft publica para
- * clientes nativos que se conectan a Power BI/Azure Analysis Services —
- * ya tiene los permisos delegados necesarios preconsentidos, por lo que
- * cualquier aplicación puede usarlo para el flujo interactivo sin que el
- * usuario/organización tenga que registrar una app propia en Azure AD.
- * Es el mismo que usan DAX Studio, Tabular Editor y ALM Toolkit.
+ * Client ID de "Microsoft Azure CLI", un cliente público y multi-tenant que
+ * suele tener registradas varias redirect URIs comunes (incluida la que
+ * usamos por defecto) y por eso se reutiliza informalmente en herramientas
+ * de terceros para evitar pedirle a cada usuario que registre su propia
+ * app. Es solo un punto de partida, NO una garantía: cada tenant puede
+ * restringirlo, y Azure Analysis Services/Power BI pueden requerir un
+ * consentimiento de permisos que este cliente no tenga. Si falla, el
+ * camino confiable es registrar una app propia (ver el comentario de
+ * arriba) y completar el campo Client ID explícitamente.
  */
-const CLIENTE_ID_PUBLICO_POR_DEFECTO = '871c010f-5e61-4fb1-83ac-98610a7e9110';
+const CLIENTE_ID_INTENTO_POR_DEFECTO = '04b07795-8ddb-461a-bbee-02f9e1bf7b46';
 
 const AMBITO_POWER_BI_POR_DEFECTO = 'https://analysis.windows.net/powerbi/api/.default offline_access';
 
 function clienteId(cfg: Record<string, string>): string {
-  return cfg.clienteId || CLIENTE_ID_PUBLICO_POR_DEFECTO;
+  return cfg.clienteId || CLIENTE_ID_INTENTO_POR_DEFECTO;
+}
+
+function redirectUri(cfg: Record<string, string>): string {
+  return cfg.redirectUri || REDIRECT_URI_POR_DEFECTO;
 }
 
 /**
@@ -99,7 +119,7 @@ export function construirUrlAutorizacion(cfg: Record<string, string>, opciones: 
   const parametros = new URLSearchParams({
     client_id: clienteId(cfg),
     response_type: 'code',
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri(cfg),
     response_mode: 'query',
     scope: cfg.scope || ambitoPorDefecto(cfg),
     state: opciones.state,
@@ -124,6 +144,20 @@ interface TokenObtenido {
   expiraEn: number;
 }
 
+/** Añade una pista accionable a errores de Azure AD conocidos por su código AADSTS. */
+function mensajeAmigable(mensaje: string): string {
+  if (/AADSTS50011/.test(mensaje)) {
+    return `${mensaje} — la redirect URI no está registrada en esta app de Azure AD. Complete el campo "Client ID" con una app propia registrada en Azure Portal (plataforma "Aplicaciones móviles y de escritorio") con la redirect URI "${REDIRECT_URI_POR_DEFECTO}" (o complete "redirectUri" con la que haya registrado).`;
+  }
+  if (/AADSTS700016/.test(mensaje)) {
+    return `${mensaje} — la app de Client ID configurado no existe en este tenant. Complete el campo "Client ID" con una app propia registrada en Azure Portal para este tenant.`;
+  }
+  if (/AADSTS65001/.test(mensaje)) {
+    return `${mensaje} — falta consentimiento para los permisos solicitados. Si usa una app propia, agregue el permiso de Power BI Service o Azure Analysis Services (delegado, user_impersonation) y dé consentimiento en Azure Portal.`;
+  }
+  return mensaje;
+}
+
 async function pedirToken(cfg: Record<string, string>, cuerpo: URLSearchParams): Promise<TokenObtenido> {
   const url = `${autoridad(cfg)}/${tenant(cfg)}/oauth2/v2.0/token`;
   const respuesta = await fetch(url, {
@@ -139,7 +173,7 @@ async function pedirToken(cfg: Record<string, string>, cuerpo: URLSearchParams):
     throw new Error('La respuesta del servidor de token de Microsoft no es JSON válido.');
   }
   if (!respuesta.ok || !datos.access_token) {
-    throw new Error(datos.error_description || datos.error || `El servidor de token de Microsoft respondió ${respuesta.status}.`);
+    throw new Error(mensajeAmigable(datos.error_description || datos.error || `El servidor de token de Microsoft respondió ${respuesta.status}.`));
   }
   return {
     accessToken: datos.access_token,
@@ -154,7 +188,7 @@ export function intercambiarCodigoPorToken(cfg: Record<string, string>, codigo: 
     client_id: clienteId(cfg),
     grant_type: 'authorization_code',
     code: codigo,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri(cfg),
     code_verifier: verifier,
     scope: cfg.scope || ambitoPorDefecto(cfg)
   });
@@ -172,8 +206,8 @@ export function renovarToken(cfg: Record<string, string>, refreshToken: string):
   return pedirToken(cfg, cuerpo);
 }
 
-function extraerRedireccion(url: string): { codigo?: string; error?: string; state?: string } {
-  if (!url.startsWith(REDIRECT_URI)) return {};
+function extraerRedireccion(url: string, redirectUriEsperada: string): { codigo?: string; error?: string; state?: string } {
+  if (!url.startsWith(redirectUriEsperada)) return {};
   const q = new URL(url).searchParams;
   return {
     codigo: q.get('code') ?? undefined,
@@ -185,12 +219,12 @@ function extraerRedireccion(url: string): { codigo?: string; error?: string; sta
 /**
  * Abre una ventana emergente con la página de inicio de sesión de
  * Microsoft y espera a que el usuario la complete. Devuelve el código de
- * autorización una vez que Azure AD redirige a la URI de cliente nativo.
+ * autorización una vez que Azure AD redirige a la redirect URI configurada.
  * Requiere el proceso principal de Electron con una sesión humana real —
  * por eso queda fuera del alcance de las pruebas automatizadas (igual que
  * cualquier flujo de login interactivo de terceros).
  */
-function iniciarSesionEnVentana(urlAutorizacion: string, stateEsperado: string): Promise<string> {
+function iniciarSesionEnVentana(urlAutorizacion: string, stateEsperado: string, redirectUriEsperada: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const ventana = new BrowserWindow({
       width: 500,
@@ -202,7 +236,7 @@ function iniciarSesionEnVentana(urlAutorizacion: string, stateEsperado: string):
 
     let resuelta = false;
     const manejarUrl = (url: string): void => {
-      const { codigo, error, state } = extraerRedireccion(url);
+      const { codigo, error, state } = extraerRedireccion(url, redirectUriEsperada);
       if (!codigo && !error) return;
       if (resuelta) return;
       resuelta = true;
@@ -216,8 +250,32 @@ function iniciarSesionEnVentana(urlAutorizacion: string, stateEsperado: string):
       ventana.close();
     };
 
+    // Un error como "redirect URI no registrada" (AADSTS50011) o "app no
+    // existe en el tenant" (AADSTS700016) no produce una redirección: Azure
+    // AD nunca deja login.microsoftonline.com, solo renderiza una página de
+    // error ahí mismo. will-redirect/will-navigate jamás disparan en ese
+    // caso y la ventana quedaría congelada sin que el resto de la app se
+    // entere. Tras cada carga se revisa el texto visible en busca de un
+    // código AADSTS para capturar ese mensaje y cerrar la ventana en vez de
+    // dejarla varada.
+    const revisarErrorEnPagina = (): void => {
+      if (resuelta) return;
+      ventana.webContents
+        .executeJavaScript('document.body ? document.body.innerText : ""')
+        .then((texto: unknown) => {
+          if (resuelta || typeof texto !== 'string') return;
+          const m = /AADSTS\d+:[^\n]*/.exec(texto);
+          if (!m) return;
+          resuelta = true;
+          reject(new Error(mensajeAmigable(m[0])));
+          ventana.close();
+        })
+        .catch(() => { /* la ventana pudo haberse cerrado entre medio; se ignora */ });
+    };
+
     ventana.webContents.on('will-redirect', (_evento, url) => manejarUrl(url));
     ventana.webContents.on('will-navigate', (_evento, url) => manejarUrl(url));
+    ventana.webContents.on('did-finish-load', revisarErrorEnPagina);
     ventana.on('closed', () => {
       if (!resuelta) reject(new Error('Se cerró la ventana de inicio de sesión antes de completarlo.'));
     });
@@ -287,7 +345,7 @@ export async function obtenerTokenMicrosoftInteractivo(origen: OrigenAutomatico,
   const { verifier, challenge } = generarPkce();
   const state = base64Url(randomBytes(16));
   const url = construirUrlAutorizacion(cfg, { state, challenge });
-  const codigo = await iniciarSesionEnVentana(url, state);
+  const codigo = await iniciarSesionEnVentana(url, state, redirectUri(cfg));
   const obtenido = await intercambiarCodigoPorToken(cfg, codigo, verifier);
   cache.set(clave, { accessToken: obtenido.accessToken, expiraEn: obtenido.expiraEn, refreshToken: obtenido.refreshToken });
   if (obtenido.refreshToken) await persistirRefreshToken(origen, obtenido.refreshToken, guardarOrigen);

@@ -61,9 +61,10 @@ const CAMPOS_XMLA_OAUTH2: CampoConfig[] = [
   { clave: 'scope', etiqueta: 'Scope (opcional, p. ej. .../.default)' }
 ];
 const CAMPOS_XMLA_MICROSOFT: CampoConfig[] = [
+  { clave: 'clienteId', etiqueta: 'Client ID (recomendado: registre su propia app; ver ayuda abajo)' },
   { clave: 'tenantId', etiqueta: 'Tenant ID (opcional; "organizations" por defecto)' },
-  { clave: 'clienteId', etiqueta: 'Client ID (opcional; usa el cliente público de Microsoft por defecto)' },
-  { clave: 'scope', etiqueta: 'Scope (opcional; se infiere del servidor: Power BI o Azure Analysis Services)' }
+  { clave: 'scope', etiqueta: 'Scope (opcional; se infiere del servidor: Power BI o Azure Analysis Services)' },
+  { clave: 'redirectUri', etiqueta: 'Redirect URI (opcional; use la misma que registró en Azure Portal)' }
 ];
 
 const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
@@ -467,11 +468,22 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 <span className="texto-suave">
                   Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele
                   usar Basic. &quot;Microsoft&quot; abre una ventana para iniciar sesión con su propia cuenta al probar la
-                  conexión — como en DAX Studio o Tabular Editor, no hace falta registrar una app en Azure AD: deje Tenant
-                  ID/Client ID/Scope en blanco y use el cliente público de Microsoft; complételos solo si su organización
-                  exige una app propia (p. ej. por una política de Conditional Access).
+                  conexión, como en DAX Studio o Tabular Editor.
                 </span>
               </Campo>
+              {editando.configuracion.autenticacion === 'microsoft' && (
+                <div className="aviso info" style={{ margin: '0 0 8px' }}>
+                  <strong>Client ID:</strong> Azure AD exige que la redirect URI del login esté registrada en la app
+                  correspondiente al Client ID, así que en la práctica hace falta una — no existe un &quot;cliente público
+                  universal&quot; que sirva para cualquier tenant. Si deja el campo en blanco, se intenta con un cliente
+                  reutilizado por otras herramientas (puede fallar según las políticas de su organización). Lo confiable:
+                  registre una app propia en Azure Portal → <em>Registros de aplicaciones</em> → <em>Nueva</em> → agregue la
+                  plataforma <em>&quot;Aplicaciones móviles y de escritorio&quot;</em> con la redirect URI sugerida{' '}
+                  <code>https://login.microsoftonline.com/common/oauth2/nativeclient</code> → en <em>API permissions</em>{' '}
+                  agregue Power BI Service o Azure Analysis Services (delegado, <code>user_impersonation</code>) y dé
+                  consentimiento → copie el Client ID (Application ID) aquí.
+                </div>
+              )}
               {(editando.configuracion.autenticacion === 'microsoft'
                 ? CAMPOS_XMLA_MICROSOFT
                 : editando.configuracion.autenticacion === 'oauth2'
