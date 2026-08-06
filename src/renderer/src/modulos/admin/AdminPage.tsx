@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, TipoOrigenAutomatico } from '@domain/index';
+import { ejemploParaFuente } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
@@ -68,8 +69,8 @@ const CAMPOS_XMLA_MICROSOFT: CampoConfig[] = [
 ];
 
 const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = [
-  { valor: 'PeriodoId', etiqueta: 'Id del período (p. ej. 2026-Trimestral-03)' },
-  { valor: 'PeriodoEtiqueta', etiqueta: 'Etiqueta del período (p. ej. T3 2026)' },
+  { valor: 'PeriodoId', etiqueta: 'Id del período' },
+  { valor: 'PeriodoEtiqueta', etiqueta: 'Etiqueta del período' },
   { valor: 'FechaInicio', etiqueta: 'Fecha de inicio del período' },
   { valor: 'FechaFin', etiqueta: 'Fecha de fin del período' },
   { valor: 'Anio', etiqueta: 'Año' },
@@ -80,6 +81,12 @@ const FUENTES_PARAMETRO_GENERAL: Array<{ valor: FuenteParametroGeneral; etiqueta
   { valor: 'Numero', etiqueta: 'Número ordinal del período en el año' },
   { valor: 'Periodicidad', etiqueta: 'Periodicidad' }
 ];
+
+/** Mismas fuentes, con un ejemplo calculado (período de muestra fijo) para orientar al usuario en el selector. */
+const OPCIONES_FUENTE: Array<{ valor: FuenteParametroGeneral; etiqueta: string }> = FUENTES_PARAMETRO_GENERAL.map((f) => ({
+  valor: f.valor,
+  etiqueta: `${f.etiqueta} — ej.: ${ejemploParaFuente(f.valor)}`
+}));
 
 /** Editor de parámetros generales: nombre del token en el script + de dónde sale su valor. */
 function EditorParametrosGenerales({
@@ -111,7 +118,7 @@ function EditorParametrosGenerales({
             data-testid={`origen-parametro-general-fuente-${indice}`}
             style={{ flex: 2 }}
           >
-            {FUENTES_PARAMETRO_GENERAL.map((f) => <option key={f.valor} value={f.valor}>{f.etiqueta}</option>)}
+            {OPCIONES_FUENTE.map((f) => <option key={f.valor} value={f.valor}>{f.etiqueta}</option>)}
           </select>
           <button className="boton sutil" onClick={() => eliminar(indice)}>
             <Icono nombre="cerrar" tamano={13} />

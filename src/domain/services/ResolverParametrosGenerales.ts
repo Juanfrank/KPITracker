@@ -1,4 +1,5 @@
-import { NOMBRES_MES } from '../value-objects/Periodicidad';
+import { NOMBRES_MES, Periodicidad } from '../value-objects/Periodicidad';
+import { crearPeriodo } from '../value-objects/Periodo';
 import type { Periodo } from '../value-objects/Periodo';
 import type { FuenteParametroGeneral, ParametroGeneral } from '../entities/OrigenAutomatico';
 
@@ -54,4 +55,12 @@ export function resolverParametrosGenerales(parametros: ParametroGeneral[], peri
   const mapa = new Map<string, string>();
   for (const p of parametros) mapa.set(p.nombre, valorFuente(p.fuente, periodo));
   return mapa;
+}
+
+/** Período fijo, solo para ilustrar en la UI qué valor concreto produciría cada fuente. */
+const PERIODO_EJEMPLO: Periodo = crearPeriodo(2026, Periodicidad.Trimestral, 3);
+
+/** Valor de ejemplo (texto legible) que produciría `fuente` para un período representativo. */
+export function ejemploParaFuente(fuente: FuenteParametroGeneral): string {
+  return valorFuente(fuente, PERIODO_EJEMPLO);
 }

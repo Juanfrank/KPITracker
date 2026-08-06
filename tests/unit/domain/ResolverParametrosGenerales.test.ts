@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolverParametrosGenerales } from '@domain/services/ResolverParametrosGenerales';
-import type { ParametroGeneral } from '@domain/entities/OrigenAutomatico';
+import { ejemploParaFuente, resolverParametrosGenerales } from '@domain/services/ResolverParametrosGenerales';
+import type { FuenteParametroGeneral, ParametroGeneral } from '@domain/entities/OrigenAutomatico';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
 import type { Periodo } from '@domain/value-objects/Periodo';
 
@@ -48,5 +48,30 @@ describe('resolverParametrosGenerales', () => {
     const valores = resolverParametrosGenerales(parametros, periodoTrimestral());
     expect(valores.get('meses')).toBe('7,8,9');
     expect(valores.get('mesesTexto')).toBe('Julio,Agosto,Septiembre');
+  });
+});
+
+describe('ejemploParaFuente', () => {
+  // El período de ejemplo interno es crearPeriodo(2026, Trimestral, 3) — mismos datos que periodoTrimestral() arriba.
+  const TODAS_LAS_FUENTES: FuenteParametroGeneral[] = [
+    'PeriodoId', 'PeriodoEtiqueta', 'FechaInicio', 'FechaFin', 'Anio', 'MesNumero', 'MesNombre',
+    'MesesNumeroLista', 'MesesNombreLista', 'Numero', 'Periodicidad'
+  ];
+
+  it('devuelve un valor no vacío y sin "undefined" para cada una de las 11 fuentes', () => {
+    for (const fuente of TODAS_LAS_FUENTES) {
+      const ejemplo = ejemploParaFuente(fuente);
+      expect(ejemplo).not.toBe('');
+      expect(ejemplo).not.toContain('undefined');
+    }
+  });
+
+  it('calcula valores concretos y correctos para el período de ejemplo (2026, T3)', () => {
+    expect(ejemploParaFuente('PeriodoId')).toBe('2026-Trimestral-03');
+    expect(ejemploParaFuente('Anio')).toBe('2026');
+    expect(ejemploParaFuente('Numero')).toBe('3');
+    expect(ejemploParaFuente('MesNumero')).toBe('7');
+    expect(ejemploParaFuente('MesNombre')).toBe('Julio');
+    expect(ejemploParaFuente('Periodicidad')).toBe('Trimestral');
   });
 });
