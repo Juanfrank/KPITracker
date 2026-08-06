@@ -12,6 +12,7 @@ import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@applicatio
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 import type { ResultadoImportacionRespaldo, ResumenRespaldo, SeleccionRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
+import type { PerfilRegistrado } from './perfiles';
 
 /** Filas máximas que devuelve `origenes:probarCodigo` — tope de VISUALIZACIÓN, aplicado tras ejecutar la consulta completa. */
 export const LIMITE_FILAS_PRUEBA_ORIGEN = 100;
@@ -181,6 +182,18 @@ export interface CanalesIpc {
       electron: string; node: string; chrome: string;
     };
   };
+
+  /**
+   * Sistema de Perfiles (Batch P): crear/renombrar/eliminar/cambiar entre
+   * distintos "modelos" (bases de datos completas e independientes). Como
+   * `sistema:info`, operan *entre* instancias de `Aplicacion` — son
+   * manejadores locales de `src/main/index.ts`, nunca canales por-perfil.
+   */
+  'perfiles:listar': { req: void; res: { perfiles: PerfilRegistrado[]; activoId: string } };
+  'perfiles:crear': { req: { nombre: string }; res: PerfilRegistrado };
+  'perfiles:renombrar': { req: { id: string; nombre: string }; res: PerfilRegistrado };
+  'perfiles:eliminar': { req: { id: string; borrarArchivos: boolean }; res: void };
+  'perfiles:cambiar': { req: { id: string }; res: { activoId: string } };
 }
 
 export type NombreCanal = keyof CanalesIpc;
@@ -192,7 +205,7 @@ export type NombreCanal = keyof CanalesIpc;
  * permite excluirlos del tipo que exige implementar cada canal en
  * `composicion.ts`.
  */
-export type CanalLocal = 'sistema:info';
+export type CanalLocal = 'sistema:info' | 'perfiles:listar' | 'perfiles:crear' | 'perfiles:renombrar' | 'perfiles:eliminar' | 'perfiles:cambiar';
 
 export const NOMBRES_CANALES: NombreCanal[] = [
   'config:obtener', 'config:guardar', 'config:reglasFechaLimite',
@@ -219,7 +232,8 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'respaldo:exportar', 'respaldo:seleccionar', 'respaldo:importar',
   'tipos:listar',
   'adjuntos:listar', 'adjuntos:subir', 'adjuntos:abrir', 'adjuntos:eliminar',
-  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo', 'sistema:info'
+  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo', 'sistema:info',
+  'perfiles:listar', 'perfiles:crear', 'perfiles:renombrar', 'perfiles:eliminar', 'perfiles:cambiar'
 ];
 
 /** Respuesta serializada por IPC: éxito con datos o error de negocio legible. */

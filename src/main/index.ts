@@ -2,14 +2,20 @@ import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import { join } from 'node:path';
 import { componerAplicacion } from './composicion';
 import type { Aplicacion } from './composicion';
+import { GestorPerfiles, directorioBasePerfiles, rutaRegistroPerfiles } from './perfiles/GestorPerfiles';
 import { NOMBRES_CANALES } from '@shared/ipc';
 import type { CanalesIpc, NombreCanal, RespuestaIpc } from '@shared/ipc';
-import { ValidacionError } from '@domain/index';
+import { EntidadNoEncontradaError, ValidacionError } from '@domain/index';
+import { GeneradorUuid, RelojSistema } from '@infrastructure/soporte/servicios';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 
 let aplicacion: Aplicacion | null = null;
 let temporizadorNotificaciones: ReturnType<typeof setInterval> | null = null;
 const yaNotificados = new Set<string>();
+
+const gestorPerfiles = new GestorPerfiles(
+  rutaRegistroPerfiles(), directorioBasePerfiles(), directorioDatos(), new GeneradorUuid(), new RelojSistema()
+);
 
 const INTERVALO_NOTIFICACIONES_MS = 60 * 60 * 1000; // cada hora
 
@@ -34,7 +40,25 @@ const manejadoresLocales: ManejadoresLocales = {
     electron: process.versions.electron,
     node: process.versions.node,
     chrome: process.versions.chrome
-  })
+  }),
+
+  'perfiles:listar': () => gestorPerfiles.listar(),
+  'perfiles:crear': ({ nombre }) => gestorPerfiles.crear(nombre),
+  'perfiles:renombrar': ({ id, nombre }) => gestorPerfiles.renombrar(id, nombre),
+  'perfiles:eliminar': ({ id, borrarArchivos }) => gestorPerfiles.eliminar(id, borrarArchivos),
+  'perfiles:cambiar': async ({ id }) => {
+    const { perfiles, activoId } = await gestorPerfiles.listar();
+    const anterior = perfiles.find((p) => p.id === activoId);
+    const nuevo = perfiles.find((p) => p.id === id);
+    if (!nuevo) throw new EntidadNoEncontradaError('Perfil', id);
+    if (!anterior) throw new ValidacionError('No se encontró el perfil activo actual.');
+    // Solo se persiste el nuevo activo si el swap tuvo éxito — si `nuevo.ruta`
+    // no abre, `cambiarPerfil` reabre `anterior.ruta` y el registro sigue
+    // apuntando al perfil que sí funciona.
+    await cambiarPerfil(nuevo.ruta, anterior.ruta);
+    await gestorPerfiles.marcarActivo(id);
+    return { activoId: id };
+  }
 };
 
 /**
@@ -69,6 +93,57 @@ function iniciarNotificaciones(aplicacionActual: Aplicacion): void {
 /** El directorio de datos puede fijarse por variable de entorno (pruebas E2E). */
 function directorioDatos(): string {
   return process.env.KPITRACKER_DATA_DIR ?? join(app.getPath('userData'), 'Data');
+}
+
+/**
+ * Cierra la `Aplicacion` activa (flush de Parquet incluido, ver
+ * `bootstrap.ts#cerrar`) y detiene las notificaciones periódicas. Deja
+ * `aplicacion` en `null` — ventana de tiempo en la que `registrarIpc`
+ * responde "no está lista" a cualquier canal.
+ */
+async function desactivarPerfil(): Promise<void> {
+  if (temporizadorNotificaciones) {
+    clearInterval(temporizadorNotificaciones);
+    temporizadorNotificaciones = null;
+  }
+  if (aplicacion) {
+    const actual = aplicacion;
+    aplicacion = null;
+    await actual.cerrar();
+  }
+}
+
+/** Abre una `Aplicacion` sobre `ruta` y reinicia las notificaciones periódicas. */
+async function activarPerfil(ruta: string): Promise<void> {
+  aplicacion = await componerAplicacion(ruta, app.getVersion());
+  iniciarNotificaciones(aplicacion);
+}
+
+/** Serializa cambios de perfil concurrentes: un segundo intento mientras uno está en curso se rechaza. */
+let cambioEnCurso: Promise<void> | null = null;
+
+/**
+ * Cierra el perfil actual y abre `rutaNueva`. Si `rutaNueva` falla al
+ * abrir (datos corruptos, disco no disponible...), reabre `rutaAnterior`
+ * automáticamente para no dejar la app sin ningún perfil activo.
+ */
+async function cambiarPerfil(rutaNueva: string, rutaAnterior: string): Promise<void> {
+  if (cambioEnCurso) throw new ValidacionError('Ya hay un cambio de perfil en curso.');
+  const ejecutar = async (): Promise<void> => {
+    await desactivarPerfil();
+    try {
+      await activarPerfil(rutaNueva);
+    } catch (error) {
+      await activarPerfil(rutaAnterior);
+      throw new ValidacionError('No se pudo abrir el perfil.', [String(error)]);
+    }
+  };
+  cambioEnCurso = ejecutar();
+  try {
+    await cambioEnCurso;
+  } finally {
+    cambioEnCurso = null;
+  }
 }
 
 /**
@@ -134,10 +209,9 @@ async function crearVentana(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  aplicacion = await componerAplicacion(directorioDatos(), app.getVersion());
+  await activarPerfil(await gestorPerfiles.rutaActiva());
   registrarIpc();
   await crearVentana();
-  iniciarNotificaciones(aplicacion);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void crearVentana();
@@ -150,14 +224,8 @@ app.on('window-all-closed', () => {
 
 // Garantiza que todo lo pendiente quede materializado en Parquet al salir.
 app.on('before-quit', (evento) => {
-  if (temporizadorNotificaciones) {
-    clearInterval(temporizadorNotificaciones);
-    temporizadorNotificaciones = null;
-  }
   if (aplicacion) {
     evento.preventDefault();
-    const actual = aplicacion;
-    aplicacion = null;
-    void actual.cerrar().finally(() => app.quit());
+    void desactivarPerfil().finally(() => app.quit());
   }
 });

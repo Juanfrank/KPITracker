@@ -12,6 +12,8 @@ import { ExportacionPage } from './modulos/exportacion/ExportacionPage';
 import { AuditoriaPage } from './modulos/auditoria/AuditoriaPage';
 import { AdminPage } from './modulos/admin/AdminPage';
 import { AcercaDePage } from './modulos/acerca-de/AcercaDePage';
+import { PerfilesPage } from './modulos/perfiles/PerfilesPage';
+import { SelectorPerfil } from './modulos/perfiles/SelectorPerfil';
 import { useNavegacion } from './stores/navegacion';
 
 interface ModuloDef {
@@ -34,7 +36,8 @@ const MODULOS: ModuloDef[] = [
   { id: 'exportacion', etiqueta: 'Exportación', icono: 'exportar', seccion: 'Sistema', Componente: ExportacionPage },
   { id: 'auditoria', etiqueta: 'Auditoría', icono: 'auditoria', seccion: 'Sistema', Componente: AuditoriaPage },
   { id: 'admin', etiqueta: 'Administración', icono: 'admin', seccion: 'Sistema', Componente: AdminPage },
-  { id: 'acerca-de', etiqueta: 'Acerca de', icono: 'informacion', seccion: 'Sistema', Componente: AcercaDePage }
+  { id: 'acerca-de', etiqueta: 'Acerca de', icono: 'informacion', seccion: 'Sistema', Componente: AcercaDePage },
+  { id: 'perfiles', etiqueta: 'Perfiles', icono: 'perfiles', seccion: 'Sistema', Componente: PerfilesPage }
 ];
 
 export function App(): React.JSX.Element {
@@ -84,6 +87,7 @@ export function App(): React.JSX.Element {
             ))}
           </div>
         ))}
+        <SelectorPerfil />
         <div className="pie">
           <button
             className="boton sutil"

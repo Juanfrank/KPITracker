@@ -137,11 +137,83 @@ body {
 }
 
 .sidebar .pie {
-  margin-top: auto;
   padding: 10px 12px 2px;
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* ============ Selector de perfil (pie del sidebar) ============ */
+.selector-perfil {
+  position: relative;
+  margin-top: auto;
+  padding: 0 4px;
+}
+
+.selector-perfil-boton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.selector-perfil-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selector-perfil-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 4px;
+  right: 4px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  box-shadow: var(--sombra, 0 4px 16px rgba(0, 0, 0, 0.15));
+  padding: 4px;
+  z-index: 20;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.selector-perfil-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radio-sm);
+  border: none;
+  background: none;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selector-perfil-item:hover {
+  background: var(--superficie-2);
+}
+
+.selector-perfil-gestionar {
+  border-top: 1px solid var(--borde);
+  margin-top: 4px;
+  padding-top: 9px;
+  color: var(--texto-3);
+}
+
+.overlay-cambio-perfil {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
 
 .contenido {
