@@ -17,9 +17,25 @@ function categoriaVacia(): Categoria {
 function origenVacio(): OrigenAutomatico {
   return {
     id: '', nombre: '', tipo: 'API', descripcion: '', configuracion: {},
-    parametrosGenerales: [{ nombre: 'periodo', fuente: 'PeriodoId' }],
+    parametrosGenerales: parametrosGeneralesPorDefecto(),
     activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
   };
+}
+
+/**
+ * Autenticación "efectiva" cuando `configuracion.autenticacion` no está
+ * explícitamente guardado: XMLA cae a Basic (SSAS on-premise clásico, su
+ * comportamiento histórico), PowerBI cae a Microsoft (la API REST nunca
+ * admite Basic, así que "sin configurar" no puede significar eso). Única
+ * fuente de verdad para el valor mostrado en el selector, el aviso de
+ * Client ID y los campos renderizados — antes divergían entre sí (el
+ * selector mostraba "Microsoft" por un fallback propio mientras los campos
+ * de abajo, sin ese mismo fallback, seguían mostrando Usuario/Contraseña),
+ * lo que dejaba un origen PowerBI recién creado autenticándose "sin nada" en
+ * tiempo real aunque la UI pareciera decir lo contrario.
+ */
+function autenticacionEfectiva(origen: OrigenAutomatico): string {
+  return origen.configuracion.autenticacion || (origen.tipo === 'XMLA' ? 'basic' : 'microsoft');
 }
 
 type CampoConfig = { clave: string; etiqueta: string; sensible?: boolean };
@@ -95,51 +111,75 @@ const OPCIONES_FUENTE: Array<{ valor: FuenteParametroGeneral; etiqueta: string }
   etiqueta: `${f.etiqueta} — ej.: ${ejemploParaFuente(f.valor)}`
 }));
 
-/** Editor de parámetros generales: nombre del token en el script + de dónde sale su valor. */
+/**
+ * Nombre de token por defecto para cada fuente — el usuario puede cambiar
+ * la notación (p. ej. renombrar "periodo" a "idPeriodo"), pero cada una de
+ * las 11 fuentes siempre existe como un parámetro, sin poder agregarse ni
+ * quitarse: no tiene sentido "agregar" una fuente que ya está cubierta, ni
+ * "quitar" una y dejar el script sin forma de referenciarla.
+ */
+const NOMBRE_POR_DEFECTO_FUENTE: Record<FuenteParametroGeneral, string> = {
+  PeriodoId: 'periodo',
+  PeriodoEtiqueta: 'periodoEtiqueta',
+  FechaInicio: 'fechaInicio',
+  FechaFin: 'fechaFin',
+  Anio: 'anio',
+  MesNumero: 'mesNumero',
+  MesNombre: 'mesNombre',
+  MesesNumeroLista: 'mesesNumero',
+  MesesNombreLista: 'mesesNombre',
+  Numero: 'numero',
+  Periodicidad: 'periodicidad'
+};
+
+/** Un parámetro general por cada fuente, con su nombre de token por defecto — usado para un origen nuevo. */
+function parametrosGeneralesPorDefecto(): ParametroGeneral[] {
+  return FUENTES_PARAMETRO_GENERAL.map((f) => ({ nombre: NOMBRE_POR_DEFECTO_FUENTE[f.valor], fuente: f.valor }));
+}
+
+/**
+ * Completa un `parametrosGenerales` con las fuentes que falten (orígenes
+ * guardados antes de este cambio, o con un JSON editado a mano) y descarta
+ * duplicados de una misma fuente (se conserva el primero) — el resultado
+ * siempre tiene exactamente una entrada por cada una de las 11 fuentes, en
+ * el mismo orden que `FUENTES_PARAMETRO_GENERAL`.
+ */
+function normalizarParametrosGenerales(actuales: ParametroGeneral[]): ParametroGeneral[] {
+  return FUENTES_PARAMETRO_GENERAL.map((f) => {
+    const existente = actuales.find((p) => p.fuente === f.valor);
+    return existente ?? { nombre: NOMBRE_POR_DEFECTO_FUENTE[f.valor], fuente: f.valor };
+  });
+}
+
+/** Editor de parámetros generales: una fila fija por fuente (siempre las 11), solo se edita el nombre del token. */
 function EditorParametrosGenerales({
   parametros, onChange
 }: {
   parametros: ParametroGeneral[];
   onChange: (parametros: ParametroGeneral[]) => void;
 }): React.JSX.Element {
-  const actualizar = (indice: number, cambio: Partial<ParametroGeneral>): void => {
-    onChange(parametros.map((p, i) => (i === indice ? { ...p, ...cambio } : p)));
+  const actualizarNombre = (fuente: FuenteParametroGeneral, nombre: string): void => {
+    onChange(parametros.map((p) => (p.fuente === fuente ? { ...p, nombre } : p)));
   };
-  const eliminar = (indice: number): void => onChange(parametros.filter((_, i) => i !== indice));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {parametros.map((p, indice) => (
-        <div key={indice} style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="text"
-            placeholder="nombre del token"
-            value={p.nombre}
-            onChange={(e) => actualizar(indice, { nombre: e.target.value })}
-            data-testid={`origen-parametro-general-nombre-${indice}`}
-            style={{ flex: 1 }}
-          />
-          <select
-            value={p.fuente}
-            onChange={(e) => actualizar(indice, { fuente: e.target.value as FuenteParametroGeneral })}
-            data-testid={`origen-parametro-general-fuente-${indice}`}
-            style={{ flex: 2 }}
-          >
-            {OPCIONES_FUENTE.map((f) => <option key={f.valor} value={f.valor}>{f.etiqueta}</option>)}
-          </select>
-          <button className="boton sutil" onClick={() => eliminar(indice)}>
-            <Icono nombre="cerrar" tamano={13} />
-          </button>
-        </div>
-      ))}
-      <button
-        className="boton sutil"
-        style={{ justifySelf: 'start' }}
-        onClick={() => onChange([...parametros, { nombre: '', fuente: 'PeriodoId' }])}
-        data-testid="origen-parametro-general-agregar"
-      >
-        <Icono nombre="mas" tamano={13} /> Agregar parámetro general
-      </button>
+      {OPCIONES_FUENTE.map((f) => {
+        const parametro = parametros.find((p) => p.fuente === f.valor);
+        return (
+          <div key={f.valor} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span className="texto-suave" style={{ flex: 2 }}>{f.etiqueta}</span>
+            <input
+              type="text"
+              placeholder="nombre del token"
+              value={parametro?.nombre ?? NOMBRE_POR_DEFECTO_FUENTE[f.valor]}
+              onChange={(e) => actualizarNombre(f.valor, e.target.value)}
+              data-testid={`origen-parametro-general-nombre-${f.valor}`}
+              style={{ flex: 1 }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -545,7 +585,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               <tr
                 key={o.id}
                 className={o.eliminado ? 'fila-eliminada' : undefined}
-                onClick={() => !o.eliminado && setEditando(o)}
+                onClick={() => !o.eliminado && setEditando({ ...o, parametrosGenerales: normalizarParametrosGenerales(o.parametrosGenerales) })}
                 style={{ cursor: o.eliminado ? 'default' : 'pointer' }}
                 data-testid={`origen-${o.nombre}`}
               >
@@ -615,7 +655,14 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
           <Campo etiqueta="Tipo" obligatorio>
             <select
               value={editando.tipo}
-              onChange={(e) => { setEditando({ ...editando, tipo: e.target.value as TipoOrigenAutomatico, configuracion: {} }); setResultadoPrueba(null); }}
+              onChange={(e) => {
+                const tipo = e.target.value as TipoOrigenAutomatico;
+                // Se escribe explícito, no solo se deja al fallback visual de `autenticacionEfectiva`:
+                // así lo que se guarda coincide siempre con lo que la UI mostró al crear el origen.
+                const configuracion: Record<string, string> = tipo === 'PowerBI' ? { autenticacion: 'microsoft' } : {};
+                setEditando({ ...editando, tipo, configuracion });
+                setResultadoPrueba(null);
+              }}
               data-testid="origen-tipo"
             >
               <option value="XMLA">XMLA</option>
@@ -643,7 +690,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
             <>
               <Campo etiqueta="Autenticación">
                 <select
-                  value={editando.configuracion.autenticacion || (editando.tipo === 'XMLA' ? 'basic' : 'microsoft')}
+                  value={autenticacionEfectiva(editando)}
                   onChange={(e) =>
                     setEditando({ ...editando, configuracion: { ...editando.configuracion, autenticacion: e.target.value } })
                   }
@@ -655,11 +702,11 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                 </select>
                 <span className="texto-suave">
                   {editando.tipo === 'PowerBI'
-                    ? 'La API REST de Power BI solo admite OAuth2 o Microsoft (nunca Basic). "Microsoft" abre una ventana para iniciar sesión con su propia cuenta al probar la conexión, como en DAX Studio o Tabular Editor.'
+                    ? 'La API REST de Power BI solo admite OAuth2 o Microsoft (nunca Basic) — por eso "Microsoft" es la opción por defecto aquí. "Microsoft" abre una ventana para iniciar sesión con su propia cuenta al probar la conexión, como en DAX Studio o Tabular Editor.'
                     : 'Power BI Premium/Fabric y Azure Analysis Services requieren OAuth2 o Microsoft; SSAS on-premise clásico suele usar Basic. "Microsoft" abre una ventana para iniciar sesión con su propia cuenta al probar la conexión, como en DAX Studio o Tabular Editor.'}
                 </span>
               </Campo>
-              {editando.configuracion.autenticacion === 'microsoft' && (
+              {autenticacionEfectiva(editando) === 'microsoft' && (
                 <div className="aviso info" style={{ margin: '0 0 8px' }}>
                   <strong>Client ID:</strong> Azure AD exige que la redirect URI del login esté registrada en la app
                   correspondiente al Client ID, así que en la práctica hace falta una — no existe un &quot;cliente público
@@ -672,9 +719,9 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
                   consentimiento → copie el Client ID (Application ID) aquí.
                 </div>
               )}
-              {(editando.configuracion.autenticacion === 'microsoft'
+              {(autenticacionEfectiva(editando) === 'microsoft'
                 ? CAMPOS_MICROSOFT
-                : editando.configuracion.autenticacion === 'oauth2'
+                : autenticacionEfectiva(editando) === 'oauth2'
                   ? CAMPOS_OAUTH2
                   : CAMPOS_XMLA_BASIC
               ).map((campo) => (
@@ -696,7 +743,7 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
               {probando ? 'Probando…' : 'Probar conexión'}
             </button>
           </div>
-          {(editando.tipo === 'XMLA' || editando.tipo === 'PowerBI') && editando.configuracion.autenticacion === 'microsoft' && (
+          {(editando.tipo === 'XMLA' || editando.tipo === 'PowerBI') && autenticacionEfectiva(editando) === 'microsoft' && (
             <p className="texto-suave" style={{ margin: 0 }}>
               &quot;Probar conexión&quot; abrirá una ventana para iniciar sesión con Microsoft la primera vez (y cada vez que
               la sesión guardada haya vencido); las siguientes veces se reutiliza el token en silencio.
@@ -770,7 +817,8 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
           <h4 style={{ margin: '8px 0 0' }}>Parámetros generales del período</h4>
           <p className="texto-suave" style={{ margin: 0 }}>
             Cómo se nombra el período al sustituirlo en el script de cada indicador: un único valor, un rango de fechas
-            (desde/hasta), año y mes por separado (numérico o textual), listas de meses, etc. — agregue tantos como necesite.
+            (desde/hasta), año y mes por separado (numérico o textual), listas de meses, etc. Cada fuente ya tiene un
+            parámetro con un nombre de token por defecto — cámbielo si su script espera otra notación.
           </p>
           <EditorParametrosGenerales
             parametros={editando.parametrosGenerales}

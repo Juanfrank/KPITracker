@@ -28,6 +28,18 @@ interface EstadoRecoleccion {
   automatizacionConfigurada: boolean;
 
   cargarIndicadores(): Promise<void>;
+  /**
+   * Recarga indicadores, períodos/automatización y la captura del período ya
+   * seleccionado, SIN perder esa selección (a diferencia de
+   * `seleccionarIndicador`, que la resetea al período más reciente). El
+   * store es un singleton de módulo: sobrevive a navegar a otra página y
+   * volver, así que sin este refresco explícito, la captura visible tras
+   * volver a Recolección seguía siendo la de antes de irse — con
+   * desagregaciones/nombres de elementos desactualizados si mientras tanto
+   * se creó una lista o se agregaron elementos (p. ej. desde la
+   * conciliación de un origen automático en Indicadores).
+   */
+  refrescar(): Promise<void>;
   seleccionarIndicador(indicadorId: string): Promise<void>;
   seleccionarPeriodo(periodoId: string): Promise<void>;
   guardarCelda(claveDesagregacion: string, valorCrudo: string, opciones?: { desdeHistorial?: boolean }): Promise<void>;
@@ -65,6 +77,21 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   async cargarIndicadores() {
     const indicadores = (await invocar('indicadores:listar', undefined)).filter((i) => i.estado === 'Activo');
     set({ indicadores });
+  },
+
+  async refrescar() {
+    await get().cargarIndicadores();
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId) return;
+    const [periodos, automatizacion] = await Promise.all([
+      invocar('recoleccion:periodos', { indicadorId }),
+      invocar('automatizacion:obtener', { indicadorId })
+    ]);
+    set({ periodos, automatizacionConfigurada: automatizacion != null });
+    if (periodoId) {
+      const captura = await invocar('recoleccion:captura', { indicadorId, periodoId });
+      set({ captura });
+    }
   },
 
   async seleccionarIndicador(indicadorId) {

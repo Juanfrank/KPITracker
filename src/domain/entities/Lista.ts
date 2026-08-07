@@ -30,3 +30,16 @@ export interface ElementoLista {
   padreCodigo: string | null;
   activo: boolean;
 }
+
+/**
+ * Código de un elemento nuevo a partir del prefijo de su lista y su orden
+ * secuencial (p. ej. "SX-01" para el primer elemento de una lista con
+ * prefijo "SX", o "E1" si la lista aún no tiene prefijo). Única fuente de
+ * verdad para esta notación — la usa tanto la UI de Listas (alta manual,
+ * pegado desde Excel) como la conciliación de orígenes automáticos (alta de
+ * elementos que el origen trajo y la lista todavía no tenía), para que
+ * ambos caminos generen códigos consistentes entre sí.
+ */
+export function generarCodigoElemento(prefijo: string, orden: number): string {
+  return prefijo ? `${prefijo}-${String(orden).padStart(2, '0')}` : `E${orden}`;
+}

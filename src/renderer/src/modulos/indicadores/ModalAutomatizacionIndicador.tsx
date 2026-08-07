@@ -137,7 +137,7 @@ export function ModalAutomatizacionIndicador({
   const agregarFaltantes = async (listaId: string): Promise<void> => {
     const reporte = conciliaciones.get(listaId);
     if (!reporte || reporte.noEncontrados.length === 0) return;
-    await invocar('automatizacion:agregarElementosFaltantes', { listaId, codigos: reporte.noEncontrados });
+    await invocar('automatizacion:agregarElementosFaltantes', { listaId, nombres: reporte.noEncontrados });
     const columna = config?.mapeoColumnas.find((m) => m.listaId === listaId)?.columna;
     if (columna) await validarColumna(listaId, columna);
   };

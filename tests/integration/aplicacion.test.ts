@@ -646,12 +646,15 @@ describe('Composition root — orígenes automáticos', () => {
   });
 
   it('ejecuta el script real contra un servidor HTTP local y escribe los resultados mapeados por desagregación', async () => {
+    // El origen devuelve el NOMBRE del elemento ("Masculino"/"Femenino"), no su código
+    // interno ("M"/"F") — así es como llegan los datos de un origen real (SQL/API/XMLA/
+    // PowerBI): la resolución nombre→código ocurre dentro de obtenerResultadoAutomatico.
     const servidor = createServer((_req, res) => {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify([
         { sexo: '', total: '82.5' },
-        { sexo: 'M', total: '90' },
-        { sexo: 'F', total: '75' }
+        { sexo: 'Masculino', total: '90' },
+        { sexo: 'Femenino', total: '75' }
       ]));
     });
     await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
@@ -810,6 +813,87 @@ describe('Composition root — orígenes automáticos', () => {
         activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
       };
       await expect(app.manejadores['origenes:probarCodigo']({ origen, script: '' })).rejects.toThrow();
+    } finally {
+      servidor.close();
+    }
+  });
+});
+
+describe('Composition root — conciliación de orígenes automáticos por NOMBRE (no por código)', () => {
+  it('automatizacion:validarColumna compara contra el nombre del elemento, no su código', async () => {
+    const lista = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SX', estado: 'Activa', version: 1, orden: 1,
+      jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['listas:guardarElemento']({
+      id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true
+    });
+    const reporte = await app.manejadores['automatizacion:validarColumna']({ listaId: lista.id, valoresUnicos: ['Masculino', 'M'] });
+    expect(reporte.coincidentes).toEqual(['Masculino']);
+    expect(reporte.noEncontrados).toEqual(['M']);
+  });
+
+  it('automatizacion:agregarElementosFaltantes crea el código desde el prefijo de la lista y guarda el nombre tal cual llegó del origen', async () => {
+    const lista = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Provincia', descripcion: '', prefijo: 'PROV', estado: 'Activa', version: 1, orden: 1,
+      jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    const creados = await app.manejadores['automatizacion:agregarElementosFaltantes']({
+      listaId: lista.id, nombres: ['Distrito Nacional', 'Santiago']
+    });
+    expect(creados).toHaveLength(2);
+    expect(creados[0]).toMatchObject({ nombre: 'Distrito Nacional', codigo: 'PROV-01' });
+    expect(creados[1]).toMatchObject({ nombre: 'Santiago', codigo: 'PROV-02' });
+
+    // Idempotente: reintentar con un nombre ya agregado no crea un duplicado.
+    const segundaVez = await app.manejadores['automatizacion:agregarElementosFaltantes']({
+      listaId: lista.id, nombres: ['Distrito Nacional', 'La Vega']
+    });
+    expect(segundaVez).toHaveLength(1);
+    expect(segundaVez[0]).toMatchObject({ nombre: 'La Vega', codigo: 'PROV-03' });
+  });
+
+  it('recoleccion:obtenerAutomatico cuenta como error una fila cuyo valor no coincide con ningún nombre de elemento', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([{ sexo: 'Masculino', total: '10' }, { sexo: 'Desconocido', total: '5' }]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'API local con valor no resoluble', tipo: 'API', descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      const lista = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Sexo', descripcion: '', prefijo: 'SX', estado: 'Activa', version: 1, orden: 1,
+        jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({
+        id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true
+      });
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [lista.id] }), valores: []
+      });
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: '', columnaValor: 'total', mapeoColumnas: [{ columna: 'sexo', listaId: lista.id }],
+        desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
+      });
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId });
+      expect(resultado.celdasActualizadas).toBe(1);
+      expect(resultado.filasConError).toBe(1);
+
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M'))?.valor).toBe(10);
     } finally {
       servidor.close();
     }
@@ -1085,14 +1169,21 @@ describe('Composition root — PowerBI (API REST "Execute Queries")', () => {
     expect(resultado.mensaje).toContain('datasetId');
   });
 
-  it('sin autenticación configurada, "origenes:probar" falla con un mensaje claro (la API REST no admite Basic)', async () => {
+  it('sin autenticación configurada, se asume Microsoft (nunca Basic ni "sin nada") — intenta iniciar sesión de verdad', async () => {
+    // No hay ventana real de Electron en este entorno de pruebas (igual que el resto de
+    // los casos "Microsoft interactivo" de la suite), así que el intento de abrir el
+    // login falla — pero el mensaje confirma que SÍ se intentó Microsoft, no que se
+    // quedó sin credenciales configuradas (el bug que este mismo fix corrige: antes,
+    // "sin autenticación configurada" fallaba con "Configure autenticación..." aunque
+    // la UI mostrara "Microsoft" seleccionado).
     const resultado = await app.manejadores['origenes:probar']({
       id: 'origen-pbi-sin-auth', nombre: 'Power BI sin autenticación', tipo: 'PowerBI', descripcion: '',
       configuracion: { datasetId: 'dataset-abc' },
       parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(resultado.ok).toBe(false);
-    expect(resultado.mensaje).toMatch(/no admite Basic/);
+    expect(resultado.mensaje).not.toMatch(/Configure autenticación/);
+    expect(resultado.mensaje).not.toMatch(/no admite Basic/);
   });
 
   it('un error real de la API de Power BI (p. ej. dataset inexistente) se propaga con su mensaje, no como error de transporte genérico', async () => {

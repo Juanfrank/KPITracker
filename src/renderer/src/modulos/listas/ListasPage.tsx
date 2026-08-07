@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AliasDesagregacionOrigen, ElementoLista, Lista, OrigenAutomatico } from '@domain/index';
+import { generarCodigoElemento } from '@domain/index';
 import { invocar } from '../../api';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
@@ -71,11 +72,6 @@ function listaVacia(): Lista {
   };
 }
 
-/** Código del próximo elemento a partir del prefijo de la lista y el orden secuencial. */
-function generarCodigo(prefijo: string, orden: number): string {
-  return prefijo ? `${prefijo}-${String(orden).padStart(2, '0')}` : `E${orden}`;
-}
-
 /**
  * Listas de selección: base de desagregaciones y atributos de selección.
  * Soporta listas jerárquicas (elemento con padre).
@@ -134,13 +130,13 @@ export function ListasPage(): React.JSX.Element {
     await cargar();
   };
 
-  const agregarElemento = async (): Promise<void> => {
-    if (!seleccionada) return;
+  const agregarElemento = async (): Promise<ElementoLista | undefined> => {
+    if (!seleccionada) return undefined;
     const orden = elementos.length > 0 ? Math.max(...elementos.map((e) => e.orden)) + 1 : 1;
     const nuevo = await invocar('listas:guardarElemento', {
       id: '',
       listaId: seleccionada.id,
-      codigo: generarCodigo(seleccionada.prefijo, orden),
+      codigo: generarCodigoElemento(seleccionada.prefijo, orden),
       nombre: `Elemento ${orden}`,
       descripcion: '',
       orden,
@@ -148,6 +144,37 @@ export function ListasPage(): React.JSX.Element {
       activo: true
     });
     setElementos([...elementos, nuevo]);
+    return nuevo;
+  };
+
+  const enfocarCampoElemento = (orden: number, campo: 'codigo' | 'nombre'): void => {
+    // Tras crear la fila o navegar, el input recién referenciado puede no existir todavía
+    // en el DOM en el mismo tick (re-render pendiente) — se enfoca en el siguiente frame.
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(`[data-testid="elemento-${campo}-${orden}"]`);
+      input?.focus();
+    });
+  };
+
+  /**
+   * Enter en Código o Nombre navega a la misma columna de la fila
+   * siguiente, como en una hoja de cálculo — salvo que ya sea la última
+   * fila, caso en el que crea un elemento nuevo (autogenerando su código
+   * desde el prefijo de la lista) y enfoca su Nombre, el campo que
+   * normalmente se completa a continuación.
+   */
+  const manejarEnterElemento = async (
+    evento: React.KeyboardEvent<HTMLInputElement>, indice: number, campo: 'codigo' | 'nombre'
+  ): Promise<void> => {
+    if (evento.key !== 'Enter') return;
+    evento.preventDefault();
+    const siguiente = elementos[indice + 1];
+    if (siguiente) {
+      enfocarCampoElemento(siguiente.orden, campo);
+      return;
+    }
+    const nuevo = await agregarElemento();
+    if (nuevo) enfocarCampoElemento(nuevo.orden, 'nombre');
   };
 
   const actualizarElemento = async (elemento: ElementoLista): Promise<void> => {
@@ -196,7 +223,7 @@ export function ListasPage(): React.JSX.Element {
         const guardado = await invocar('listas:guardarElemento', {
           id: '',
           listaId: seleccionada.id,
-          codigo: codigoPegado?.trim() || generarCodigo(seleccionada.prefijo, ordenSiguiente),
+          codigo: codigoPegado?.trim() || generarCodigoElemento(seleccionada.prefijo, ordenSiguiente),
           nombre: nombrePegado?.trim() || `Elemento ${ordenSiguiente}`,
           descripcion: '',
           orden: ordenSiguiente,
@@ -335,6 +362,7 @@ export function ListasPage(): React.JSX.Element {
                               void pegarElementos(indice, contenido);
                             }
                           }}
+                          onKeyDown={(e) => void manejarEnterElemento(e, indice, 'codigo')}
                           data-testid={`elemento-codigo-${el.orden}`}
                         />
                       </td>
@@ -343,6 +371,7 @@ export function ListasPage(): React.JSX.Element {
                           type="text"
                           value={el.nombre}
                           onChange={(e) => void actualizarElemento({ ...el, nombre: e.target.value })}
+                          onKeyDown={(e) => void manejarEnterElemento(e, indice, 'nombre')}
                           data-testid={`elemento-nombre-${el.orden}`}
                         />
                       </td>

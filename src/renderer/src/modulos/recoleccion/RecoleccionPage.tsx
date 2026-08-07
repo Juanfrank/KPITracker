@@ -16,9 +16,15 @@ export function RecoleccionPage(): React.JSX.Element {
   const cuerpoTabla = useRef<HTMLTableSectionElement>(null);
 
   useEffect(() => {
-    void vm.cargarIndicadores().then(() => {
-      if (parametros.indicadorId) void vm.seleccionarIndicador(parametros.indicadorId);
-    });
+    // Con un indicadorId explícito en la navegación (deep link desde Seguimiento,
+    // p. ej.), se selecciona ese indicador de cero. Si no, se refresca la selección
+    // que ya hubiera en el store (singleton de módulo: sobrevive a haber estado en
+    // otra página) sin perderla — ver el docstring de `refrescar` en el store.
+    if (parametros.indicadorId) {
+      void vm.cargarIndicadores().then(() => void vm.seleccionarIndicador(parametros.indicadorId!));
+    } else {
+      void vm.refrescar();
+    }
   }, []);
 
   useEffect(() => {

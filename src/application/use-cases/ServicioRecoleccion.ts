@@ -254,17 +254,38 @@ export class ServicioRecoleccion extends ServicioBase {
     const desagregacionesSinMapear = indicador.desagregaciones.filter((listaId) => !listasCubiertas.includes(listaId));
     const columnaPorLista = new Map(automatizacion.mapeoColumnas.map((m) => [m.listaId, m.columna]));
 
+    // El origen devuelve nombres legibles ("Masculino"), no los códigos internos de la
+    // lista (autogenerados desde su prefijo, sin relación con el dato de origen) — se
+    // resuelve cada valor crudo al código real del elemento antes de construir la clave
+    // de desagregación, la misma que usa la grilla de captura manual. Un valor sin
+    // coincidencia exacta con ningún nombre de elemento activo no puede resolverse a una
+    // clave alcanzable: la fila se cuenta como error en vez de escribirse con una clave
+    // fantasma que la grilla nunca mostraría.
+    const elementosPorLista = new Map<string, ElementoLista[]>();
+    for (const listaId of listasCubiertas) {
+      elementosPorLista.set(listaId, await this.listas.listarElementos(listaId));
+    }
+    const codigoPorNombre = (listaId: string, nombre: string): string | undefined =>
+      elementosPorLista.get(listaId)?.find((e) => e.nombre === nombre)?.codigo;
+
     let celdasActualizadas = 0;
     let filasConError = 0;
     for (const fila of resultado.filas) {
-      const pares = listasCubiertas.map((listaId) => [listaId, fila[columnaPorLista.get(listaId) as string] ?? ''] as const);
-      const todasVacias = pares.every(([, v]) => !v);
-      const todasLlenas = pares.every(([, v]) => v);
+      const crudos = listasCubiertas.map((listaId) => [listaId, fila[columnaPorLista.get(listaId) as string] ?? ''] as const);
+      const todasVacias = crudos.every(([, v]) => !v);
+      const todasLlenas = crudos.every(([, v]) => v);
       let clave: string | null = null;
-      if (todasVacias) clave = claveATexto(CLAVE_GENERAL);
-      else if (todasLlenas && desagregacionesSinMapear.length === 0) clave = claveATexto(crearClave(pares));
-      // Filas con cobertura parcial (algunas listas cubiertas en blanco, otras no) o con
-      // desagregaciones sin mapear fuera de la fila General no pueden determinarse sin ambigüedad: se saltan.
+      if (todasVacias) {
+        clave = claveATexto(CLAVE_GENERAL);
+      } else if (todasLlenas && desagregacionesSinMapear.length === 0) {
+        const pares = crudos.map(([listaId, nombre]) => [listaId, codigoPorNombre(listaId, nombre)] as const);
+        if (pares.every((par): par is readonly [string, string] => par[1] != null)) {
+          clave = claveATexto(crearClave(pares));
+        }
+      }
+      // Filas con cobertura parcial (algunas listas cubiertas en blanco, otras no), con
+      // desagregaciones sin mapear fuera de la fila General, o con un valor que no
+      // coincide con ningún elemento de su lista no pueden determinarse sin ambigüedad: se saltan.
       if (clave === null) {
         if (!todasVacias) filasConError += 1;
         continue;

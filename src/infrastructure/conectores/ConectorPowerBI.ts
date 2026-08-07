@@ -38,11 +38,24 @@ function mensajeError(error: ErrorPowerBI | undefined, status: number, textoCrud
   return `HTTP ${status}: ${detalle || error?.message || error?.code || textoCrudo.slice(0, 300)}`;
 }
 
+/**
+ * La API REST de Power BI nunca admite Basic ni "sin autenticación": si no
+ * se configuró OAuth2 explícito, se asume Microsoft — es la única opción
+ * por defecto que tiene sentido aquí (a diferencia de XMLA, donde "sin
+ * configurar" cae históricamente a Basic para SSAS on-premise clásico).
+ * Cubre tanto la UI (que ya escribe 'microsoft' explícito al crear el
+ * origen) como orígenes creados fuera de ella (IPC directo, datos legados).
+ */
+export function autenticacionEfectivaPowerBI(cfg: Record<string, string>): Record<string, string> {
+  return cfg.autenticacion === 'oauth2' ? cfg : { ...cfg, autenticacion: 'microsoft' };
+}
+
 /** Ejecuta una consulta DAX vía la API REST "Execute Queries" y devuelve las filas de la primera tabla del primer resultado. */
 async function ejecutarDax(origen: OrigenAutomatico, dax: string, guardarOrigen?: GuardarOrigen): Promise<Record<string, unknown>[]> {
   const resuelto = urlExecuteQueries(origen.configuracion);
   if ('error' in resuelto) throw new Error(resuelto.error);
-  const auth = await cabeceraBearer(origen, guardarOrigen);
+  const configuracion = autenticacionEfectivaPowerBI(origen.configuracion);
+  const auth = await cabeceraBearer({ ...origen, configuracion }, guardarOrigen);
   if (!auth.Authorization) {
     throw new Error('Configure autenticación (Microsoft o OAuth2) para el origen Power BI: la API REST no admite Basic ni conexiones sin credenciales.');
   }

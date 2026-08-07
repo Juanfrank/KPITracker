@@ -119,7 +119,7 @@ export interface CanalesIpc {
     res: ResultadoTabular;
   };
   'automatizacion:validarColumna': { req: { listaId: string; valoresUnicos: string[] }; res: ReporteConciliacion };
-  'automatizacion:agregarElementosFaltantes': { req: { listaId: string; codigos: string[] }; res: ElementoLista[] };
+  'automatizacion:agregarElementosFaltantes': { req: { listaId: string; nombres: string[] }; res: ElementoLista[] };
 
   'recoleccion:periodos': { req: { indicadorId: string }; res: Periodo[] };
   'recoleccion:captura': { req: { indicadorId: string; periodoId: string }; res: DatosCaptura };

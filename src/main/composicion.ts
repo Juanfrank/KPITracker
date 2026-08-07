@@ -153,7 +153,7 @@ export async function componerAplicacion(dataDir: string, appVersion?: string): 
     'automatizacion:ejecutarPrueba': ({ indicadorId, periodoId, origenAutomaticoId, parametrosDinamicos, script }) =>
       automatizacion.ejecutarPrueba(indicadorId, periodoId, origenAutomaticoId, parametrosDinamicos, script),
     'automatizacion:validarColumna': ({ listaId, valoresUnicos }) => automatizacion.validarColumna(listaId, valoresUnicos),
-    'automatizacion:agregarElementosFaltantes': ({ listaId, codigos }) => automatizacion.agregarElementosFaltantes(listaId, codigos),
+    'automatizacion:agregarElementosFaltantes': ({ listaId, nombres }) => automatizacion.agregarElementosFaltantes(listaId, nombres),
 
     'recoleccion:periodos': ({ indicadorId }) => recoleccion.periodosDisponibles(indicadorId),
     'recoleccion:captura': ({ indicadorId, periodoId }) => recoleccion.obtenerCaptura(indicadorId, periodoId),

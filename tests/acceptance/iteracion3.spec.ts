@@ -93,6 +93,22 @@ test('probar código de un origen automático ejecuta el script y muestra el res
   await pagina.getByLabel('Cerrar panel').click();
 });
 
+test('los parámetros generales del período tienen un nombre por defecto para cada fuente, sin poder agregarse ni quitarse', async () => {
+  await pagina.getByTestId('nav-admin').click();
+  await pagina.getByTestId('origen-API institucional').click();
+  // Las 11 fuentes están siempre presentes, cada una con su nombre de token por defecto.
+  await expect(pagina.getByTestId('origen-parametro-general-nombre-PeriodoId')).toHaveValue('periodo');
+  await expect(pagina.getByTestId('origen-parametro-general-nombre-Periodicidad')).toHaveValue('periodicidad');
+  await expect(pagina.getByTestId('origen-parametro-general-agregar')).toHaveCount(0);
+  // La notación (nombre del token) sí se puede cambiar por fuente, y se persiste sin perder al resto.
+  await pagina.getByTestId('origen-parametro-general-nombre-Anio').fill('anioFiscal');
+  await pagina.getByTestId('guardar-origen').click();
+  await pagina.getByTestId('origen-API institucional').click();
+  await expect(pagina.getByTestId('origen-parametro-general-nombre-Anio')).toHaveValue('anioFiscal');
+  await expect(pagina.getByTestId('origen-parametro-general-nombre-MesNombre')).toHaveValue('mesNombre');
+  await pagina.getByLabel('Cerrar panel').click();
+});
+
 test('un origen XMLA puede configurarse con inicio de sesión interactivo de Microsoft', async () => {
   // No se hace click en "Probar conexión": abriría una ventana real de login de
   // Microsoft que nunca se completaría en este entorno. La cobertura del
@@ -127,6 +143,14 @@ test('un origen PowerBI (API REST) se configura con dataset/workspace y OAuth2, 
   await pagina.getByTestId('origen-nombre').fill('Dataset de Ventas');
   await pagina.getByTestId('origen-tipo').selectOption('PowerBI');
   await expect(pagina.getByTestId('origen-powerbi-autenticacion').locator('option', { hasText: 'Basic' })).toHaveCount(0);
+  // Microsoft debe ser el modo por defecto (sin tocar el selector): el
+  // selector lo muestra Y los campos renderizados deben coincidir —
+  // Client ID (Microsoft), nunca Usuario/Contraseña (Basic, que esta API
+  // nunca admite). Antes divergían: el selector mostraba "Microsoft" pero
+  // los campos de abajo seguían siendo los de Basic.
+  await expect(pagina.getByTestId('origen-powerbi-autenticacion')).toHaveValue('microsoft');
+  await expect(pagina.getByTestId('origen-campo-clienteId')).toBeVisible();
+  await expect(pagina.getByTestId('origen-campo-usuario')).toHaveCount(0);
   await pagina.getByTestId('origen-campo-datasetId').fill('11111111-2222-3333-4444-555555555555');
   await pagina.getByTestId('origen-campo-groupId').fill('66666666-7777-8888-9999-000000000000');
   await pagina.getByTestId('origen-powerbi-autenticacion').selectOption('oauth2');

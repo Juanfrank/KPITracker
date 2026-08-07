@@ -1,6 +1,6 @@
 import {
   EntidadNoEncontradaError, GeneradorPeriodos, Periodicidad, ValidacionError, conciliarConLista,
-  resolverParametrosGenerales, sustituirTokens
+  generarCodigoElemento, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
   AutomatizacionIndicador, DefinicionPeriodicidad, ElementoLista, OrigenAutomatico, ParametroDinamico, Periodo
@@ -116,25 +116,33 @@ export class ServicioAutomatizacionIndicador extends ServicioBase {
     return conciliarConLista(valoresUnicos, elementos);
   }
 
-  /** Agrega a la lista, como elementos nuevos, los códigos que el resultado trajo y la lista aún no tenía. */
-  async agregarElementosFaltantes(listaId: string, codigos: string[]): Promise<ElementoLista[]> {
+  /**
+   * Agrega a la lista, como elementos nuevos, los nombres que el resultado
+   * del origen trajo y la lista aún no tenía (conciliación por nombre, ver
+   * `conciliarConLista`). El código de cada elemento nuevo se autogenera
+   * desde el prefijo de la lista — la misma notación que produce la UI de
+   * Listas al dar de alta un elemento a mano o al pegar desde Excel — nunca
+   * el valor crudo del origen, que es un nombre, no un código.
+   */
+  async agregarElementosFaltantes(listaId: string, nombres: string[]): Promise<ElementoLista[]> {
     const lista = await this.listasRepo.obtener(listaId);
     if (!lista) throw new EntidadNoEncontradaError('Lista', listaId);
     const existentes = await this.listasRepo.listarElementos(listaId);
     let orden = existentes.length > 0 ? Math.max(...existentes.map((e) => e.orden)) : 0;
     const creados: ElementoLista[] = [];
-    for (const codigo of codigos) {
-      if (existentes.some((e) => e.codigo === codigo)) continue;
+    for (const nombre of nombres) {
+      if (existentes.some((e) => e.nombre === nombre) || creados.some((e) => e.nombre === nombre)) continue;
       orden += 1;
       const nuevo: ElementoLista = {
-        id: this.ctx.ids.nuevoId(), listaId, codigo, nombre: codigo, descripcion: '', orden, padreCodigo: null, activo: true
+        id: this.ctx.ids.nuevoId(), listaId, codigo: generarCodigoElemento(lista.prefijo, orden), nombre,
+        descripcion: '', orden, padreCodigo: null, activo: true
       };
       await this.listasRepo.guardarElemento(nuevo);
       creados.push(nuevo);
     }
     if (creados.length > 0) {
       await this.auditar('Crear', 'ElementoLista', listaId, null, null,
-        `Agregados desde conciliación de origen automático: ${creados.map((c) => c.codigo).join(', ')}`);
+        `Agregados desde conciliación de origen automático: ${creados.map((c) => c.nombre).join(', ')}`);
     }
     return creados;
   }
