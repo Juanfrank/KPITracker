@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Atributo, AutomatizacionIndicador, OrigenAutomatico, ParametroDinamico, Periodo } from '@domain/index';
+import type { Atributo, AutomatizacionIndicador, MapeoColumna, OrigenAutomatico, ParametroDinamico, Periodo } from '@domain/index';
 import type { ResultadoTabular } from '@application/ports/index';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 import { invocar } from '../../api';
@@ -8,12 +8,21 @@ import { Icono } from '../../componentes/Icono';
 
 const SENTINELA_VALOR = '__valor__';
 const SENTINELA_IGNORAR = '__ignorar__';
+/** Prefijo del valor de select para "esta columna es el segmentador de subtotal de <listaId>". */
+const PREFIJO_SEGMENTADOR = 'seg:';
 
 function configVacia(indicadorId: string, origenAutomaticoId: string): AutomatizacionIndicador {
   return {
     id: '', indicadorId, origenAutomaticoId, parametrosDinamicos: [], script: '', columnaValor: null,
     mapeoColumnas: [], desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
   };
+}
+
+/** Quita cualquier rol previo de `columna` (como valor de una desagregación o como su segmentador) antes de reasignarla. */
+function limpiarColumna(mapeoColumnas: MapeoColumna[], columna: string): MapeoColumna[] {
+  return mapeoColumnas
+    .filter((m) => m.columna !== columna)
+    .map((m) => (m.columnaSegmentadorSubtotal === columna ? { ...m, columnaSegmentadorSubtotal: null } : m));
 }
 
 /**
@@ -108,23 +117,37 @@ export function ModalAutomatizacionIndicador({
     return mapeo?.listaId ?? null;
   };
 
+  const listaIdSegmentadaPorColumna = (columna: string): string | null => {
+    const mapeo = config?.mapeoColumnas.find((m) => m.columnaSegmentadorSubtotal === columna);
+    return mapeo?.listaId ?? null;
+  };
+
   const asignarColumna = (columna: string, valor: string): void => {
     if (!config) return;
     if (valor === SENTINELA_VALOR) {
-      actualizar({ columnaValor: columna, mapeoColumnas: config.mapeoColumnas.filter((m) => m.columna !== columna) });
+      actualizar({ columnaValor: columna, mapeoColumnas: limpiarColumna(config.mapeoColumnas, columna) });
       return;
     }
     const sinValor = config.columnaValor === columna ? null : config.columnaValor;
-    const sinEstaColumna = config.mapeoColumnas.filter((m) => m.columna !== columna);
     if (valor === SENTINELA_IGNORAR) {
-      actualizar({ columnaValor: sinValor, mapeoColumnas: sinEstaColumna });
+      actualizar({ columnaValor: sinValor, mapeoColumnas: limpiarColumna(config.mapeoColumnas, columna) });
       return;
     }
-    actualizar({ columnaValor: sinValor, mapeoColumnas: [...sinEstaColumna, { columna, listaId: valor }] });
+    if (valor.startsWith(PREFIJO_SEGMENTADOR)) {
+      const listaId = valor.slice(PREFIJO_SEGMENTADOR.length);
+      const limpio = limpiarColumna(config.mapeoColumnas, columna);
+      actualizar({
+        columnaValor: sinValor,
+        mapeoColumnas: limpio.map((m) => (m.listaId === listaId ? { ...m, columnaSegmentadorSubtotal: columna } : m))
+      });
+      return;
+    }
+    const limpio = limpiarColumna(config.mapeoColumnas, columna);
+    actualizar({ columnaValor: sinValor, mapeoColumnas: [...limpio, { columna, listaId: valor, columnaSegmentadorSubtotal: null }] });
   };
 
   const desagregacionesSinMapear = desagregaciones.filter(
-    (listaId) => !config?.mapeoColumnas.some((m) => m.listaId === listaId)
+    (listaId) => !config?.mapeoColumnas.some((m) => m.listaId === listaId && m.columna)
   );
 
   const validarColumna = async (listaId: string, columna: string): Promise<void> => {
@@ -255,6 +278,13 @@ export function ModalAutomatizacionIndicador({
           {resultado && (
             <>
               <h4 style={{ margin: '8px 0 0' }}>4. Mapeo de columnas a desagregaciones</h4>
+              <p className="texto-suave" style={{ margin: 0 }}>
+                Además del valor de cada desagregación, una desagregación ya mapeada puede tener un
+                &quot;segmentador de subtotal&quot;: una columna booleana del resultado que indica, fila por fila, si esa
+                desagregación viene enrollada (subtotal) en esa fila — como las columnas <code>IsSubtotal...</code> que
+                produce DAX <code>SUMMARIZECOLUMNS(..., ROLLUPADDISSUBTOTAL(...))</code>. Sin segmentador, una columna de
+                valor en blanco ya se interpreta como &quot;enrollada&quot;.
+              </p>
               <div className="tabla-envoltura">
                 <table className="tabla">
                   <thead>
@@ -266,7 +296,13 @@ export function ModalAutomatizacionIndicador({
                   <tbody>
                     {resultado.columnas.map((columna) => {
                       const listaId = listaIdDeColumna(columna);
-                      const valorSelect = config.columnaValor === columna ? SENTINELA_VALOR : (listaId ?? SENTINELA_IGNORAR);
+                      const listaIdSegmentada = listaIdSegmentadaPorColumna(columna);
+                      const valorSelect = config.columnaValor === columna
+                        ? SENTINELA_VALOR
+                        : listaId ?? (listaIdSegmentada ? `${PREFIJO_SEGMENTADOR}${listaIdSegmentada}` : SENTINELA_IGNORAR);
+                      const desagregacionesMapeadas = desagregaciones.filter((id) =>
+                        config.mapeoColumnas.some((m) => m.listaId === id && m.columna)
+                      );
                       return (
                         <tr key={columna}>
                           <td><code>{columna}</code></td>
@@ -280,6 +316,11 @@ export function ModalAutomatizacionIndicador({
                               <option value={SENTINELA_VALOR}>Es el valor del resultado</option>
                               {desagregaciones.map((id) => (
                                 <option key={id} value={id}>{listaPorId.get(id)?.nombre ?? id}</option>
+                              ))}
+                              {desagregacionesMapeadas.map((id) => (
+                                <option key={`seg-${id}`} value={`${PREFIJO_SEGMENTADOR}${id}`}>
+                                  Segmentador de subtotal de {listaPorId.get(id)?.nombre ?? id}
+                                </option>
                               ))}
                             </select>
                           </td>

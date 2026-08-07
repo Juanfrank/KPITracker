@@ -28,17 +28,36 @@ describe('ProductoCartesiano', () => {
     expect(claveATexto(combos[1]!.clave)).toBe('sexo=M');
   });
 
-  it('varias desagregaciones producen el producto cartesiano completo + General', () => {
+  it('varias desagregaciones producen el CUBO completo: General + subtotal por cada subconjunto + detalle completo', () => {
     const combos = servicio.generar(['sexo', 'provincia', 'tribunal'], elementos);
-    // 2 × 3 × 2 = 12 + fila General
-    expect(combos).toHaveLength(13);
+    // Cada lista aporta un factor de (1 + cantidad de elementos activos): (2+1)×(3+1)×(2+1) = 36.
+    expect(combos).toHaveLength(36);
+    expect(combos.filter((c) => c.nivel === 0)).toHaveLength(1); // General
+    // Subtotales de una sola desagregación (las otras dos enrolladas): 2 + 3 + 2 = 7.
+    expect(combos.filter((c) => c.nivel === 1)).toHaveLength(7);
+    // Subtotales de dos desagregaciones: (2×3) + (2×2) + (3×2) = 16.
+    expect(combos.filter((c) => c.nivel === 2)).toHaveLength(16);
+    // Detalle completo (producto cartesiano de las tres, como antes de este cambio): 2×3×2 = 12.
+    expect(combos.filter((c) => c.nivel === 3)).toHaveLength(12);
+    // El General va primero (nivel ascendente); el resto queda agrupado por nivel.
+    expect(claveATexto(combos[0]!.clave)).toBe('GENERAL');
+    expect(combos.map((c) => c.nivel)).toEqual([...combos.map((c) => c.nivel)].sort((a, b) => a - b));
   });
 
-  it('la exclusión temporal remueve la lista sin alterar la configuración', () => {
+  it('un subtotal de una sola desagregación deja las demás ausentes de las etiquetas (enrolladas)', () => {
+    const combos = servicio.generar(['sexo', 'provincia'], elementos);
+    const subtotalSexo = combos.find((c) => c.nivel === 1 && c.etiquetas[0]?.listaId === 'sexo' && c.etiquetas[0]?.codigo === 'M');
+    expect(subtotalSexo).toBeDefined();
+    expect(subtotalSexo!.etiquetas).toHaveLength(1); // "provincia" no aparece: está enrollada en este subtotal
+    expect(claveATexto(subtotalSexo!.clave)).toBe('sexo=M');
+  });
+
+  it('la exclusión temporal remueve la lista del cubo por completo (ni presente ni contribuye a enrollarse)', () => {
     const desagregaciones = ['sexo', 'provincia', 'tribunal'];
     const combos = servicio.generar(desagregaciones, elementos, ['tribunal']);
-    // 2 × 3 = 6 + General
-    expect(combos).toHaveLength(7);
+    // Sin "tribunal": (2+1)×(3+1) = 12.
+    expect(combos).toHaveLength(12);
+    expect(combos.every((c) => c.etiquetas.every((e) => e.listaId !== 'tribunal'))).toBe(true);
     expect(desagregaciones).toEqual(['sexo', 'provincia', 'tribunal']);
   });
 

@@ -183,6 +183,180 @@ describe('Composition root — advertencias de validación cruzada en Recolecci�
   });
 });
 
+describe('Composition root — cubo de subtotales en Recolección (2 desagregaciones)', () => {
+  async function indicadorConDosListas(): Promise<{ indicadorId: string; periodoId: string; sexoId: string; provinciaId: string }> {
+    const sexo = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Sexo cubo', descripcion: '', prefijo: 'SXC', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: sexo.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: sexo.id, codigo: 'F', nombre: 'Femenino', descripcion: '', orden: 2, padreCodigo: null, activo: true });
+
+    const provincia = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Provincia cubo', descripcion: '', prefijo: 'PRC', estado: 'Activa', version: 1, orden: 2, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'SD', nombre: 'Santo Domingo', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'STG', nombre: 'Santiago', descripcion: '', orden: 2, padreCodigo: null, activo: true });
+
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ desagregaciones: [sexo.id, provincia.id] }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    return { indicadorId: guardado.id, periodoId, sexoId: sexo.id, provinciaId: provincia.id };
+  }
+
+  it('recoleccion:captura genera el cubo completo: General + subtotales de una lista + detalle completo', async () => {
+    const { indicadorId, periodoId } = await indicadorConDosListas();
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId, periodoId });
+
+    // (2+1) × (2+1) = 9: 1 General + 2 subtotales de Sexo + 2 subtotales de Provincia + 4 de detalle completo.
+    expect(captura.filas).toHaveLength(9);
+    expect(captura.filas.filter((f) => f.esGeneral)).toHaveLength(1);
+    expect(captura.filas.filter((f) => f.esSubtotal)).toHaveLength(4);
+    expect(captura.filas.filter((f) => f.esDetalleCompleto)).toHaveLength(4);
+
+    const subtotalMasculino = captura.filas.find((f) => f.esSubtotal && f.etiquetas.length === 1 && f.etiquetas[0]?.descripcion === 'Masculino');
+    expect(subtotalMasculino).toBeDefined();
+    expect(subtotalMasculino!.claveDesagregacion.includes('=M')).toBe(true);
+  });
+
+  it('un subtotal parcial no infla Suma/Máximo: solo el detalle completo cuenta para los agregados', async () => {
+    const { indicadorId, periodoId, sexoId } = await indicadorConDosListas();
+    // Subtotal "Masculino, todas las provincias" = 100 (ya explicado por 60+40 del detalle).
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId, periodoId, claveDesagregacion: `${sexoId}=M`, valorCrudo: '100' });
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId, periodoId });
+    const subtotal = captura.filas.find((f) => f.claveDesagregacion === `${sexoId}=M`);
+    expect(subtotal?.esSubtotal).toBe(true);
+    // Sin celdas de detalle todavía: los agregados no cuentan el subtotal (cantidadConValor=1, pero suma/máximo derivan solo de esDetalleCompleto).
+    expect(captura.advertencias).toEqual([]); // no hay General con qué compararlo, y el subtotal no cuenta como "máximo de las desagregaciones"
+  });
+});
+
+describe('Composition root — segmentador de subtotal en orígenes automáticos', () => {
+  it('sin segmentador, un valor en blanco en la columna mapeada ya se interpreta como subtotal (enrollada) por desagregación', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([
+        { sexo: '', provincia: '', total: '500' }, // General
+        { sexo: 'Masculino', provincia: '', total: '300' }, // subtotal de Sexo (Provincia enrollada)
+        { sexo: 'Masculino', provincia: 'Santo Domingo', total: '180' }, // detalle completo
+        { sexo: 'Masculino', provincia: 'Santiago', total: '120' } // detalle completo
+      ]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const sexo = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Sexo segmentador', descripcion: '', prefijo: 'SXS', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: sexo.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      const provincia = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Provincia segmentador', descripcion: '', prefijo: 'PRS', estado: 'Activa', version: 1, orden: 2, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'SD', nombre: 'Santo Domingo', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'STG', nombre: 'Santiago', descripcion: '', orden: 2, padreCodigo: null, activo: true });
+
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'API cubo sin segmentador', tipo: 'API', descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [sexo.id, provincia.id] }), valores: []
+      });
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: '', columnaValor: 'total',
+        mapeoColumnas: [
+          { columna: 'sexo', listaId: sexo.id, columnaSegmentadorSubtotal: null },
+          { columna: 'provincia', listaId: provincia.id, columnaSegmentadorSubtotal: null }
+        ],
+        desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
+      });
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId });
+      expect(resultado.celdasActualizadas).toBe(4);
+      expect(resultado.filasConError).toBe(0);
+
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+      expect(captura.filas.find((f) => f.esGeneral)?.valor).toBe(500);
+      expect(captura.filas.find((f) => f.claveDesagregacion === `${sexo.id}=M`)?.valor).toBe(300);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=SD'))?.valor).toBe(180);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=STG'))?.valor).toBe(120);
+    } finally {
+      servidor.close();
+    }
+  });
+
+  it('con segmentador explícito, una fila con valor NO en blanco pero segmentador=true igual se trata como subtotal (enrollada)', async () => {
+    const servidor = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify([
+        // El origen no deja "provincia" en blanco en la fila de rollup: repite un valor pero marca esSubtotalProvincia=true.
+        { sexo: 'Masculino', provincia: 'TODAS', esSubtotalProvincia: 'true', total: '300' },
+        { sexo: 'Masculino', provincia: 'Santo Domingo', esSubtotalProvincia: 'false', total: '180' },
+        { sexo: 'Masculino', provincia: 'Santiago', esSubtotalProvincia: 'false', total: '120' }
+      ]));
+    });
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    const puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
+
+    try {
+      const sexo = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Sexo segmentador2', descripcion: '', prefijo: 'SXSB', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: sexo.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      const provincia = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Provincia segmentador2', descripcion: '', prefijo: 'PRSB', estado: 'Activa', version: 1, orden: 2, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'SD', nombre: 'Santo Domingo', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'STG', nombre: 'Santiago', descripcion: '', orden: 2, padreCodigo: null, activo: true });
+
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'API cubo con segmentador', tipo: 'API', descripcion: '',
+        configuracion: { url: `http://127.0.0.1:${puerto}`, metodo: 'GET' }, parametrosGenerales: [],
+        activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [sexo.id, provincia.id] }), valores: []
+      });
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: '', columnaValor: 'total',
+        mapeoColumnas: [
+          { columna: 'sexo', listaId: sexo.id, columnaSegmentadorSubtotal: null },
+          { columna: 'provincia', listaId: provincia.id, columnaSegmentadorSubtotal: 'esSubtotalProvincia' }
+        ],
+        desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
+      });
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId });
+      expect(resultado.celdasActualizadas).toBe(3);
+      expect(resultado.filasConError).toBe(0);
+
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+      // La fila "TODAS"/esSubtotalProvincia=true escribió el subtotal de Sexo=Masculino (Provincia enrollada), NO un detalle con provincia="TODAS".
+      expect(captura.filas.find((f) => f.claveDesagregacion === `${sexo.id}=M`)?.valor).toBe(300);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=SD'))?.valor).toBe(180);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=STG'))?.valor).toBe(120);
+    } finally {
+      servidor.close();
+    }
+  });
+});
+
 describe('Composition root — configuración portable v1 → v2', () => {
   it('migra un archivo v1 auténtico (sin las secciones nuevas) e importa correctamente', async () => {
     const archivoV1 = {

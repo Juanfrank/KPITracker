@@ -489,6 +489,17 @@ table.tabla tbody tr.fila-eliminada:hover {
   background: var(--superficie-2);
 }
 
+/* Fila de subtotal (nivel intermedio del cubo: alguna(s) desagregación(es)
+   presente(s), el resto enrollada(s) — ni General ni detalle completo). */
+.grilla-captura tr.fila-subtotal {
+  font-style: italic;
+  background: var(--superficie-2);
+}
+
+.grilla-captura td.celda-enrollada {
+  color: var(--texto-3);
+}
+
 /* ============ Chips y estados ============ */
 .chip {
   display: inline-flex;

@@ -10,6 +10,18 @@ export interface ParametroDinamico {
 export interface MapeoColumna {
   columna: string;
   listaId: string;
+  /**
+   * Columna booleana opcional del resultado que indica, fila por fila, si
+   * ESTA desagregación viene "enrollada" (subtotal/rollup) en esa fila —
+   * el mismo rol que cumplen las columnas `IsSubtotal...` que produce DAX
+   * `SUMMARIZECOLUMNS(..., ROLLUPADDISSUBTOTAL(...))`. Cuando está
+   * configurada y su valor es verdadero en una fila, esa desagregación se
+   * trata como ausente en esa fila (subtotal) en vez de leer `columna`. Sin
+   * segmentador, un valor en blanco en `columna` ya se interpreta como
+   * "enrollada" — el segmentador es para orígenes que no dejan el valor en
+   * blanco en las filas de rollup.
+   */
+  columnaSegmentadorSubtotal?: string | null;
 }
 
 /**

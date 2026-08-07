@@ -24,8 +24,13 @@ export interface ResultadoObtencionAutomatica {
 
 export interface FilaCaptura {
   claveDesagregacion: string;
+  /** Solo las desagregaciones PRESENTES en esta fila (ausente = enrollada/subtotal en ella; ver ProductoCartesiano). */
   etiquetas: Array<{ listaId: string; listaNombre: string; codigo: string; descripcion: string }>;
   esGeneral: boolean;
+  /** true en el nivel intermedio del cubo (algunas desagregaciones presentes, otras enrolladas) — ni General ni detalle completo. */
+  esSubtotal: boolean;
+  /** true solo cuando TODAS las desagregaciones activas están presentes (el nivel más fino, el único que existía antes del cubo). */
+  esDetalleCompleto: boolean;
   valor: number | null;
   observacion: string | null;
   actualizadoEn: string | null;
@@ -110,6 +115,8 @@ export class ServicioRecoleccion extends ServicioBase {
           claveDesagregacion: 'GENERAL',
           etiquetas: [],
           esGeneral: true,
+          esSubtotal: false,
+          esDetalleCompleto: false,
           valor,
           observacion: null,
           actualizadoEn: null
@@ -130,16 +137,20 @@ export class ServicioRecoleccion extends ServicioBase {
     }
 
     const combinaciones = this.productoCartesiano.generar(indicador.desagregaciones, elementosPorLista, excluidas);
+    const totalDesagregacionesActivas = indicador.desagregaciones.filter((id) => !excluidas.includes(id)).length;
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const porClave = new Map(existentes.map((r) => [r.claveDesagregacion, r]));
 
     const filas: FilaCaptura[] = combinaciones.map((c) => {
       const clave = claveATexto(c.clave);
       const existente = porClave.get(clave);
+      const esDetalleCompleto = totalDesagregacionesActivas > 0 && c.nivel === totalDesagregacionesActivas;
       return {
         claveDesagregacion: clave,
         etiquetas: c.etiquetas.map((e) => ({ ...e, listaNombre: nombresListas.get(e.listaId) ?? e.listaId })),
         esGeneral: clave === 'GENERAL',
+        esSubtotal: c.nivel > 0 && !esDetalleCompleto,
+        esDetalleCompleto,
         valor: existente?.valor ?? null,
         observacion: existente?.observacion ?? null,
         actualizadoEn: existente?.actualizadoEn ?? null
@@ -147,7 +158,9 @@ export class ServicioRecoleccion extends ServicioBase {
     });
 
     const reglasRecoleccion = await this.reglasRepo.listar('Recoleccion');
-    const agregados = calcularAgregadosCaptura(filas.map((f) => ({ esGeneral: f.esGeneral, valor: f.valor })));
+    const agregados = calcularAgregadosCaptura(
+      filas.map((f) => ({ esGeneral: f.esGeneral, esDetalleCompleto: f.esDetalleCompleto, valor: f.valor }))
+    );
     const advertencias = evaluarValidacionesCaptura(agregados, reglasRecoleccion);
 
     const definicion = await this.definicionPara(indicador);
@@ -201,12 +214,18 @@ export class ServicioRecoleccion extends ServicioBase {
 
   /**
    * Obtiene el resultado del período desde el origen configurado para el
-   * indicador y escribe directamente las celdas de la grilla que su mapeo
-   * de columnas permite determinar sin ambigüedad. Si alguna desagregación
-   * del indicador no está mapeada (u omitida explícitamente), esas
-   * combinaciones se saltan y quedan para captura manual — solo la fila
-   * General se completa cuando el resultado trae una fila agregada (todas
-   * las columnas mapeadas en blanco).
+   * indicador y escribe directamente las celdas de la grilla — incluidas
+   * las de subtotal (nivel intermedio del cubo, ver ProductoCartesiano),
+   * no solo General y detalle completo. Para cada desagregación mapeada de
+   * cada fila, se determina si viene "enrollada" (subtotal) en esa fila: si
+   * tiene un segmentador configurado (`columnaSegmentadorSubtotal`) y es
+   * verdadero, o si no tiene segmentador y su columna viene en blanco. Una
+   * desagregación NUNCA mapeada (o explícitamente omitida) se trata como
+   * siempre enrollada — no hay de dónde sacar un valor concreto para ella,
+   * así que solo bloquea escribir el detalle completo, no los subtotales
+   * que no la involucran. Una fila cuyo valor no coincide con ningún
+   * elemento de su lista (y no está enrollada) no puede determinarse: se
+   * cuenta como error en vez de escribirse con una clave fantasma.
    */
   async obtenerResultadoAutomatico(indicadorId: string, periodoId: string): Promise<ResultadoObtencionAutomatica> {
     const indicador = await this.indicadores.obtener(indicadorId);
@@ -249,10 +268,10 @@ export class ServicioRecoleccion extends ServicioBase {
     }
 
     const listasCubiertas = indicador.desagregaciones.filter((listaId) =>
-      automatizacion.mapeoColumnas.some((m) => m.listaId === listaId) && !automatizacion.desagregacionesOmitidas.includes(listaId)
+      automatizacion.mapeoColumnas.some((m) => m.listaId === listaId && m.columna) && !automatizacion.desagregacionesOmitidas.includes(listaId)
     );
     const desagregacionesSinMapear = indicador.desagregaciones.filter((listaId) => !listasCubiertas.includes(listaId));
-    const columnaPorLista = new Map(automatizacion.mapeoColumnas.map((m) => [m.listaId, m.columna]));
+    const mapeoPorLista = new Map(automatizacion.mapeoColumnas.map((m) => [m.listaId, m]));
 
     // El origen devuelve nombres legibles ("Masculino"), no los códigos internos de la
     // lista (autogenerados desde su prefijo, sin relación con el dato de origen) — se
@@ -267,29 +286,40 @@ export class ServicioRecoleccion extends ServicioBase {
     }
     const codigoPorNombre = (listaId: string, nombre: string): string | undefined =>
       elementosPorLista.get(listaId)?.find((e) => e.nombre === nombre)?.codigo;
+    const tipoBooleano = this.tipos.obtener(TipoDato.Boolean);
+    const esVerdadero = (crudo: string | undefined): boolean => {
+      const parseado = tipoBooleano.parse(crudo ?? '');
+      return parseado.ok && parseado.valor === true;
+    };
 
     let celdasActualizadas = 0;
     let filasConError = 0;
     for (const fila of resultado.filas) {
-      const crudos = listasCubiertas.map((listaId) => [listaId, fila[columnaPorLista.get(listaId) as string] ?? ''] as const);
-      const todasVacias = crudos.every(([, v]) => !v);
-      const todasLlenas = crudos.every(([, v]) => v);
-      let clave: string | null = null;
-      if (todasVacias) {
-        clave = claveATexto(CLAVE_GENERAL);
-      } else if (todasLlenas && desagregacionesSinMapear.length === 0) {
-        const pares = crudos.map(([listaId, nombre]) => [listaId, codigoPorNombre(listaId, nombre)] as const);
-        if (pares.every((par): par is readonly [string, string] => par[1] != null)) {
-          clave = claveATexto(crearClave(pares));
+      // Por cada desagregación mapeada, se determina si esta fila la trae "enrollada"
+      // (subtotal): con segmentador configurado, gana su valor; sin segmentador, un
+      // valor en blanco en la columna mapeada ya se interpreta como enrollada — así
+      // "todas en blanco" (la fila General) sigue funcionando exactamente como antes,
+      // ahora generalizado a subtotales parciales de una sola desagregación.
+      const pares: Array<readonly [string, string]> = [];
+      let filaValida = true;
+      for (const listaId of listasCubiertas) {
+        const mapeo = mapeoPorLista.get(listaId)!;
+        const enrollada = mapeo.columnaSegmentadorSubtotal
+          ? esVerdadero(fila[mapeo.columnaSegmentadorSubtotal])
+          : !fila[mapeo.columna];
+        if (enrollada) continue;
+        const codigo = codigoPorNombre(listaId, fila[mapeo.columna] ?? '');
+        if (codigo == null) {
+          filaValida = false;
+          break;
         }
+        pares.push([listaId, codigo]);
       }
-      // Filas con cobertura parcial (algunas listas cubiertas en blanco, otras no), con
-      // desagregaciones sin mapear fuera de la fila General, o con un valor que no
-      // coincide con ningún elemento de su lista no pueden determinarse sin ambigüedad: se saltan.
-      if (clave === null) {
-        if (!todasVacias) filasConError += 1;
+      if (!filaValida) {
+        filasConError += 1;
         continue;
       }
+      const clave = claveATexto(pares.length === 0 ? CLAVE_GENERAL : crearClave(pares));
       const parseado = this.tipos.obtener(TipoDato.Decimal).parse(fila[automatizacion.columnaValor] ?? '');
       if (!parseado.ok) {
         filasConError += 1;

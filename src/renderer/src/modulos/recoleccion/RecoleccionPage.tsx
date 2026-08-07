@@ -49,7 +49,10 @@ export function RecoleccionPage(): React.JSX.Element {
   };
 
   const captura = vm.captura;
-  const columnasDesagregacion = captura?.filas.find((f) => !f.esGeneral)?.etiquetas.map((e) => e.listaNombre) ?? [];
+  // Las columnas de la grilla salen de TODAS las desagregaciones activas del indicador
+  // (no de las etiquetas de una fila cualquiera): con subtotales, la primera fila que no
+  // es General puede tener menos etiquetas que el total (las demás vienen enrolladas).
+  const desagregacionesActivas = captura?.desagregacionesDisponibles.filter((d) => !d.excluida) ?? [];
   const indicadorSeleccionado = vm.indicadores.find((i) => i.id === vm.indicadorId);
 
   return (
@@ -176,8 +179,8 @@ export function RecoleccionPage(): React.JSX.Element {
           <table className="tabla grilla-captura" data-testid="grilla-captura">
             <thead>
               <tr>
-                {columnasDesagregacion.map((c) => <th key={c}>{c}</th>)}
-                {columnasDesagregacion.length === 0 && <th>Desagregación</th>}
+                {desagregacionesActivas.map((d) => <th key={d.listaId}>{d.nombre}</th>)}
+                {desagregacionesActivas.length === 0 && <th>Desagregación</th>}
                 <th style={{ textAlign: 'right', width: 160 }}>Resultado — {captura.periodoEtiqueta}</th>
                 <th style={{ width: 170 }}>Última modificación</th>
               </tr>
@@ -186,14 +189,22 @@ export function RecoleccionPage(): React.JSX.Element {
               {captura.filas.map((fila, indice) => {
                 const estado = vm.estadoCeldas.get(fila.claveDesagregacion);
                 const error = vm.erroresCeldas.get(fila.claveDesagregacion);
+                const clases = [fila.esGeneral ? 'fila-general' : '', fila.esSubtotal ? 'fila-subtotal' : ''].filter(Boolean).join(' ');
                 return (
-                  <tr key={fila.claveDesagregacion} className={fila.esGeneral ? 'fila-general' : ''} data-indice={indice}>
+                  <tr key={fila.claveDesagregacion} className={clases} data-indice={indice}>
                     {fila.esGeneral ? (
-                      <td colSpan={Math.max(columnasDesagregacion.length, 1)}>
-                        {indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'Subtotal general (total del indicador)'}
+                      <td colSpan={Math.max(desagregacionesActivas.length, 1)}>
+                        {indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'General (total del indicador)'}
                       </td>
                     ) : (
-                      fila.etiquetas.map((e) => <td key={e.listaId}>{e.descripcion}</td>)
+                      desagregacionesActivas.map((d) => {
+                        const etiqueta = fila.etiquetas.find((e) => e.listaId === d.listaId);
+                        return etiqueta ? (
+                          <td key={d.listaId}>{etiqueta.descripcion}</td>
+                        ) : (
+                          <td key={d.listaId} className="celda-enrollada" title={`Subtotal: todas las opciones de "${d.nombre}"`}>Todos</td>
+                        );
+                      })
                     )}
                     <td
                       className={`celda-editable ${estado ?? ''} ${error ? 'error' : ''}`}

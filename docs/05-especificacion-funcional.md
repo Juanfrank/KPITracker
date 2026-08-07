@@ -44,7 +44,7 @@ Convenciones globales de UX: navegación por teclado, autoguardado (sin botón G
 ```
 
 - Los **períodos disponibles** derivan de la periodicidad del indicador y del año inicial global (períodos ya iniciados; por defecto se selecciona el último cerrado).
-- Las filas son el **producto cartesiano** de las desagregaciones activas **+ la fila General** (siempre presente, porque el total puede no ser un promedio simple de las desagregaciones).
+- Las filas forman un **cubo** (como SQL `CUBE` / DAX `SUMMARIZECOLUMNS` con `ROLLUPADDISSUBTOTAL`): la fila **General** (todas las desagregaciones enrolladas, siempre presente porque el total puede no ser un promedio simple), un **subtotal** por cada subconjunto de desagregaciones presentes (el resto enrolladas, mostradas como "Todos" y en cursiva), y el **detalle completo** (producto cartesiano de todas). Para N desagregaciones, cada una aporta un factor de (1 + su cantidad de elementos activos) al total de filas.
 - **Exclusión temporal**: chips de desagregación por levantamiento; al excluir, la grilla se regenera sin esa lista. No modifica el indicador.
 - **Fecha de corte**: única, obligatoria para completar el período, compartida por todas las desagregaciones.
 - Captura: edición rápida en celda; Enter o ↓/↑ confirman y navegan; pegado multi-fila desde Excel (TSV); validación en tiempo real (celda roja + tooltip con el error); indicadores visuales guardando/guardada; deshacer/rehacer con pila de cambios; autoguardado por celda (sin botón Guardar). El historial de cada celda queda en Auditoría.

@@ -15,12 +15,20 @@ export interface AgregadosCaptura {
 
 export interface FilaValor {
   esGeneral: boolean;
+  /**
+   * true solo en las filas de detalle completo (todas las desagregaciones
+   * presentes, ninguna enrollada) — a diferencia de las filas de subtotal
+   * (nivel intermedio del cubo, ver ProductoCartesiano), que no deben
+   * contarse aquí: ya están implícitas en el detalle completo y sumarlas
+   * junto a él infla Suma/Máximo/Promedio con el mismo dato varias veces.
+   */
+  esDetalleCompleto: boolean;
   valor: number | null;
 }
 
 export function calcularAgregadosCaptura(filas: FilaValor[]): AgregadosCaptura {
   const general = filas.find((f) => f.esGeneral)?.valor ?? null;
-  const desagregados = filas.filter((f) => !f.esGeneral && f.valor != null).map((f) => f.valor as number);
+  const desagregados = filas.filter((f) => f.esDetalleCompleto && f.valor != null).map((f) => f.valor as number);
   const suma = desagregados.reduce((a, b) => a + b, 0);
   return {
     general,
