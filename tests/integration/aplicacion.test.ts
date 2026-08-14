@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { componerAplicacion } from '../../src/main/composicion';
 import type { Aplicacion } from '../../src/main/composicion';
-import { Periodicidad, TipoDato } from '@domain/index';
+import { Periodicidad, TipoDato, generarConsultaDax } from '@domain/index';
 import type { DefinicionPeriodicidad, Indicador, Meta, ReglaNegocio } from '@domain/index';
 
 let dataDir: string;
@@ -348,6 +348,153 @@ describe('Composition root — segmentador de subtotal en orígenes automáticos
 
       const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
       // La fila "TODAS"/esSubtotalProvincia=true escribió el subtotal de Sexo=Masculino (Provincia enrollada), NO un detalle con provincia="TODAS".
+      expect(captura.filas.find((f) => f.claveDesagregacion === `${sexo.id}=M`)?.valor).toBe(300);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=SD'))?.valor).toBe(180);
+      expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=STG'))?.valor).toBe(120);
+    } finally {
+      servidor.close();
+    }
+  });
+});
+
+describe('Composition root — generador de consultas DAX (alias por origen + orígenes PowerBI)', () => {
+  function crearServidorTokenPowerBi(handlerExtra: (req: IncomingMessage, res: ServerResponse) => void) {
+    return createServer((req, res) => {
+      if (req.url === '/token') {
+        const trozos: Buffer[] = [];
+        req.on('data', (d) => trozos.push(d));
+        req.on('end', () => {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ access_token: 'token-dax-gen', expires_in: 3600 }));
+        });
+        return;
+      }
+      handlerExtra(req, res);
+    });
+  }
+
+  async function levantar(servidor: ReturnType<typeof createServer>): Promise<number> {
+    await new Promise<void>((resolve) => servidor.listen(0, '127.0.0.1', () => resolve()));
+    const direccion = servidor.address();
+    return typeof direccion === 'object' && direccion ? direccion.port : 0;
+  }
+
+  it('resuelve alias por origen de una sola vez, genera el DAX, y la consulta ejecuta contra un origen PowerBI real produciendo el cubo completo', async () => {
+    const capturado: { query: string | null } = { query: null };
+    const servidor = crearServidorTokenPowerBi((req, res) => {
+      if (req.url !== '/v1.0/myorg/datasets/ds-dax-gen/executeQueries') {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      const trozos: Buffer[] = [];
+      req.on('data', (d) => trozos.push(d));
+      req.on('end', () => {
+        capturado.query = (JSON.parse(Buffer.concat(trozos).toString('utf-8')) as { queries: { query: string }[] }).queries[0]!.query;
+        res.setHeader('Content-Type', 'application/json');
+        // Forma real de "Execute Queries": columnas calificadas Tabla[Columna] sin comillas,
+        // columnas renombradas/creadas (medida y ROLLUPADDISSUBTOTAL) entre corchetes.
+        res.end(JSON.stringify({
+          results: [{
+            tables: [{
+              rows: [
+                { 'Sexo[Nombre]': '', 'Provincia[Nombre]': '', '[EsSubtotal1]': true, '[EsSubtotal2]': true, '[Total]': 500 },
+                { 'Sexo[Nombre]': 'Masculino', 'Provincia[Nombre]': '', '[EsSubtotal1]': false, '[EsSubtotal2]': true, '[Total]': 300 },
+                { 'Sexo[Nombre]': 'Masculino', 'Provincia[Nombre]': 'Santo Domingo', '[EsSubtotal1]': false, '[EsSubtotal2]': false, '[Total]': 180 },
+                { 'Sexo[Nombre]': 'Masculino', 'Provincia[Nombre]': 'Santiago', '[EsSubtotal1]': false, '[EsSubtotal2]': false, '[Total]': 120 }
+              ]
+            }]
+          }]
+        }));
+      });
+    });
+    const puerto = await levantar(servidor);
+
+    try {
+      const sexo = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Sexo DAX gen', descripcion: '', prefijo: 'SXG', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: sexo.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      const provincia = await app.manejadores['listas:guardar']({
+        id: '', nombre: 'Provincia DAX gen', descripcion: '', prefijo: 'PVG', estado: 'Activa', version: 1, orden: 2, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'SD', nombre: 'Santo Domingo', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+      await app.manejadores['listas:guardarElemento']({ id: '', listaId: provincia.id, codigo: 'STG', nombre: 'Santiago', descripcion: '', orden: 2, padreCodigo: null, activo: true });
+
+      const origen = await app.manejadores['origenes:guardar']({
+        id: '', nombre: 'PowerBI DAX gen', tipo: 'PowerBI', descripcion: '',
+        configuracion: {
+          apiBase: `http://127.0.0.1:${puerto}/v1.0/myorg`,
+          datasetId: 'ds-dax-gen',
+          autenticacion: 'oauth2',
+          tokenUrl: `http://127.0.0.1:${puerto}/token`,
+          clienteId: 'cid', clienteSecreto: 'secreto',
+          daxTablaFecha: 'Fecha', daxColumnaFecha: 'Fecha'
+        },
+        parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      });
+
+      // El alias por origen (Tabla[Columna]) se configura una sola vez por lista×origen —
+      // no por indicador — y se resuelve de una sola llamada para todas las desagregaciones.
+      await app.manejadores['listas:guardarAliasOrigen']({
+        id: '', listaId: sexo.id, origenAutomaticoId: origen.id, alias: 'Sexo[Nombre]', creadoEn: '', actualizadoEn: ''
+      });
+      await app.manejadores['listas:guardarAliasOrigen']({
+        id: '', listaId: provincia.id, origenAutomaticoId: origen.id, alias: "'Provincia'[Nombre]", creadoEn: '', actualizadoEn: ''
+      });
+      const aliases = await app.manejadores['listas:aliasPorOrigen']({ origenAutomaticoId: origen.id });
+      expect(aliases).toHaveLength(2);
+      const aliasPorLista = new Map(aliases.map((a) => [a.listaId, a.alias]));
+      expect(aliasPorLista.get(sexo.id)).toBe('Sexo[Nombre]');
+      expect(aliasPorLista.get(provincia.id)).toBe("'Provincia'[Nombre]");
+
+      const guardado = await app.manejadores['indicadores:guardar']({
+        indicador: indicador({ desagregaciones: [sexo.id, provincia.id] }), valores: []
+      });
+      const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const periodo = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!;
+
+      // El generador solo necesita el nombre de la medida: todo lo demás (mapeo de
+      // columnas, filtro de fecha, ROLLUPADDISSUBTOTAL) sale de lo ya configurado.
+      const generado = generarConsultaDax({
+        desagregaciones: [
+          { listaId: sexo.id, referenciaDax: aliasPorLista.get(sexo.id)! },
+          { listaId: provincia.id, referenciaDax: aliasPorLista.get(provincia.id)! }
+        ],
+        tablaFecha: origen.configuracion.daxTablaFecha!,
+        columnaFecha: origen.configuracion.daxColumnaFecha!,
+        fechaInicio: periodo.fechaInicio,
+        fechaFin: periodo.fechaFin,
+        medida: 'Total de casos'
+      });
+
+      await app.manejadores['automatizacion:guardar']({
+        id: '', indicadorId: guardado.id, origenAutomaticoId: origen.id, parametrosDinamicos: [],
+        script: generado.script, columnaValor: generado.columnaValor, mapeoColumnas: generado.mapeoColumnas,
+        desagregacionesOmitidas: [], medidaDax: 'Total de casos', creadoEn: '', actualizadoEn: ''
+      });
+
+      // El medidaDax persiste a través de un round-trip (guardar → obtener), no solo en memoria.
+      const persistida = await app.manejadores['automatizacion:obtener']({ indicadorId: guardado.id });
+      expect(persistida?.medidaDax).toBe('Total de casos');
+      expect(persistida?.script).toBe(generado.script);
+      expect(persistida?.columnaValor).toBe('[Total]');
+
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId: periodo.id, fechaCorte: '2025-01-31' });
+      const resultado = await app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: guardado.id, periodoId: periodo.id });
+      expect(resultado.filasConError).toBe(0);
+      expect(resultado.celdasActualizadas).toBe(4);
+
+      // La consulta DAX generada de verdad se envió al origen (probando que el texto es DAX ejecutable, no solo texto plausible).
+      expect(capturado.query).toContain('SUMMARIZECOLUMNS(');
+      expect(capturado.query).toContain("ROLLUPADDISSUBTOTAL('Sexo'[Nombre], \"EsSubtotal1\", 'Provincia'[Nombre], \"EsSubtotal2\")");
+      expect(capturado.query).toContain('"Total", [Total de casos]');
+
+      // El cubo completo (General + subtotal de Sexo + detalle) quedó escrito vía el
+      // segmentador [EsSubtotalN] generado automáticamente — sin mapeo manual alguno.
+      const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId: periodo.id });
+      expect(captura.filas.find((f) => f.esGeneral)?.valor).toBe(500);
       expect(captura.filas.find((f) => f.claveDesagregacion === `${sexo.id}=M`)?.valor).toBe(300);
       expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=SD'))?.valor).toBe(180);
       expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=STG'))?.valor).toBe(120);

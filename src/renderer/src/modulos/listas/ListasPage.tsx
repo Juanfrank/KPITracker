@@ -39,7 +39,9 @@ function SeccionAliasOrigen({ listaId }: { listaId: string }): React.JSX.Element
       <h4 style={{ margin: '8px 0 0' }}>Nombre en cada origen automático</h4>
       <p className="texto-suave" style={{ margin: 0 }}>
         Cómo se identifica esta desagregación en los datos de cada origen (para sugerir el mapeo de columnas al configurar
-        la obtención automática de un indicador).
+        la obtención automática de un indicador). Para orígenes <strong>PowerBI</strong>, use la referencia DAX de la
+        columna del modelo — <code>Tabla[Columna]</code> — así el generador de consultas DAX arma la
+        consulta completa a partir de ella.
       </p>
       {origenes.map((o) => (
         <div key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -48,6 +50,7 @@ function SeccionAliasOrigen({ listaId }: { listaId: string }): React.JSX.Element
             type="text"
             value={alias.get(o.id) ?? ''}
             onChange={(e) => void guardar(o.id, e.target.value)}
+            placeholder={o.tipo === 'PowerBI' ? "p. ej. Sexo[Nombre]" : undefined}
             data-testid={`lista-alias-${o.nombre}`}
           />
         </div>

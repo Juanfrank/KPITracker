@@ -43,6 +43,13 @@ export interface AutomatizacionIndicador {
   mapeoColumnas: MapeoColumna[];
   /** Desagregaciones del indicador que este origen no provee: se completan manualmente. */
   desagregacionesOmitidas: string[];
+  /**
+   * Nombre de la medida DAX del indicador, cuando `script`/`mapeoColumnas`/
+   * `columnaValor` fueron generados automáticamente (ver
+   * `generarConsultaDax`) en vez de escritos a mano. `null` si la
+   * configuración es manual o el origen no es PowerBI.
+   */
+  medidaDax?: string | null;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

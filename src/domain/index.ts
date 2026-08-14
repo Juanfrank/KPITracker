@@ -33,6 +33,7 @@ export * from './rules/constructorCondicion';
 export * from './rules/contextoIndicador';
 export * from './services/GeneradorPeriodos';
 export * from './services/ProductoCartesiano';
+export * from './services/GeneradorConsultaDax';
 export * from './services/CalculadoraEstados';
 export * from './services/CalculoMetas';
 export * from './services/ValidacionCaptura';

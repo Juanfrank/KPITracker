@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Atributo, AutomatizacionIndicador, MapeoColumna, OrigenAutomatico, ParametroDinamico, Periodo } from '@domain/index';
+import { generarConsultaDax } from '@domain/index';
 import type { ResultadoTabular } from '@application/ports/index';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 import { invocar } from '../../api';
@@ -52,6 +53,7 @@ export function ModalAutomatizacionIndicador({
   const [conciliaciones, setConciliaciones] = useState<Map<string, ReporteConciliacion>>(new Map());
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [generandoDax, setGenerandoDax] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -109,6 +111,64 @@ export function ModalAutomatizacionIndicador({
       setErrorEjecucion((error as Error).message);
     } finally {
       setEjecutando(false);
+    }
+  };
+
+  /**
+   * Genera automáticamente `script`/`columnaValor`/`mapeoColumnas` a partir
+   * del nombre de la medida DAX ingresado, la referencia `Tabla[Columna]` ya
+   * guardada como "alias por origen" de cada desagregación, y la
+   * tabla/columna de fecha configuradas una sola vez en el origen — sin
+   * necesidad de ejecutar el script antes ni escribir DAX a mano. El usuario
+   * puede después ejecutar la consulta generada (paso 3) para validar los
+   * valores de cada desagregación como con un script manual.
+   */
+  const generarDax = async (): Promise<void> => {
+    if (!config || !origen || !config.medidaDax?.trim()) return;
+    const periodo = periodos.find((p) => p.id === periodoId);
+    if (!periodo) {
+      setMensaje({ tipo: 'error', texto: 'Seleccione un período de prueba antes de generar la consulta.' });
+      return;
+    }
+    setGenerandoDax(true);
+    setMensaje(null);
+    try {
+      const aliases = await invocar('listas:aliasPorOrigen', { origenAutomaticoId: origen.id });
+      const aliasPorLista = new Map(aliases.map((a) => [a.listaId, a.alias]));
+      const desagregacionesActivas = desagregaciones.filter((id) => !config.desagregacionesOmitidas.includes(id));
+      const conAlias = desagregacionesActivas
+        .map((listaId) => ({ listaId, referenciaDax: aliasPorLista.get(listaId) }))
+        .filter((d): d is { listaId: string; referenciaDax: string } => !!d.referenciaDax?.trim());
+      const sinAlias = desagregacionesActivas.filter((id) => !aliasPorLista.get(id)?.trim());
+
+      if (conAlias.length === 0) {
+        setMensaje({ tipo: 'error', texto: 'Ninguna desagregación tiene un alias DAX (Tabla[Columna]) configurado en Listas para este origen.' });
+        return;
+      }
+
+      const { script, columnaValor, mapeoColumnas } = generarConsultaDax({
+        desagregaciones: conAlias,
+        tablaFecha: origen.configuracion.daxTablaFecha ?? '',
+        columnaFecha: origen.configuracion.daxColumnaFecha ?? '',
+        fechaInicio: periodo.fechaInicio,
+        fechaFin: periodo.fechaFin,
+        medida: config.medidaDax
+      });
+      actualizar({ script, columnaValor, mapeoColumnas });
+
+      if (sinAlias.length > 0) {
+        const nombres = sinAlias.map((id) => listaPorId.get(id)?.nombre ?? id).join(', ');
+        setMensaje({
+          tipo: 'error',
+          texto: `Consulta generada, pero sin alias DAX para: ${nombres}. Configúrelos en Listas o márquelas como omitidas abajo.`
+        });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Consulta DAX generada. Ejecútela (paso 3) para validar los valores.' });
+      }
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: (error as Error).message });
+    } finally {
+      setGenerandoDax(false);
     }
   };
 
@@ -208,7 +268,7 @@ export function ModalAutomatizacionIndicador({
           <Campo etiqueta="Origen" obligatorio>
             <select
               value={config.origenAutomaticoId}
-              onChange={(e) => actualizar({ origenAutomaticoId: e.target.value, mapeoColumnas: [], columnaValor: null })}
+              onChange={(e) => actualizar({ origenAutomaticoId: e.target.value, mapeoColumnas: [], columnaValor: null, medidaDax: null })}
               data-testid="automatizacion-origen"
             >
               {origenes.map((o) => <option key={o.id} value={o.id}>{o.nombre} ({o.tipo})</option>)}
@@ -245,6 +305,38 @@ export function ModalAutomatizacionIndicador({
           <button className="boton sutil" style={{ justifySelf: 'start' }} onClick={agregarParametroDinamico} data-testid="automatizacion-agregar-parametro">
             <Icono nombre="mas" tamano={13} /> Agregar parámetro dinámico
           </button>
+
+          {origen?.tipo === 'PowerBI' && (
+            <div className="tarjeta" style={{ padding: 12 }}>
+              <h4 style={{ margin: 0 }}>Generador de consultas DAX</h4>
+              <p className="texto-suave" style={{ margin: '4px 0 8px' }}>
+                En vez de escribir <code>SUMMARIZECOLUMNS</code> a mano, ingrese solo el nombre de la medida: la consulta
+                se arma con las referencias DAX ya guardadas en Listas (alias por origen) para cada desagregación y con
+                la tabla/columna de fecha del origen.
+              </p>
+              <div className="fila-form c2">
+                <Campo etiqueta="Nombre de la medida DAX">
+                  <input
+                    type="text"
+                    placeholder="p. ej. Total de casos"
+                    value={config.medidaDax ?? ''}
+                    onChange={(e) => actualizar({ medidaDax: e.target.value })}
+                    data-testid="automatizacion-medida-dax"
+                  />
+                </Campo>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button
+                    className="boton primario"
+                    onClick={() => void generarDax()}
+                    disabled={generandoDax || !config.medidaDax?.trim() || !periodoId}
+                    data-testid="automatizacion-generar-dax"
+                  >
+                    {generandoDax ? 'Generando…' : 'Generar consulta DAX'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <h4 style={{ margin: '8px 0 0' }}>2. Script</h4>
           {tokensDisponibles.length > 0 && (

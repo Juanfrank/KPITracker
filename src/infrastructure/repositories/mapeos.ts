@@ -270,13 +270,14 @@ export const aAutomatizacionIndicador = (f: Fila): AutomatizacionIndicador => ({
   columnaValor: sn(f.columna_valor),
   mapeoColumnas: json<MapeoColumna[]>(f.mapeo_columnas, []),
   desagregacionesOmitidas: json<string[]>(f.desagregaciones_omitidas, []),
+  medidaDax: sn(f.medida_dax),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deAutomatizacionIndicador = (a: AutomatizacionIndicador): unknown[] => [
   a.id, a.indicadorId, a.origenAutomaticoId, JSON.stringify(a.parametrosDinamicos), a.script,
-  a.columnaValor, JSON.stringify(a.mapeoColumnas), JSON.stringify(a.desagregacionesOmitidas),
+  a.columnaValor, JSON.stringify(a.mapeoColumnas), JSON.stringify(a.desagregacionesOmitidas), a.medidaDax ?? null,
   a.creadoEn, a.actualizadoEn
 ];
 

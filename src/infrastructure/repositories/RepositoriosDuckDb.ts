@@ -540,8 +540,8 @@ export class AutomatizacionIndicadorRepositoryDuckDb extends RepositorioBase imp
     await this.db.run(
       `INSERT INTO automatizaciones_indicador (
          id, indicador_id, origen_automatico_id, parametros_dinamicos, script, columna_valor,
-         mapeo_columnas, desagregaciones_omitidas, creado_en, actualizado_en
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         mapeo_columnas, desagregaciones_omitidas, medida_dax, creado_en, actualizado_en
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (indicador_id) DO UPDATE SET
          origen_automatico_id = excluded.origen_automatico_id,
          parametros_dinamicos = excluded.parametros_dinamicos,
@@ -549,6 +549,7 @@ export class AutomatizacionIndicadorRepositoryDuckDb extends RepositorioBase imp
          columna_valor = excluded.columna_valor,
          mapeo_columnas = excluded.mapeo_columnas,
          desagregaciones_omitidas = excluded.desagregaciones_omitidas,
+         medida_dax = excluded.medida_dax,
          actualizado_en = excluded.actualizado_en`,
       deAutomatizacionIndicador(config)
     );

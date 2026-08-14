@@ -100,6 +100,7 @@ const TABLAS: Record<string, string> = {
     columna_valor VARCHAR,
     mapeo_columnas VARCHAR NOT NULL DEFAULT '[]',
     desagregaciones_omitidas VARCHAR NOT NULL DEFAULT '[]',
+    medida_dax VARCHAR,
     creado_en VARCHAR NOT NULL,
     actualizado_en VARCHAR NOT NULL,
     UNIQUE (indicador_id)
@@ -289,7 +290,10 @@ export const MIGRACIONES_ADITIVAS: string[] = [
   'ALTER TABLE reglas ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
   'ALTER TABLE responsables ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
   'ALTER TABLE categorias ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
-  'ALTER TABLE origenes_automaticos ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false'
+  'ALTER TABLE origenes_automaticos ADD COLUMN IF NOT EXISTS eliminado BOOLEAN DEFAULT false',
+  // Generador de consultas DAX: nombre de la medida cuando script/mapeoColumnas/
+  // columnaValor fueron auto-generados en vez de escritos a mano (ver generarConsultaDax).
+  'ALTER TABLE automatizaciones_indicador ADD COLUMN IF NOT EXISTS medida_dax VARCHAR'
 ];
 
 export async function crearEsquema(db: Db): Promise<void> {

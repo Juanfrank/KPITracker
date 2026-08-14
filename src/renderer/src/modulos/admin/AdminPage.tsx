@@ -61,7 +61,9 @@ const CAMPOS_POR_TIPO: Record<TipoOrigenAutomatico, CampoConfig[]> = {
   PowerBI: [
     { clave: 'datasetId', etiqueta: 'Dataset Id (GUID del semantic model)' },
     { clave: 'groupId', etiqueta: 'Workspace Id (GUID, opcional — vacío = "Mi área de trabajo")' },
-    { clave: 'apiBase', etiqueta: 'API base (opcional; nubes soberanas: api.powerbigov.us, api.powerbi.de, api.powerbi.cn)' }
+    { clave: 'apiBase', etiqueta: 'API base (opcional; nubes soberanas: api.powerbigov.us, api.powerbi.de, api.powerbi.cn)' },
+    { clave: 'daxTablaFecha', etiqueta: 'Tabla de fecha del modelo (para el generador de consultas DAX, p. ej. Fecha)' },
+    { clave: 'daxColumnaFecha', etiqueta: 'Columna de fecha dentro de esa tabla (p. ej. Fecha)' }
   ]
 };
 

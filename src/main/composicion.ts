@@ -144,6 +144,7 @@ export async function componerAplicacion(dataDir: string, appVersion?: string): 
     },
 
     'listas:aliasOrigen': ({ listaId }) => listas.listarAliasOrigen(listaId),
+    'listas:aliasPorOrigen': ({ origenAutomaticoId }) => listas.listarAliasPorOrigen(origenAutomaticoId),
     'listas:guardarAliasOrigen': (alias) => listas.guardarAliasOrigen(alias),
     'listas:eliminarAliasOrigen': ({ id }) => listas.eliminarAliasOrigen(id),
 

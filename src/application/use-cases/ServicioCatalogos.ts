@@ -401,6 +401,16 @@ export class ServicioListas extends ServicioBase {
     return this.aliasRepo.listarPorLista(listaId);
   }
 
+  /**
+   * Todos los alias por origen (una fila por lista) para UN origen — usado
+   * por el generador de consultas DAX para resolver, de una sola vez, la
+   * referencia `Tabla[Columna]` de cada desagregación del indicador en el
+   * origen seleccionado.
+   */
+  listarAliasPorOrigen(origenAutomaticoId: string): Promise<AliasDesagregacionOrigen[]> {
+    return this.aliasRepo.listarPorOrigen(origenAutomaticoId);
+  }
+
   async guardarAliasOrigen(alias: AliasDesagregacionOrigen): Promise<AliasDesagregacionOrigen> {
     if (!alias.alias.trim()) throw new ValidacionError('El alias no puede estar vacío.');
     const anterior = await this.aliasRepo.obtener(alias.listaId, alias.origenAutomaticoId);

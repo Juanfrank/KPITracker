@@ -105,6 +105,8 @@ export interface CanalesIpc {
   'origenes:probarCodigo': { req: { origen: OrigenAutomatico; script: string }; res: ResultadoPruebaCodigo };
 
   'listas:aliasOrigen': { req: { listaId: string }; res: AliasDesagregacionOrigen[] };
+  /** Todos los alias por origen (una fila por lista) para UN origen — usado por el generador de consultas DAX. */
+  'listas:aliasPorOrigen': { req: { origenAutomaticoId: string }; res: AliasDesagregacionOrigen[] };
   'listas:guardarAliasOrigen': { req: AliasDesagregacionOrigen; res: AliasDesagregacionOrigen };
   'listas:eliminarAliasOrigen': { req: { id: string }; res: void };
 
@@ -220,7 +222,7 @@ export const NOMBRES_CANALES: NombreCanal[] = [
   'responsables:listar', 'responsables:guardar', 'responsables:eliminar', 'responsables:restaurar',
   'categorias:listar', 'categorias:guardar', 'categorias:eliminar', 'categorias:restaurar',
   'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:restaurar', 'origenes:probar', 'origenes:probarCodigo',
-  'listas:aliasOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
+  'listas:aliasOrigen', 'listas:aliasPorOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
   'automatizacion:obtener', 'automatizacion:guardar', 'automatizacion:eliminar',
   'automatizacion:ejecutarPrueba', 'automatizacion:validarColumna', 'automatizacion:agregarElementosFaltantes',
   'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:comentario',
