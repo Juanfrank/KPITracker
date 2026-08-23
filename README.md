@@ -10,7 +10,8 @@ Aplicación de escritorio **100% local (offline-first)** para la configuración,
 ## Inicio rápido
 
 ```bash
-npm install        # instala dependencias (incluye Electron y DuckDB embebido)
+npm install        # instala dependencias (incluye Electron)
+npx electron-builder install-app-deps  # recompila módulos nativos (better-sqlite3) contra el ABI de Electron — una sola vez, ver nota abajo
 npm run dev        # ejecuta la aplicación en modo desarrollo
 npm run build      # compila para producción
 npm test           # pruebas unitarias + integración (Vitest)
@@ -18,6 +19,17 @@ npm run test:e2e   # pruebas de aceptación (Playwright sobre Electron)
 npm run typecheck  # verificación de tipos
 npm run lint       # linter
 ```
+
+> **Nota — módulos nativos y Electron**: la persistencia ahora usa Knex sobre
+> `better-sqlite3` (local) o `mssql` (producción, ver más abajo). `better-sqlite3`
+> es un binding nativo compilado contra el ABI de Node — el de Electron es
+> distinto del de Node "normal", así que tras `npm install` hace falta
+> `npx electron-builder install-app-deps` (una sola vez, requiere acceso de red
+> normal a `electronjs.org` para descargar los headers) antes de `npm run dev`/
+> `npm run test:e2e`. `npm test` (Vitest, sin Electron) no lo necesita —
+> corre sobre Node directamente y ya usa el binario tal cual se instaló.
+> Este paso desaparece por completo en la Fase 4 del plan de migración a app
+> web (retiro de Electron a favor de un servidor Node/Express normal).
 
 Los datos viven en `Data/` dentro del directorio de usuario de la aplicación (`userData`), con esta estructura:
 

@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import type { IAuthProvider, IPasswordHasher, IUsuarioRepository } from '@application/ports/index';
 import type { Usuario } from '@domain/index';
 
@@ -13,6 +13,14 @@ const RONDAS_BCRYPT = 12;
  * la única pieza que sabe cómo se estableció la identidad — ver
  * `IAuthProvider` para el punto de enganche de un futuro reemplazo por
  * Azure AD/Entra ID.
+ *
+ * Usa `bcryptjs` (implementación pura en JavaScript) en vez de `bcrypt`
+ * (binding nativo): evita que la app de escritorio Electron necesite
+ * recompilar un módulo nativo contra el ABI de Electron (un paso aparte,
+ * estándar en cualquier app Electron con dependencias nativas, pero
+ * innecesario aquí si se puede evitar) — y es exactamente el mismo motivo
+ * por el que el backend de base de datos local (better-sqlite3) sí lo
+ * necesita: no hay alternativa pura en JS con su madurez para SQLite.
  */
 export class ProveedorPassword implements IAuthProvider, IPasswordHasher {
   constructor(private readonly usuarios: IUsuarioRepository) {}
