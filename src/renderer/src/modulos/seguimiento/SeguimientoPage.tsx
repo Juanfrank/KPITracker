@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Categoria, Responsable } from '@domain/index';
+import { etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
@@ -12,6 +13,105 @@ const PESTANAS = [
   { id: 'historico', etiqueta: 'Histórico' }
 ] as const;
 type Pestana = (typeof PESTANAS)[number]['id'];
+
+const VISTAS_ESTADO = [
+  { id: 'lista', etiqueta: 'Lista' },
+  { id: 'arbol', etiqueta: 'Árbol' }
+] as const;
+type VistaEstado = (typeof VISTAS_ESTADO)[number]['id'];
+
+/** Id sintético del grupo "sin categoría" en la vista Árbol — nunca colisiona con un id de categoría real (uuid). */
+const SIN_CATEGORIA = '__sin-categoria__';
+
+type NodoArbolSeguimiento =
+  | { tipo: 'categoria'; id: string; nivel: number; nombre: string; prefijo: string | null; contador: number; tieneHijos: boolean }
+  | { tipo: 'indicador'; id: string; nivel: number; fila: FilaTablero };
+
+/**
+ * Construye la vista jerárquica Categoría → Subcategoría → Indicador a
+ * partir de `filas` (ya filtradas) y el catálogo completo de categorías —
+ * 100% en el renderer, sin tocar `ServicioSeguimiento` (no hace falta:
+ * `categoriasCatalogo` ya se trae para el filtro plano existente). Bajo
+ * cada nodo-categoría van primero sus subcategorías (recursivo, orden
+ * alfabético) y luego sus indicadores propios como filas hoja; un grupo
+ * final "Sin categoría" agrupa los indicadores con `categoriaId == null`.
+ * DFS pre-order + `nivel` como profundidad — misma convención que
+ * `ArbolDesagregaciones`/`calcularFilasVisibles` (RecoleccionPage), para
+ * poder expandir/colapsar sin reconstruir el árbol.
+ */
+function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+  const categoriasPorId = new Map(categorias.map((c) => [c.id, c]));
+  const hijosDe = new Map<string | null, Categoria[]>();
+  for (const c of categorias) {
+    const clave = c.padreId && categoriasPorId.has(c.padreId) ? c.padreId : null;
+    const lista = hijosDe.get(clave) ?? [];
+    lista.push(c);
+    hijosDe.set(clave, lista);
+  }
+  for (const lista of hijosDe.values()) lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const filasPorCategoria = new Map<string, FilaTablero[]>();
+  const sinCategoria: FilaTablero[] = [];
+  for (const f of filas) {
+    if (f.categoriaId && categoriasPorId.has(f.categoriaId)) {
+      const lista = filasPorCategoria.get(f.categoriaId) ?? [];
+      lista.push(f);
+      filasPorCategoria.set(f.categoriaId, lista);
+    } else {
+      sinCategoria.push(f);
+    }
+  }
+
+  const contarTotal = (categoriaId: string): number => {
+    let total = (filasPorCategoria.get(categoriaId) ?? []).length;
+    for (const hijo of hijosDe.get(categoriaId) ?? []) total += contarTotal(hijo.id);
+    return total;
+  };
+
+  const nodos: NodoArbolSeguimiento[] = [];
+  const visitar = (categoria: Categoria, nivel: number): void => {
+    const hijos = hijosDe.get(categoria.id) ?? [];
+    const propias = [...(filasPorCategoria.get(categoria.id) ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    nodos.push({
+      tipo: 'categoria', id: categoria.id, nivel, nombre: categoria.nombre, prefijo: categoria.prefijo,
+      contador: contarTotal(categoria.id), tieneHijos: hijos.length > 0 || propias.length > 0
+    });
+    for (const hijo of hijos) visitar(hijo, nivel + 1);
+    for (const f of propias) nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivel + 1, fila: f });
+  };
+  for (const raiz of hijosDe.get(null) ?? []) visitar(raiz, 0);
+
+  if (sinCategoria.length > 0) {
+    nodos.push({
+      tipo: 'categoria', id: SIN_CATEGORIA, nivel: 0, nombre: 'Sin categoría', prefijo: null,
+      contador: sinCategoria.length, tieneHijos: true
+    });
+    for (const f of [...sinCategoria].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
+      nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: 1, fila: f });
+    }
+  }
+  return nodos;
+}
+
+/**
+ * Igual convención que `calcularFilasVisibles` (RecoleccionPage): las filas
+ * llegan en DFS pre-order con `nivel` como profundidad, así que una
+ * categoría colapsada oculta exactamente el tramo contiguo siguiente cuya
+ * profundidad sea mayor que la suya, sin reconstruir el árbol.
+ */
+function nodosVisibles(nodos: NodoArbolSeguimiento[], colapsadas: Set<string>): NodoArbolSeguimiento[] {
+  const visibles: NodoArbolSeguimiento[] = [];
+  let ocultarDesdeNivel: number | null = null;
+  for (const nodo of nodos) {
+    if (ocultarDesdeNivel !== null) {
+      if (nodo.nivel > ocultarDesdeNivel) continue;
+      ocultarDesdeNivel = null;
+    }
+    visibles.push(nodo);
+    if (nodo.tipo === 'categoria' && nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
+  }
+  return visibles;
+}
 
 const FILTROS_ESTADO = [
   { id: 'todos', etiqueta: 'Todos' },
@@ -28,6 +128,8 @@ const FILTROS_ESTADO = [
  */
 export function SeguimientoPage(): React.JSX.Element {
   const [pestana, setPestana] = useState<Pestana>('estado');
+  const [vistaEstado, setVistaEstado] = useState<VistaEstado>('lista');
+  const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
   const [historico, setHistorico] = useState<FilaHistorico[] | null>(null);
   const [cargandoHistorico, setCargandoHistorico] = useState(false);
@@ -108,6 +210,7 @@ export function SeguimientoPage(): React.JSX.Element {
   );
   const idsVisibles = new Set(visibles.map((f) => f.indicadorId));
   const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
+  const arbol = nodosVisibles(construirArbolSeguimiento(visibles, categoriasCatalogo), colapsadasCategorias);
   const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string }>();
   for (const fila of historicoVisible) {
     for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio });
@@ -117,6 +220,15 @@ export function SeguimientoPage(): React.JSX.Element {
     .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
+
+  const alternarColapsoCategoria = (categoriaId: string): void => {
+    setColapsadasCategorias((previo) => {
+      const nuevo = new Set(previo);
+      if (nuevo.has(categoriaId)) nuevo.delete(categoriaId);
+      else nuevo.add(categoriaId);
+      return nuevo;
+    });
+  };
 
   const alternarSeleccion = (id: string): void => {
     setSeleccionados((previo) => {
@@ -260,6 +372,22 @@ export function SeguimientoPage(): React.JSX.Element {
       )}
 
       {pestana === 'estado' && (
+        <div className="filtros-chips">
+          <span className="texto-suave" style={{ alignSelf: 'center' }}>Ver como:</span>
+          {VISTAS_ESTADO.map((v) => (
+            <button
+              key={v.id}
+              className={`filtro-chip ${vistaEstado === v.id ? 'activo' : ''}`}
+              onClick={() => setVistaEstado(v.id)}
+              data-testid={`vista-${v.id}`}
+            >
+              {v.etiqueta}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {pestana === 'estado' && vistaEstado === 'lista' && (
       <div className="tabla-envoltura">
         <table className="tabla" data-testid="tabla-seguimiento">
           <thead>
@@ -302,7 +430,14 @@ export function SeguimientoPage(): React.JSX.Element {
                     data-testid={`seleccionar-${f.nombre}`}
                   />
                 </td>
-                <td><strong>{f.nombre}</strong></td>
+                <td>
+                  <strong>{f.nombre}</strong>
+                  {f.codigo && (
+                    <div className="texto-suave" style={{ fontSize: '0.85em' }}>
+                      {etiquetaConPrefijo(categoriasCatalogo.find((c) => c.id === f.categoriaId)?.prefijo, f.codigo)}
+                    </div>
+                  )}
+                </td>
                 <td><ChipEstado estado={f.estado} /></td>
                 <td>{f.periodicidad}</td>
                 <td className="texto-suave">{f.responsable ?? '—'}</td>
@@ -319,6 +454,95 @@ export function SeguimientoPage(): React.JSX.Element {
             {visibles.length === 0 && (
               <tr>
                 <td colSpan={11}>
+                  {cargando ? (
+                    <Vacio mensaje="Cargando…" />
+                  ) : (
+                    <Vacio icono="▤" mensaje="Sin indicadores que mostrar" detalle="Ajuste los filtros o configure indicadores." />
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {pestana === 'estado' && vistaEstado === 'arbol' && (
+      <div className="tabla-envoltura">
+        <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-seguimiento-arbol">
+          <thead>
+            <tr>
+              <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+              <th>Categoría / Indicador</th>
+              <th>Estado</th>
+              <th>Periodicidad</th>
+              <th>Responsable</th>
+              <th>Período pendiente</th>
+              <th>Fecha límite</th>
+              <th>Fecha de corte</th>
+              <th>Progreso</th>
+              <th>Última actualización</th>
+            </tr>
+          </thead>
+          <tbody>
+            {arbol.map((nodo) => {
+              if (nodo.tipo === 'categoria') {
+                const colapsada = colapsadasCategorias.has(nodo.id);
+                return (
+                  <tr key={`c-${nodo.id}`} className="fila-categoria" data-testid={`seguimiento-arbol-categoria-${nodo.nombre}`}>
+                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {nodo.tieneHijos && (
+                        <button
+                          type="button"
+                          className={`boton-arbol ${colapsada ? '' : 'expandido'}`}
+                          onClick={() => alternarColapsoCategoria(nodo.id)}
+                          title={colapsada ? 'Expandir' : 'Colapsar'}
+                          data-testid={`colapsar-categoria-${nodo.nombre}`}
+                        >
+                          <Icono nombre="flecha" tamano={13} />
+                        </button>
+                      )}
+                    </td>
+                    <td colSpan={9}>
+                      {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
+                      <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
+                    </td>
+                  </tr>
+                );
+              }
+              const f = nodo.fila;
+              return (
+                <tr
+                  key={`i-${nodo.id}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
+                  data-testid={`seguimiento-${f.nombre}`}
+                >
+                  <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
+                  <td>
+                    <strong>{f.nombre}</strong>
+                    {f.codigo && (
+                      <div className="texto-suave" style={{ fontSize: '0.85em' }}>
+                        {etiquetaConPrefijo(categoriasCatalogo.find((c) => c.id === f.categoriaId)?.prefijo, f.codigo)}
+                      </div>
+                    )}
+                  </td>
+                  <td><ChipEstado estado={f.estado} /></td>
+                  <td>{f.periodicidad}</td>
+                  <td className="texto-suave">{f.responsable ?? '—'}</td>
+                  <td>{f.periodoPendiente ?? '—'}</td>
+                  <td>{f.fechaLimite ?? '—'}</td>
+                  <td>{f.fechaCorte ?? '—'}</td>
+                  <td><BarraProgreso valor={f.periodosCompletos} total={f.totalPeriodos} /></td>
+                  <td className="texto-suave">
+                    {f.ultimaActualizacion ? new Date(f.ultimaActualizacion).toLocaleDateString('es') : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+            {arbol.length === 0 && (
+              <tr>
+                <td colSpan={10}>
                   {cargando ? (
                     <Vacio mensaje="Cargando…" />
                   ) : (

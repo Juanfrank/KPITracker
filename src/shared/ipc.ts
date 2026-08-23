@@ -1,6 +1,6 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, DefinicionPeriodicidad,
-  ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
+  ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
   Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
 } from '@domain/index';
 import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
@@ -48,7 +48,7 @@ export interface CanalesIpc {
   'indicadores:guardar': { req: GuardarIndicadorInput; res: Indicador };
   'indicadores:eliminar': { req: { id: string }; res: void };
   'indicadores:reasignarMasivo': {
-    req: { ids: string[]; responsable?: string | null; categoria?: string | null };
+    req: { ids: string[]; responsable?: string | null; categoria?: string | null; equipo?: string | null };
     res: void;
   };
   'indicadores:importarExcel': {
@@ -97,6 +97,12 @@ export interface CanalesIpc {
   /** Borrado lógico: rechaza (con el detalle de qué la usa) si la categoría está en uso. */
   'categorias:eliminar': { req: { id: string }; res: void };
   'categorias:restaurar': { req: { id: string }; res: void };
+
+  'equipos:listar': { req: { incluirEliminados?: boolean } | void; res: Equipo[] };
+  'equipos:guardar': { req: Equipo; res: Equipo };
+  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el equipo tiene sub-equipos, responsables o indicadores vinculados. */
+  'equipos:eliminar': { req: { id: string }; res: void };
+  'equipos:restaurar': { req: { id: string }; res: void };
 
   'origenes:listar': { req: { incluirEliminados?: boolean } | void; res: OrigenAutomatico[] };
   'origenes:guardar': { req: OrigenAutomatico; res: OrigenAutomatico };

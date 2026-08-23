@@ -72,6 +72,11 @@ const TABLA_PROCEDIMIENTOS: Partial<Record<NombreCanal, [string, string, TipoPro
   'categorias:eliminar': ['categorias', 'eliminar', 'mutation'],
   'categorias:restaurar': ['categorias', 'restaurar', 'mutation'],
 
+  'equipos:listar': ['equipos', 'listar', 'query'],
+  'equipos:guardar': ['equipos', 'guardar', 'mutation'],
+  'equipos:eliminar': ['equipos', 'eliminar', 'mutation'],
+  'equipos:restaurar': ['equipos', 'restaurar', 'mutation'],
+
   'origenes:listar': ['origenes', 'listar', 'query'],
   'origenes:guardar': ['origenes', 'guardar', 'mutation'],
   'origenes:eliminar': ['origenes', 'eliminar', 'mutation'],

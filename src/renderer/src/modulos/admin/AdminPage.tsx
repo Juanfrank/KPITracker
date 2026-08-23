@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, RolUsuario, TipoOrigenAutomatico } from '@domain/index';
-import { ejemploParaFuente } from '@domain/index';
+import type {
+  Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral, Responsable, RolUsuario,
+  TipoOrigenAutomatico
+} from '@domain/index';
+import { ejemploParaFuente, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { descargar, postTexto } from '../../rest';
@@ -11,11 +14,52 @@ import { Icono } from '../../componentes/Icono';
 import { TarjetaRespaldo } from './TarjetaRespaldo';
 
 function responsableVacio(): Responsable {
-  return { id: '', nombre: '', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
+  return {
+    id: '', nombre: '', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
+  };
 }
 
 function categoriaVacia(): Categoria {
-  return { id: '', nombre: '', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
+  return {
+    id: '', nombre: '', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+    creadoEn: '', actualizadoEn: ''
+  };
+}
+
+function equipoVacio(): Equipo {
+  return {
+    id: '', nombre: '', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+  };
+}
+
+/**
+ * Aplana un catálogo con `padreId` en orden jerárquico (DFS pre-order,
+ * alfabético dentro de cada nivel) para mostrarlo indentado en una tabla o
+ * un `<select>`. Un `padreId` que apunta a un id ausente de `items` (p. ej.
+ * el padre está eliminado y oculto) se trata como raíz, para no perder la
+ * fila de la lista.
+ */
+function ordenarJerarquia<T extends { id: string; padreId: string | null; nombre: string }>(
+  items: readonly T[]
+): Array<T & { nivel: number }> {
+  const ids = new Set(items.map((i) => i.id));
+  const porPadre = new Map<string | null, T[]>();
+  for (const item of items) {
+    const clave = item.padreId && ids.has(item.padreId) ? item.padreId : null;
+    const lista = porPadre.get(clave) ?? [];
+    lista.push(item);
+    porPadre.set(clave, lista);
+  }
+  for (const lista of porPadre.values()) lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const resultado: Array<T & { nivel: number }> = [];
+  const visitar = (padreId: string | null, nivel: number): void => {
+    for (const item of porPadre.get(padreId) ?? []) {
+      resultado.push({ ...item, nivel });
+      visitar(item.id, nivel + 1);
+    }
+  };
+  visitar(null, 0);
+  return resultado;
 }
 
 function origenVacio(): OrigenAutomatico {
@@ -195,6 +239,7 @@ function SeccionResponsables(): React.JSX.Element {
   const [editando, setEditando] = useState<Responsable | null>(null);
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [errores, setErrores] = useState<string[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
     setItems(await invocar('responsables:listar', { incluirEliminados: mostrarEliminados }));
@@ -203,6 +248,16 @@ function SeccionResponsables(): React.JSX.Element {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  // Recargado también al abrir el editor (no solo al montar): un equipo creado en `SeccionEquipos`
+  // (componente hermano, montado a la vez que este) no dispararía este efecto de otro modo.
+  const cargarEquipos = useCallback(async (): Promise<void> => {
+    setEquipos(await invocar('equipos:listar', undefined));
+  }, []);
+
+  useEffect(() => {
+    void cargarEquipos();
+  }, [cargarEquipos]);
 
   const guardar = async (): Promise<void> => {
     if (!editando) return;
@@ -243,7 +298,11 @@ function SeccionResponsables(): React.JSX.Element {
           />
           Mostrar eliminados
         </label>
-        <button className="boton primario" onClick={() => setEditando(responsableVacio())} data-testid="nuevo-responsable">
+        <button
+          className="boton primario"
+          onClick={() => { void cargarEquipos(); setEditando(responsableVacio()); }}
+          data-testid="nuevo-responsable"
+        >
           <Icono nombre="mas" /> Responsable
         </button>
       </div>
@@ -262,7 +321,7 @@ function SeccionResponsables(): React.JSX.Element {
               <tr
                 key={r.id}
                 className={r.eliminado ? 'fila-eliminada' : undefined}
-                onClick={() => !r.eliminado && setEditando(r)}
+                onClick={() => { if (r.eliminado) return; void cargarEquipos(); setEditando(r); }}
                 style={{ cursor: r.eliminado ? 'default' : 'pointer' }}
                 data-testid={`responsable-${r.nombre}`}
               >
@@ -321,6 +380,21 @@ function SeccionResponsables(): React.JSX.Element {
           <Campo etiqueta="Correo">
             <input type="email" value={editando.correo ?? ''} onChange={(e) => setEditando({ ...editando, correo: e.target.value || null })} />
           </Campo>
+          <Campo etiqueta="Equipo">
+            <select
+              value={editando.equipoId ?? ''}
+              onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null })}
+              data-testid="responsable-equipo"
+            >
+              <option value="">— (sin equipo) —</option>
+              {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
+                <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
+              ))}
+            </select>
+            <span className="texto-suave">
+              Determina el vínculo indirecto de los indicadores de este responsable con un equipo.
+            </span>
+          </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
             Activo
@@ -369,6 +443,15 @@ function SeccionCategorias(): React.JSX.Element {
     await cargar();
   };
 
+  const filas = ordenarJerarquia(items);
+  // Opciones válidas de "categoría padre": excluye la propia categoría en edición y sus descendientes
+  // (evita ciclos client-side; el backend vuelve a validarlo con `sinCiclo`), y las ya eliminadas.
+  const opcionesPadre = editando
+    ? ordenarJerarquia(items.filter((c) => !c.eliminado)).filter(
+        (c) => c.id !== editando.id && sinCiclo(editando.id, c.id, items)
+      )
+    : [];
+
   return (
     <div className="tarjeta">
       <div className="toolbar">
@@ -393,13 +476,14 @@ function SeccionCategorias(): React.JSX.Element {
           <thead>
             <tr>
               <th>Nombre</th>
+              <th>Prefijo</th>
               <th>Descripción</th>
               <th>Activa</th>
               <th style={{ width: 90 }} />
             </tr>
           </thead>
           <tbody>
-            {items.map((c) => (
+            {filas.map((c) => (
               <tr
                 key={c.id}
                 className={c.eliminado ? 'fila-eliminada' : undefined}
@@ -407,7 +491,10 @@ function SeccionCategorias(): React.JSX.Element {
                 style={{ cursor: c.eliminado ? 'default' : 'pointer' }}
                 data-testid={`categoria-${c.nombre}`}
               >
-                <td>{c.nombre} {c.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
+                <td style={{ paddingLeft: 12 + c.nivel * 20 }}>
+                  {c.nombre} {c.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}
+                </td>
+                <td className="texto-suave">{c.prefijo ?? '—'}</td>
                 <td className="texto-suave">{c.descripcion || '—'}</td>
                 <td>{c.activo ? 'Sí' : 'No'}</td>
                 <td>
@@ -426,7 +513,7 @@ function SeccionCategorias(): React.JSX.Element {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={5}>
                   <Vacio mensaje="Sin categorías" detalle="Créelas para clasificar indicadores." />
                 </td>
               </tr>
@@ -462,10 +549,290 @@ function SeccionCategorias(): React.JSX.Element {
           <Campo etiqueta="Descripción">
             <textarea rows={2} value={editando.descripcion} onChange={(e) => setEditando({ ...editando, descripcion: e.target.value })} />
           </Campo>
+          <Campo etiqueta="Prefijo">
+            <input
+              type="text"
+              value={editando.prefijo ?? ''}
+              onChange={(e) => setEditando({ ...editando, prefijo: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') || null })}
+              data-testid="categoria-prefijo"
+            />
+            <span className="texto-suave">
+              Opcional, alfabético en mayúsculas. Puramente visual: antepone «PREFIJO-» al código del indicador al mostrarlo, sin afectar el código guardado ni las referencias de fórmulas.
+            </span>
+          </Campo>
+          <Campo etiqueta="Categoría padre">
+            <select
+              value={editando.padreId ?? ''}
+              onChange={(e) => setEditando({ ...editando, padreId: e.target.value || null })}
+              data-testid="categoria-padre"
+            >
+              <option value="">— (categoría raíz) —</option>
+              {opcionesPadre.map((c) => (
+                <option key={c.id} value={c.id}>{'—'.repeat(c.nivel)} {c.nombre}</option>
+              ))}
+            </select>
+          </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
             Activa
           </label>
+        </PanelLateral>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Equipos jerárquicos (Batch R), mismo patrón CRUD que `SeccionCategorias`
+ * más un sub-panel "Indicadores de este equipo": lista TODOS los
+ * indicadores marcando su vínculo con el equipo en edición — directo
+ * (`Indicador.equipo`, checkbox editable, togglea vía
+ * `indicadores:reasignarMasivo`), indirecto (vía `Responsable.equipoId`,
+ * informativo — ese vínculo se cambia asignando/quitando el responsable
+ * del indicador, no desde acá) o ninguno (checkbox editable para vincular
+ * directo).
+ */
+function SeccionEquipos(): React.JSX.Element {
+  const [items, setItems] = useState<Equipo[]>([]);
+  const [editando, setEditando] = useState<Equipo | null>(null);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [errores, setErrores] = useState<string[]>([]);
+  const [responsables, setResponsables] = useState<Responsable[]>([]);
+  const [indicadores, setIndicadores] = useState<Indicador[]>([]);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setItems(await invocar('equipos:listar', { incluirEliminados: mostrarEliminados }));
+  }, [mostrarEliminados]);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  // También recargado al abrir el editor (no solo al montar): un responsable o indicador
+  // creado mientras este componente ya estaba montado no dispararía este efecto de otro modo.
+  const cargarResponsablesEIndicadores = useCallback(async (): Promise<void> => {
+    setResponsables(await invocar('responsables:listar', undefined));
+    setIndicadores(await invocar('indicadores:listar', undefined));
+  }, []);
+
+  useEffect(() => {
+    void cargarResponsablesEIndicadores();
+  }, [cargarResponsablesEIndicadores]);
+
+  const guardar = async (): Promise<void> => {
+    if (!editando) return;
+    await invocar('equipos:guardar', editando);
+    setEditando(null);
+    await cargar();
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await invocar('equipos:eliminar', { id });
+      setEditando(null);
+      setErrores([]);
+      await cargar();
+    } catch (error) {
+      const e = error as Error & { detalles?: string[] };
+      setErrores(e.detalles?.length ? e.detalles : [e.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await invocar('equipos:restaurar', { id });
+    await cargar();
+  };
+
+  const alternarVinculoDirecto = async (indicadorId: string, vincular: boolean): Promise<void> => {
+    if (!editando) return;
+    await invocar('indicadores:reasignarMasivo', { ids: [indicadorId], equipo: vincular ? editando.id : null });
+    setIndicadores(await invocar('indicadores:listar', undefined));
+  };
+
+  const filas = ordenarJerarquia(items);
+  const opcionesPadre = editando
+    ? ordenarJerarquia(items.filter((e) => !e.eliminado)).filter(
+        (e) => e.id !== editando.id && sinCiclo(editando.id, e.id, items)
+      )
+    : [];
+
+  const responsablesPorId = new Map(responsables.map((r) => [r.id, r]));
+  const vinculoDe = (i: Indicador): 'directo' | 'indirecto' | 'ninguno' => {
+    if (!editando) return 'ninguno';
+    if (i.equipo === editando.id) return 'directo';
+    const resp = i.responsable ? responsablesPorId.get(i.responsable) : undefined;
+    return resp?.equipoId === editando.id ? 'indirecto' : 'ninguno';
+  };
+
+  return (
+    <div className="tarjeta">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Equipos</h3>
+        <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="equipos-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
+        <button
+          className="boton primario"
+          onClick={() => { void cargarResponsablesEIndicadores(); setEditando(equipoVacio()); }}
+          data-testid="nuevo-equipo"
+        >
+          <Icono nombre="mas" /> Equipo
+        </button>
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Descripción</th>
+              <th>Activo</th>
+              <th style={{ width: 90 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((eq) => (
+              <tr
+                key={eq.id}
+                className={eq.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => { if (eq.eliminado) return; void cargarResponsablesEIndicadores(); setEditando(eq); }}
+                style={{ cursor: eq.eliminado ? 'default' : 'pointer' }}
+                data-testid={`equipo-${eq.nombre}`}
+              >
+                <td style={{ paddingLeft: 12 + eq.nivel * 20 }}>
+                  {eq.nombre} {eq.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}
+                </td>
+                <td className="texto-suave">{eq.descripcion || '—'}</td>
+                <td>{eq.activo ? 'Sí' : 'No'}</td>
+                <td>
+                  {eq.eliminado && (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(eq.id); }}
+                      data-testid={`restaurar-${eq.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={4}>
+                  <Vacio mensaje="Sin equipos" detalle="Créelos para agrupar indicadores organizacionalmente." />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {editando && (
+        <PanelLateral
+          titulo={editando.id ? 'Editar equipo' : 'Nuevo equipo'}
+          alCerrar={() => { setEditando(null); setErrores([]); }}
+          pie={
+            <>
+              {editando.id && (
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
+                  Eliminar
+                </button>
+              )}
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-equipo">Guardar</button>
+            </>
+          }
+        >
+          {errores.length > 0 && (
+            <div className="aviso error" data-testid="equipo-error-eliminar">
+              {errores.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
+          <Campo etiqueta="Nombre" obligatorio>
+            <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="equipo-nombre" />
+          </Campo>
+          <Campo etiqueta="Descripción">
+            <textarea rows={2} value={editando.descripcion} onChange={(e) => setEditando({ ...editando, descripcion: e.target.value })} />
+          </Campo>
+          <Campo etiqueta="Equipo padre">
+            <select
+              value={editando.padreId ?? ''}
+              onChange={(e) => setEditando({ ...editando, padreId: e.target.value || null })}
+              data-testid="equipo-padre"
+            >
+              <option value="">— (equipo raíz) —</option>
+              {opcionesPadre.map((eq) => (
+                <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
+              ))}
+            </select>
+          </Campo>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
+            Activo
+          </label>
+
+          {editando.id && (
+            <>
+              <h4 style={{ margin: '16px 0 8px' }}>Indicadores de este equipo</h4>
+              <p className="texto-suave" style={{ marginTop: 0 }}>
+                Directo: vinculado explícitamente a este equipo. Indirecto: vía el responsable asignado — cámbielo
+                desde el indicador o su responsable, no aquí.
+              </p>
+              <div className="tabla-envoltura">
+                <table className="tabla">
+                  <thead>
+                    <tr>
+                      <th>Indicador</th>
+                      <th>Vínculo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {indicadores.map((i) => {
+                      const vinculo = vinculoDe(i);
+                      return (
+                        <tr key={i.id} data-testid={`equipo-indicador-${i.nombre}`}>
+                          <td>
+                            <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: vinculo === 'indirecto' ? 'default' : 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                style={{ width: 'auto' }}
+                                checked={vinculo !== 'ninguno'}
+                                disabled={vinculo === 'indirecto'}
+                                onChange={(e) => void alternarVinculoDirecto(i.id, e.target.checked)}
+                                data-testid={`equipo-indicador-check-${i.nombre}`}
+                              />
+                              {i.nombre}
+                            </label>
+                          </td>
+                          <td className="texto-suave">
+                            {vinculo === 'directo' && 'Directo'}
+                            {vinculo === 'indirecto' && 'Indirecto (responsable)'}
+                            {vinculo === 'ninguno' && '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {indicadores.length === 0 && (
+                      <tr>
+                        <td colSpan={2}>
+                          <Vacio mensaje="Sin indicadores" />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </PanelLateral>
       )}
     </div>
@@ -1106,6 +1473,7 @@ export function AdminPage(): React.JSX.Element {
 
       <SeccionResponsables />
       <SeccionCategorias />
+      <SeccionEquipos />
       <SeccionOrigenesAutomaticos />
 
       {usuario?.rol === 'admin' && <SeccionUsuarios />}

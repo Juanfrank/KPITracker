@@ -8,6 +8,7 @@ import { reglasRouter } from './routers/reglas';
 import { periodicidadesRouter } from './routers/periodicidades';
 import { responsablesRouter } from './routers/responsables';
 import { categoriasRouter } from './routers/categorias';
+import { equiposRouter } from './routers/equipos';
 import { origenesRouter } from './routers/origenes';
 import { automatizacionRouter } from './routers/automatizacion';
 import { recoleccionRouter } from './routers/recoleccion';
@@ -36,6 +37,7 @@ export const appRouter = router({
   periodicidades: periodicidadesRouter,
   responsables: responsablesRouter,
   categorias: categoriasRouter,
+  equipos: equiposRouter,
   origenes: origenesRouter,
   automatizacion: automatizacionRouter,
   recoleccion: recoleccionRouter,

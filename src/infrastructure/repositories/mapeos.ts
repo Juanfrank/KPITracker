@@ -1,6 +1,6 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
-  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
+  DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
   ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable,
   Sesion, Usuario
 } from '@domain/index';
@@ -45,6 +45,7 @@ export const aIndicador = (f: Fila): Indicador => ({
   estado: s(f.estado) as Indicador['estado'],
   responsable: sn(f.responsable),
   categoria: sn(f.categoria),
+  equipo: sn(f.equipo),
   unidadMedida: sn(f.unidad_medida),
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   esCalculado: b(f.es_calculado),
@@ -63,7 +64,7 @@ export const deIndicador = (i: Indicador): Fila => ({
   id: i.id, codigo: i.codigo ?? '', nombre: i.nombre, definicion: i.definicion, forma_calculo: i.formaCalculo ?? null,
   periodicidad: i.periodicidad, linea_base: i.lineaBase, linea_base_periodo_id: i.lineaBasePeriodoId ?? null,
   meta_global: i.metaGlobal, desagregaciones: JSON.stringify(i.desagregaciones), estado: i.estado,
-  responsable: i.responsable, categoria: i.categoria, unidad_medida: i.unidadMedida,
+  responsable: i.responsable, categoria: i.categoria, equipo: i.equipo ?? null, unidad_medida: i.unidadMedida,
   periodicidad_personalizada_id: i.periodicidadPersonalizadaId, es_calculado: i.esCalculado ?? false,
   formula: i.formula ?? null, creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
 });
@@ -250,13 +251,14 @@ export const aResponsable = (f: Fila): Responsable => ({
   correo: sn(f.correo),
   activo: b(f.activo),
   eliminado: b(f.eliminado ?? false),
+  equipoId: sn(f.equipo_id),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deResponsable = (r: Responsable): Fila => ({
   id: r.id, nombre: r.nombre, correo: r.correo, activo: r.activo, eliminado: r.eliminado ?? false,
-  creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
+  equipo_id: r.equipoId, creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 
 export const aCategoria = (f: Fila): Categoria => ({
@@ -265,13 +267,31 @@ export const aCategoria = (f: Fila): Categoria => ({
   descripcion: s(f.descripcion),
   activo: b(f.activo),
   eliminado: b(f.eliminado ?? false),
+  padreId: sn(f.padre_id),
+  prefijo: sn(f.prefijo),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deCategoria = (c: Categoria): Fila => ({
   id: c.id, nombre: c.nombre, descripcion: c.descripcion, activo: c.activo, eliminado: c.eliminado ?? false,
-  creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
+  padre_id: c.padreId, prefijo: c.prefijo, creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
+});
+
+export const aEquipo = (f: Fila): Equipo => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  descripcion: s(f.descripcion),
+  activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
+  padreId: sn(f.padre_id),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deEquipo = (e: Equipo): Fila => ({
+  id: e.id, nombre: e.nombre, descripcion: e.descripcion, activo: e.activo, eliminado: e.eliminado ?? false,
+  padre_id: e.padreId, creado_en: e.creadoEn, actualizado_en: e.actualizadoEn
 });
 
 export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({

@@ -527,6 +527,17 @@ table.tabla tbody tr.fila-eliminada:hover {
   width: 32px;
 }
 
+/* Misma columna de jerarquía, para la vista Árbol de Seguimiento (categoría/subcategoría). */
+.tabla-seguimiento-arbol td.celda-arbol {
+  padding: 0 2px;
+  width: 32px;
+}
+
+.tabla-seguimiento-arbol tr.fila-categoria {
+  font-weight: 700;
+  background: var(--superficie-2);
+}
+
 .boton-arbol {
   display: inline-flex;
   align-items: center;

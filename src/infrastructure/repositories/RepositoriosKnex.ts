@@ -1,7 +1,7 @@
 import type { Knex } from 'knex';
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, DefinicionPeriodicidad, ElementoLista,
-  EntidadAdjunto, Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio,
+  EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio,
   Resultado, ResultadoHistorial, Sesion, Usuario
 } from '@domain/index';
 import type {
@@ -13,10 +13,10 @@ import type {
 import { upsert } from '../db/upsert';
 import {
   aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aDefinicionPeriodicidad,
-  aElemento, aIndicador, aLevantamiento, aLista, aMeta, aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial,
-  aSesion, aUsuario,
+  aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMeta, aOrigenAutomatico, aRegla, aResultado,
+  aResultadoHistorial, aSesion, aUsuario,
   deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deDefinicionPeriodicidad,
-  deElemento, deIndicador, deLevantamiento, deLista, deMeta, deOrigenAutomatico, deRegla, deResultado,
+  deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMeta, deOrigenAutomatico, deRegla, deResultado,
   deResultadoHistorial, deSesion, deUsuario
 } from './mapeos';
 
@@ -452,4 +452,15 @@ export function crearRepositorioDefinicionesPeriodicidad(knex: Knex): CatalogoRe
 
 export function crearRepositorioOrigenesAutomaticos(knex: Knex): CatalogoRepositoryKnex<OrigenAutomatico> {
   return new CatalogoRepositoryKnex(knex, 'origenes_automaticos', aOrigenAutomatico, deOrigenAutomatico, true);
+}
+
+/**
+ * Igual que Categoria, Equipo es un árbol simple (id + padreId) — la
+ * validación de jerarquía (sin ciclos, bloqueo de borrado con hijos) vive
+ * en la capa de aplicación (`ServicioEquipos`) sobre el `listar()` completo
+ * de este repositorio genérico; no hace falta un método de consulta
+ * específico para "hijos de X" a esta escala.
+ */
+export function crearRepositorioEquipos(knex: Knex): CatalogoRepositoryKnex<Equipo> {
+  return new CatalogoRepositoryKnex(knex, 'equipos', aEquipo, deEquipo, true);
 }

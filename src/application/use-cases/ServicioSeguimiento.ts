@@ -21,6 +21,7 @@ export interface AtributoFiltro {
 
 export interface FilaTablero {
   indicadorId: string;
+  codigo: string;
   nombre: string;
   estado: EstadoSeguimiento;
   periodicidad: Periodicidad;
@@ -182,6 +183,7 @@ export class ServicioSeguimiento extends ServicioBase {
 
       filas.push({
         indicadorId: indicador.id,
+        codigo: indicador.codigo,
         nombre: indicador.nombre,
         estado: indicador.estado !== 'Activo' ? 'NoAplica' : (pendiente?.estado ?? (estados.length > 0 ? 'Completo' : 'NoAplica')),
         periodicidad: indicador.periodicidad,

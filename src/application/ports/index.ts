@@ -8,6 +8,7 @@ import type {
   DefinicionPeriodicidad,
   ElementoLista,
   EntidadAdjunto,
+  Equipo,
   Indicador,
   Levantamiento,
   Lista,
@@ -125,6 +126,7 @@ export interface ICatalogoRepository<T extends { readonly id: string }> {
 export type IResponsableRepository = ICatalogoRepository<Responsable>;
 export type ICategoriaRepository = ICatalogoRepository<Categoria>;
 export type IOrigenAutomaticoRepository = ICatalogoRepository<OrigenAutomatico>;
+export type IEquipoRepository = ICatalogoRepository<Equipo>;
 
 /** Resumen por período para el tablero de seguimiento. */
 export interface ResumenPeriodo {

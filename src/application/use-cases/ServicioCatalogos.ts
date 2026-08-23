@@ -1,19 +1,21 @@
 import type {
-  AliasDesagregacionOrigen, Atributo, ElementoLista, Indicador, Lista, Meta, ReglaNegocio, TypeRegistry
+  AliasDesagregacionOrigen, Atributo, Categoria, ElementoLista, Equipo, Indicador, Lista, Meta, ReglaNegocio,
+  TypeRegistry
 } from '@domain/index';
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
-  construirContextoIndicador, signosAgrupacionBalanceados
+  construirContextoIndicador, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
-  IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository,
+  IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
   IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository,
-  ValorAtributoEntidad
+  IResponsableRepository, ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { mapaValoresDesdeEntidad } from './valoresEav';
-import { referenciasDeAtributo, referenciasDeLista, referenciasDeRegla } from './referencias';
+import { ServicioCatalogoGenerico } from './ServicioCatalogoGenerico';
+import { referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, referenciasDeLista, referenciasDeRegla } from './referencias';
 
 /** Mapeo de campos de Indicador -> nombre de columna del archivo importado (undefined = no mapeado). */
 export interface MapeoImportacionIndicadores {
@@ -159,13 +161,15 @@ export class ServicioIndicadores extends ServicioBase {
   }
 
   /**
-   * Reasigna responsable y/o categoría a varios indicadores de una vez
-   * (acción masiva desde Seguimiento). `undefined` en un campo significa
-   * "no tocar"; `null` significa "quitar la asignación actual".
+   * Reasigna responsable, categoría y/o equipo (Batch R: vínculo directo
+   * indicador↔equipo, usado también por el panel de Equipos para vincular/
+   * desvincular indicadores) a varios indicadores de una vez (acción masiva
+   * desde Seguimiento). `undefined` en un campo significa "no tocar"; `null`
+   * significa "quitar la asignación actual".
    */
   async reasignarMasivo(
     indicadorIds: string[],
-    cambios: { responsable?: string | null; categoria?: string | null }
+    cambios: { responsable?: string | null; categoria?: string | null; equipo?: string | null }
   ): Promise<void> {
     if (indicadorIds.length === 0) return;
     const ahora = this.ctx.reloj.ahoraIso();
@@ -176,12 +180,13 @@ export class ServicioIndicadores extends ServicioBase {
         ...actual,
         responsable: cambios.responsable === undefined ? actual.responsable : cambios.responsable,
         categoria: cambios.categoria === undefined ? actual.categoria : cambios.categoria,
+        equipo: cambios.equipo === undefined ? actual.equipo : cambios.equipo,
         actualizadoEn: ahora
       };
       await this.repo.guardar(actualizado);
       await this.auditar('Modificar', 'Indicador', id, 'reasignacionMasiva',
-        JSON.stringify({ responsable: actual.responsable, categoria: actual.categoria }),
-        JSON.stringify({ responsable: actualizado.responsable, categoria: actualizado.categoria }));
+        JSON.stringify({ responsable: actual.responsable, categoria: actual.categoria, equipo: actual.equipo }),
+        JSON.stringify({ responsable: actualizado.responsable, categoria: actualizado.categoria, equipo: actualizado.equipo }));
     }
     this.sincronizarExport();
   }
@@ -233,6 +238,7 @@ export class ServicioIndicadores extends ServicioBase {
           estado: 'Borrador',
           responsable: null,
           categoria: null,
+          equipo: null,
           unidadMedida: mapeo.unidadMedida ? (fila[mapeo.unidadMedida] ?? '').trim() || null : null,
           esCalculado: false,
           formula: null,
@@ -515,5 +521,130 @@ export class ServicioReglas extends ServicioBase {
     if (!regla) throw new EntidadNoEncontradaError('ReglaNegocio', id);
     await this.repo.marcarEliminado(id, false);
     await this.auditar('Restaurar', 'ReglaNegocio', id, null, null, regla.nombre);
+  }
+}
+
+/**
+ * Categorías jerárquicas (Batch R): envuelve `ServicioCatalogoGenerico<Categoria>`
+ * (nombre, auditoría, borrado lógico) agregando lo que ese genérico no puede
+ * conocer: formato/unicidad de `prefijo` (mismo criterio que `Lista.prefijo`
+ * — puramente visual, ver `etiquetaConPrefijo`, nunca se guarda en el código
+ * del indicador) y validación de jerarquía (`padreId` debe existir y no
+ * generar ciclo, vía `sinCiclo`). `eliminar()` además bloquea si la
+ * categoría tiene subcategorías, sumado al bloqueo por indicadores que ya
+ * hace `referenciasDeCategoria`.
+ */
+export class ServicioCategorias extends ServicioBase {
+  private readonly generico: ServicioCatalogoGenerico<Categoria>;
+
+  constructor(
+    ctx: ContextoAplicacion,
+    private readonly repo: ICatalogoRepository<Categoria>,
+    private readonly indicadoresRepo: IIndicadorRepository
+  ) {
+    super(ctx);
+    this.generico = new ServicioCatalogoGenerico(ctx, repo, 'Categoria', (id) => this.verificarReferencias(id));
+  }
+
+  listar(incluirEliminados = false): Promise<Categoria[]> {
+    return this.generico.listar(incluirEliminados);
+  }
+
+  async guardar(categoria: Categoria): Promise<Categoria> {
+    const errores: string[] = [];
+    const prefijo = categoria.prefijo?.trim().toUpperCase() || null;
+    if (prefijo) {
+      if (!/^[A-Z]+$/.test(prefijo)) {
+        errores.push('El prefijo debe ser alfabético, en mayúsculas, sin espacios ni caracteres especiales.');
+      } else {
+        const otras = await this.repo.listar();
+        if (otras.some((c) => c.id !== categoria.id && c.prefijo?.toUpperCase() === prefijo)) {
+          errores.push(`Ya existe una categoría con el prefijo "${prefijo}".`);
+        }
+      }
+    }
+    if (categoria.padreId) {
+      const todas = await this.repo.listar();
+      if (!todas.some((c) => c.id === categoria.padreId)) {
+        errores.push('La categoría padre seleccionada no existe.');
+      } else if (!sinCiclo(categoria.id, categoria.padreId, todas)) {
+        errores.push('La categoría padre seleccionada genera un ciclo (no puede ser subcategoría de sí misma ni de sus propias subcategorías).');
+      }
+    }
+    if (errores.length > 0) throw new ValidacionError('Categoría inválida.', errores);
+    return this.generico.guardar({ ...categoria, prefijo });
+  }
+
+  eliminar(id: string): Promise<void> {
+    return this.generico.eliminar(id);
+  }
+
+  restaurar(id: string): Promise<void> {
+    return this.generico.restaurar(id);
+  }
+
+  private async verificarReferencias(id: string): Promise<string[]> {
+    const detalles = await referenciasDeCategoria({ indicadores: this.indicadoresRepo }, id);
+    const todas = await this.repo.listar();
+    const hijas = todas.filter((c) => c.padreId === id);
+    if (hijas.length > 0) detalles.push(`Subcategorías (${hijas.length})`);
+    return detalles;
+  }
+}
+
+/**
+ * Equipos jerárquicos (Batch R): mismo patrón que `ServicioCategorias` —
+ * envuelve `ServicioCatalogoGenerico<Equipo>` y valida jerarquía (`padreId`
+ * existente + `sinCiclo`). `eliminar()` bloquea si tiene sub-equipos, o si
+ * algún responsable/indicador lo referencia (`referenciasDeEquipo`: directo
+ * vía `Indicador.equipo`, indirecto vía `Responsable.equipoId`).
+ */
+export class ServicioEquipos extends ServicioBase {
+  private readonly generico: ServicioCatalogoGenerico<Equipo>;
+
+  constructor(
+    ctx: ContextoAplicacion,
+    private readonly repo: ICatalogoRepository<Equipo>,
+    private readonly responsablesRepo: IResponsableRepository,
+    private readonly indicadoresRepo: IIndicadorRepository
+  ) {
+    super(ctx);
+    this.generico = new ServicioCatalogoGenerico(ctx, repo, 'Equipo', (id) => this.verificarReferencias(id));
+  }
+
+  listar(incluirEliminados = false): Promise<Equipo[]> {
+    return this.generico.listar(incluirEliminados);
+  }
+
+  async guardar(equipo: Equipo): Promise<Equipo> {
+    const errores: string[] = [];
+    if (equipo.padreId) {
+      const todos = await this.repo.listar();
+      if (!todos.some((e) => e.id === equipo.padreId)) {
+        errores.push('El equipo padre seleccionado no existe.');
+      } else if (!sinCiclo(equipo.id, equipo.padreId, todos)) {
+        errores.push('El equipo padre seleccionado genera un ciclo (no puede ser sub-equipo de sí mismo ni de sus propios sub-equipos).');
+      }
+    }
+    if (errores.length > 0) throw new ValidacionError('Equipo inválido.', errores);
+    return this.generico.guardar(equipo);
+  }
+
+  eliminar(id: string): Promise<void> {
+    return this.generico.eliminar(id);
+  }
+
+  restaurar(id: string): Promise<void> {
+    return this.generico.restaurar(id);
+  }
+
+  private async verificarReferencias(id: string): Promise<string[]> {
+    const detalles = await referenciasDeEquipo(
+      { responsables: this.responsablesRepo, indicadores: this.indicadoresRepo }, id
+    );
+    const todos = await this.repo.listar();
+    const hijos = todos.filter((e) => e.padreId === id);
+    if (hijos.length > 0) detalles.push(`Sub-equipos (${hijos.length})`);
+    return detalles;
   }
 }

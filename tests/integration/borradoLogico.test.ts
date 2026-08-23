@@ -22,7 +22,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
-    estado: 'Activo', responsable: null, categoria: null, unidadMedida: null, esCalculado: false, formula: null,
+    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -56,11 +56,17 @@ function regla(parcial: Partial<ReglaNegocio> = {}): ReglaNegocio {
 }
 
 function responsable(parcial: Partial<Responsable> = {}): Responsable {
-  return { id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: '', ...parcial };
+  return {
+    id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: '',
+    ...parcial
+  };
 }
 
 function categoria(parcial: Partial<Categoria> = {}): Categoria {
-  return { id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: '', ...parcial };
+  return {
+    id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+    creadoEn: '', actualizadoEn: '', ...parcial
+  };
 }
 
 function origen(parcial: Partial<OrigenAutomatico> = {}): OrigenAutomatico {

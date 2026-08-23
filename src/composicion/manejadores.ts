@@ -4,10 +4,11 @@ import type { CanalesIpc, CanalLocal, NombreCanal } from '@shared/ipc';
 import { crearRegistroReglasFechaLimite, crearRegistroTiposBase } from '@domain/index';
 import { ServicioConfiguracion } from '@application/use-cases/ServicioConfiguracion';
 import {
-  ServicioAtributos, ServicioIndicadores, ServicioListas, ServicioMetas, ServicioReglas
+  ServicioAtributos, ServicioCategorias, ServicioEquipos, ServicioIndicadores, ServicioListas, ServicioMetas,
+  ServicioReglas
 } from '@application/use-cases/ServicioCatalogos';
 import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalogoGenerico';
-import { referenciasDeCategoria, referenciasDeOrigen, referenciasDeResponsable } from '@application/use-cases/referencias';
+import { referenciasDeOrigen, referenciasDeResponsable } from '@application/use-cases/referencias';
 import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodicidades';
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
@@ -66,9 +67,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const responsables = new ServicioCatalogoGenerico(
     ctx, infra.responsables, 'Responsable', (id) => referenciasDeResponsable({ indicadores: infra.indicadores }, id)
   );
-  const categorias = new ServicioCatalogoGenerico(
-    ctx, infra.categorias, 'Categoria', (id) => referenciasDeCategoria({ indicadores: infra.indicadores }, id)
-  );
+  const categorias = new ServicioCategorias(ctx, infra.categorias, infra.indicadores);
+  const equipos = new ServicioEquipos(ctx, infra.equipos, infra.responsables, infra.indicadores);
   const origenesAutomaticos = new ServicioCatalogoGenerico(
     ctx, infra.origenesAutomaticos, 'OrigenAutomatico',
     (id) => referenciasDeOrigen(
@@ -99,8 +99,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     'indicadores:obtener': ({ id }) => indicadores.obtener(id),
     'indicadores:guardar': (input) => indicadores.guardar(input),
     'indicadores:eliminar': ({ id }) => indicadores.eliminar(id),
-    'indicadores:reasignarMasivo': ({ ids, responsable, categoria }) =>
-      indicadores.reasignarMasivo(ids, { responsable, categoria }),
+    'indicadores:reasignarMasivo': ({ ids, responsable, categoria, equipo }) =>
+      indicadores.reasignarMasivo(ids, { responsable, categoria, equipo }),
     'indicadores:importarExcel': ({ filas, mapeo }) => indicadores.importarExcel(filas, mapeo),
 
     'atributos:listar': (payload) => atributos.listar(payload?.entidad, payload?.incluirEliminados),
@@ -140,6 +140,11 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     'categorias:guardar': (categoria) => categorias.guardar(categoria),
     'categorias:eliminar': ({ id }) => categorias.eliminar(id),
     'categorias:restaurar': ({ id }) => categorias.restaurar(id),
+
+    'equipos:listar': (payload) => equipos.listar(payload?.incluirEliminados),
+    'equipos:guardar': (equipo) => equipos.guardar(equipo),
+    'equipos:eliminar': ({ id }) => equipos.eliminar(id),
+    'equipos:restaurar': ({ id }) => equipos.restaurar(id),
 
     'origenes:listar': (payload) => origenesAutomaticos.listar(payload?.incluirEliminados),
     'origenes:guardar': (origen) => origenesAutomaticos.guardar(origen),

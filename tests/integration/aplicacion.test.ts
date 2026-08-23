@@ -16,7 +16,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
-    estado: 'Activo', responsable: null, categoria: null, unidadMedida: null, esCalculado: false, formula: null,
+    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -107,10 +107,10 @@ describe('Composition root — catálogos', () => {
 
   it('CRUD de responsables y categorías vía IPC', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Juan Pérez', correo: 'juan@example.org', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Juan Pérez', correo: 'juan@example.org', activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
     });
     const categoria = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
@@ -118,6 +118,129 @@ describe('Composition root — catálogos', () => {
     await app.manejadores['categorias:eliminar']({ id: categoria.id });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(0);
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(0);
+  });
+});
+
+/** Los mensajes específicos de una `ValidacionError` viajan en `.detalles`, no en `.message` (ver `RespuestaIpc`). */
+async function erroresDe(promesa: Promise<unknown>): Promise<string[]> {
+  try {
+    await promesa;
+    throw new Error('no debió llegar aquí');
+  } catch (error) {
+    const e = error as Error & { detalles?: string[] };
+    return e.detalles?.length ? e.detalles : [e.message];
+  }
+}
+
+describe('Composition root — categorías jerárquicas (Batch R)', () => {
+  it('crea una categoría raíz y una subcategoría vinculada por padreId', async () => {
+    const raiz = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const hija = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Sub-estratégico', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    expect(hija.padreId).toBe(raiz.id);
+  });
+
+  it('rechaza asignar como padre a una categoría que generaría un ciclo', async () => {
+    const raiz = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Raíz', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const hija = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Hija', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const detalles = await erroresDe(app.manejadores['categorias:guardar']({ ...raiz, padreId: hija.id }));
+    expect(detalles.some((d) => /ciclo/.test(d))).toBe(true);
+  });
+
+  it('valida formato y unicidad del prefijo visual', async () => {
+    await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Uno', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: 'EST',
+      creadoEn: '', actualizadoEn: ''
+    });
+    const detallesFormato = await erroresDe(app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Dos', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: 'est-1',
+      creadoEn: '', actualizadoEn: ''
+    }));
+    expect(detallesFormato.some((d) => /alfabético/.test(d))).toBe(true);
+    const detallesDuplicado = await erroresDe(app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Tres', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: 'EST',
+      creadoEn: '', actualizadoEn: ''
+    }));
+    expect(detallesDuplicado.some((d) => /Ya existe/.test(d))).toBe(true);
+  });
+
+  it('bloquea borrar una categoría que tiene subcategorías', async () => {
+    const raiz = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Con hijas', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Hija de con hijas', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const detalles = await erroresDe(app.manejadores['categorias:eliminar']({ id: raiz.id }));
+    expect(detalles.some((d) => /Subcategorías/.test(d))).toBe(true);
+  });
+});
+
+describe('Composition root — equipos jerárquicos (Batch R)', () => {
+  it('crea un equipo raíz y un sub-equipo vinculado por padreId', async () => {
+    const raiz = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Dirección', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    const hijo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Sub-dirección', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, creadoEn: '', actualizadoEn: ''
+    });
+    expect(hijo.padreId).toBe(raiz.id);
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
+  });
+
+  it('rechaza asignar como padre a un equipo que generaría un ciclo', async () => {
+    const raiz = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Raíz equipo', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    const hijo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Hijo equipo', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, creadoEn: '', actualizadoEn: ''
+    });
+    const detalles = await erroresDe(app.manejadores['equipos:guardar']({ ...raiz, padreId: hijo.id }));
+    expect(detalles.some((d) => /ciclo/.test(d))).toBe(true);
+  });
+
+  it('bloquea borrar un equipo que tiene sub-equipos', async () => {
+    const raiz = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Equipo con hijos', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Sub-equipo', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, creadoEn: '', actualizadoEn: ''
+    });
+    const detalles = await erroresDe(app.manejadores['equipos:eliminar']({ id: raiz.id }));
+    expect(detalles.some((d) => /Sub-equipos/.test(d))).toBe(true);
+  });
+
+  it('bloquea borrar un equipo referenciado indirectamente por un responsable', async () => {
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Equipo con responsable', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['responsables:guardar']({
+      id: '', nombre: 'Con equipo', correo: null, activo: true, eliminado: false, equipoId: equipo.id, creadoEn: '', actualizadoEn: ''
+    });
+    const detalles = await erroresDe(app.manejadores['equipos:eliminar']({ id: equipo.id }));
+    expect(detalles.some((d) => /Responsable/.test(d))).toBe(true);
+  });
+
+  it('bloquea borrar un equipo referenciado directamente por un indicador', async () => {
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Equipo con indicador', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['indicadores:guardar']({ indicador: indicador({ equipo: equipo.id }), valores: [] });
+    const detalles = await erroresDe(app.manejadores['equipos:eliminar']({ id: equipo.id }));
+    expect(detalles.some((d) => /Indicador/.test(d))).toBe(true);
   });
 });
 
@@ -533,10 +656,10 @@ describe('Composition root — configuración portable v1 → v2', () => {
 describe('Composition root — exportación analítica resuelve nombres de catálogo', () => {
   it('ResultadosAnalitico.parquet muestra el nombre del responsable y la categoría, no sus ids', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'María Gómez', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'María Gómez', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
     });
     const categoria = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Prioritario', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Prioritario', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
     const guardado = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ responsable: responsable.id, categoria: categoria.id }),
@@ -584,10 +707,10 @@ describe('Composition root — código único de indicador', () => {
 describe('Composition root — reasignación masiva de responsable/categoría', () => {
   it('reasigna responsable y categoría a varios indicadores sin tocar los campos no especificados', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
     });
     const categoriaOriginal = await app.manejadores['categorias:guardar']({
-      id: '', nombre: 'Original', descripcion: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Original', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
     const i1 = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ categoria: categoriaOriginal.id }), valores: []
@@ -606,7 +729,7 @@ describe('Composition root — reasignación masiva de responsable/categoría', 
 
   it('permite quitar una asignación pasando null explícitamente', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Beto', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+      id: '', nombre: 'Beto', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
     });
     const i1 = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ responsable: responsable.id }), valores: []

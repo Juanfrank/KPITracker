@@ -3,7 +3,8 @@ import type {
   IAtributoRepository,
   IAutomatizacionIndicadorRepository,
   IIndicadorRepository,
-  IReglaRepository
+  IReglaRepository,
+  IResponsableRepository
 } from '@application/ports/index';
 
 /**
@@ -110,6 +111,28 @@ export async function referenciasDeResponsable(deps: DepsReferenciasIndicadorCat
 export async function referenciasDeCategoria(deps: DepsReferenciasIndicadorCatalogo, categoriaId: string): Promise<string[]> {
   const indicadores = await deps.indicadores.listar();
   return indicadores.filter((i) => i.categoria === categoriaId).map((i) => `Indicador: ${i.nombre}`);
+}
+
+export interface DepsReferenciasEquipo {
+  responsables: IResponsableRepository;
+  indicadores: IIndicadorRepository;
+}
+
+/** Bloquea el borrado de un equipo referenciado directo (`Indicador.equipo`) o indirecto (vía `Responsable.equipoId`). */
+export async function referenciasDeEquipo(deps: DepsReferenciasEquipo, equipoId: string): Promise<string[]> {
+  const detalles: string[] = [];
+
+  const responsables = await deps.responsables.listar();
+  for (const responsable of responsables) {
+    if (responsable.equipoId === equipoId) detalles.push(`Responsable: ${responsable.nombre}`);
+  }
+
+  const indicadores = await deps.indicadores.listar();
+  for (const indicador of indicadores) {
+    if (indicador.equipo === equipoId) detalles.push(`Indicador: ${indicador.nombre}`);
+  }
+
+  return detalles;
 }
 
 export interface DepsReferenciasOrigen {

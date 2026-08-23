@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
-  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo,
+  Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Meta, Periodo,
   ReglaNegocio, Responsable, ValorAtributo
 } from '@domain/index';
-import { GeneradorPeriodos, Periodicidad, construirContextoIndicador } from '@domain/index';
+import { GeneradorPeriodos, Periodicidad, construirContextoIndicador, etiquetaConPrefijo } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
 import { tipos, validadorAtributos } from '../../dominio';
@@ -14,6 +14,17 @@ import { ImportarExcelIndicadores } from './ImportarExcelIndicadores';
 import { ModalAutomatizacionIndicador } from './ModalAutomatizacionIndicador';
 
 const generadorPeriodos = new GeneradorPeriodos();
+
+/** Ruta completa "Equipo > Sub-equipo > ..." de un equipo, para etiquetar su `<optgroup>` (que no anida más de un nivel). */
+function rutaEquipo(equipo: Equipo, porId: Map<string, Equipo>): string {
+  const partes: string[] = [equipo.nombre];
+  let actual = equipo.padreId ? porId.get(equipo.padreId) : undefined;
+  while (actual) {
+    partes.unshift(actual.nombre);
+    actual = actual.padreId ? porId.get(actual.padreId) : undefined;
+  }
+  return partes.join(' > ');
+}
 
 function indicadorVacio(): Indicador {
   return {
@@ -31,6 +42,7 @@ function indicadorVacio(): Indicador {
     estado: 'Activo',
     responsable: null,
     categoria: null,
+    equipo: null,
     unidadMedida: null,
     esCalculado: false,
     formula: null,
@@ -89,6 +101,7 @@ export function IndicadoresPage(): React.JSX.Element {
   const [periodicidades, setPeriodicidades] = useState<DefinicionPeriodicidad[]>([]);
   const [responsables, setResponsables] = useState<Responsable[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [mostrarAutomatizacion, setMostrarAutomatizacion] = useState(false);
   const [editando, setEditando] = useState<Indicador | null>(null);
   const [valoresAttr, setValoresAttr] = useState<Map<string, string>>(new Map());
@@ -114,6 +127,7 @@ export function IndicadoresPage(): React.JSX.Element {
     void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
     void invocar('responsables:listar', undefined).then(setResponsables);
     void invocar('categorias:listar', undefined).then(setCategorias);
+    void invocar('equipos:listar', undefined).then(setEquipos);
     void invocar('config:obtener', undefined).then((c) => setAnioInicial(c.anioInicial));
   }, [cargar]);
 
@@ -229,6 +243,7 @@ export function IndicadoresPage(): React.JSX.Element {
   const filtrados = indicadores.filter((i) =>
     i.nombre.toLowerCase().includes(filtro.toLowerCase()) || i.codigo.toLowerCase().includes(filtro.toLowerCase())
   );
+  const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
 
   // Validación en vivo de atributos dinámicos: mismas reglas que evaluará el backend al guardar.
   const base = editando ?? indicadorVacio();
@@ -288,7 +303,9 @@ export function IndicadoresPage(): React.JSX.Element {
           <tbody>
             {filtrados.map((i) => (
               <tr key={i.id} onClick={() => void abrirEditor(i)} style={{ cursor: 'pointer' }} data-testid={`indicador-${i.nombre}`}>
-                <td className="texto-suave">{i.codigo || '—'}</td>
+                <td className="texto-suave">
+                  {etiquetaConPrefijo(categorias.find((c) => c.id === i.categoria)?.prefijo, i.codigo) || '—'}
+                </td>
                 <td><strong>{i.nombre}</strong>{i.esCalculado && <span className="chip" style={{ marginLeft: 6 }}>Calculado</span>}</td>
                 <td>{i.periodicidad}</td>
                 <td>{i.lineaBase ?? '—'}</td>
@@ -448,15 +465,41 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
           <div className="fila-form c2">
-            <Campo etiqueta="Responsable">
+            <Campo etiqueta="Responsable / Equipo">
               <select
-                value={editando.responsable ?? ''}
-                onChange={(e) => setEditando({ ...editando, responsable: e.target.value || null })}
+                value={editando.equipo ? `equipo:${editando.equipo}` : editando.responsable ? `responsable:${editando.responsable}` : ''}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (valor.startsWith('equipo:')) {
+                    setEditando({ ...editando, equipo: valor.slice('equipo:'.length), responsable: null });
+                  } else if (valor.startsWith('responsable:')) {
+                    setEditando({ ...editando, responsable: valor.slice('responsable:'.length), equipo: null });
+                  } else {
+                    setEditando({ ...editando, equipo: null, responsable: null });
+                  }
+                }}
                 data-testid="indicador-responsable"
               >
                 <option value="">— sin asignar —</option>
-                {responsables.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                {equipos.map((eq) => (
+                  <optgroup key={eq.id} label={rutaEquipo(eq, equiposPorId)}>
+                    <option value={`equipo:${eq.id}`}>— Todo el equipo —</option>
+                    {responsables.filter((r) => r.equipoId === eq.id).map((r) => (
+                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombre}</option>
+                    ))}
+                  </optgroup>
+                ))}
+                {responsables.some((r) => !r.equipoId) && (
+                  <optgroup label="Sin equipo">
+                    {responsables.filter((r) => !r.equipoId).map((r) => (
+                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombre}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
+              <span className="texto-suave">
+                Elija un equipo completo (vínculo directo) o un responsable puntual (vínculo indirecto vía su equipo).
+              </span>
             </Campo>
             <Campo etiqueta="Categoría">
               <select

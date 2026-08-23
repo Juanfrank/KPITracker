@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { Categoria, DefinicionPeriodicidad, OrigenAutomatico, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Responsable } from '@domain/index';
 import type { IArchivoService } from '@application/ports/index';
 import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
@@ -8,7 +8,7 @@ import {
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex,
   IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex, ReglaRepositoryKnex,
   ResultadoRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
-  crearRepositorioDefinicionesPeriodicidad, crearRepositorioOrigenesAutomaticos
+  crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
 import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
@@ -33,6 +33,7 @@ export interface Infraestructura {
   periodicidades: CatalogoRepositoryKnex<DefinicionPeriodicidad>;
   responsables: CatalogoRepositoryKnex<Responsable>;
   categorias: CatalogoRepositoryKnex<Categoria>;
+  equipos: CatalogoRepositoryKnex<Equipo>;
   origenesAutomaticos: CatalogoRepositoryKnex<OrigenAutomatico>;
   automatizaciones: AutomatizacionIndicadorRepositoryKnex;
   aliasDesagregacionOrigen: AliasDesagregacionOrigenRepositoryKnex;
@@ -88,6 +89,7 @@ export async function crearInfraestructura(
   const periodicidades = crearRepositorioDefinicionesPeriodicidad(knex);
   const responsables = new CatalogoRepositoryKnex(knex, 'responsables', aResponsable, deResponsable, true);
   const categorias = new CatalogoRepositoryKnex(knex, 'categorias', aCategoria, deCategoria, true);
+  const equipos = crearRepositorioEquipos(knex);
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(knex);
   const automatizaciones = new AutomatizacionIndicadorRepositoryKnex(knex);
   const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryKnex(knex);
@@ -124,6 +126,7 @@ export async function crearInfraestructura(
     periodicidades,
     responsables,
     categorias,
+    equipos,
     origenesAutomaticos,
     automatizaciones,
     aliasDesagregacionOrigen,

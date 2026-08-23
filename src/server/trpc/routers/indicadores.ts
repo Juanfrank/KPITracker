@@ -18,7 +18,9 @@ export const indicadoresRouter = router({
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:eliminar'](input))),
 
   reasignarMasivo: protectedProcedure
-    .input(z.object({ ids: z.array(z.string()), responsable: z.string().nullish(), categoria: z.string().nullish() }))
+    .input(z.object({
+      ids: z.array(z.string()), responsable: z.string().nullish(), categoria: z.string().nullish(), equipo: z.string().nullish()
+    }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:reasignarMasivo'](input))),
 
   importarExcel: protectedProcedure

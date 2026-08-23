@@ -26,6 +26,7 @@ function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
     estado: 'Activo',
     responsable: null,
     categoria: null,
+    equipo: null,
     unidadMedida: '%',
     esCalculado: false,
     formula: null,

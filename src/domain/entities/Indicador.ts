@@ -26,10 +26,12 @@ export interface Indicador {
   /** Ids de las listas de selección usadas como desagregaciones. */
   desagregaciones: string[];
   estado: EstadoIndicador;
-  /** Id de Responsable (catálogo). */
+  /** Id de Responsable (catálogo). Determina el vínculo INDIRECTO a un equipo (vía `Responsable.equipoId`), salvo que `equipo` esté seteado, que prevalece — ver `equipoEfectivo`. */
   responsable: string | null;
   /** Id de Categoria (catálogo). */
   categoria: string | null;
+  /** Id de Equipo (catálogo) — vínculo DIRECTO, independiente del responsable. */
+  equipo: string | null;
   /** Unidad de medida para presentación (%, casos, días...). */
   unidadMedida: string | null;
   /** Si es true, el valor de sus resultados se calcula a partir de `formula` en vez de capturarse. */
