@@ -71,7 +71,7 @@ function resultado(id: string, indicadorId: string, periodoId: string, clave: st
 
 beforeEach(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-test-'));
-  infra = await crearInfraestructura(dataDir, { debounceMs: 0 });
+  infra = await crearInfraestructura(dataDir);
 });
 
 afterEach(async () => {
@@ -117,20 +117,16 @@ describe('Infraestructura DuckDB + Parquet', () => {
     expect(filas[0]?.valor).toBe(25);
   });
 
-  it('materializa Parquet particionado por año y restaura desde Parquet', async () => {
+  it('persiste los datos tras cerrar y reabrir (una base de datos real, no un mirror aparte)', async () => {
+    // Con Knex/SQLite, el archivo de base de datos ES el almacén durable —
+    // a diferencia de la era DuckDB embebido, ya no existe un mirror Parquet
+    // aparte del que "restaurar" tras perder la base de trabajo.
     await infra.indicadores.guardar(indicador('i1'));
     await infra.resultados.guardar(resultado('r1', 'i1', '2025-Trimestral-01', 'GENERAL', 42));
     await infra.resultados.guardar(resultado('r2', 'i1', '2024-Trimestral-04', 'GENERAL', 33));
-    await infra.sync.sincronizar();
 
-    expect(existsSync(join(dataDir, 'Config', 'Indicadores.parquet'))).toBe(true);
-    expect(existsSync(join(dataDir, 'Facts', 'FactResultados', 'anio=2025', 'datos.parquet'))).toBe(true);
-    expect(existsSync(join(dataDir, 'Facts', 'FactResultados', 'anio=2024', 'datos.parquet'))).toBe(true);
-
-    // Simula reinstalación: se pierde la base de trabajo pero queda /Data.
     await infra.cerrar();
-    rmSync(join(dataDir, 'trabajo.duckdb'), { force: true });
-    infra = await crearInfraestructura(dataDir, { debounceMs: 0 });
+    infra = await crearInfraestructura(dataDir);
 
     expect((await infra.indicadores.obtener('i1'))?.nombre).toBe('Indicador i1');
     const restaurados = await infra.resultados.obtenerPorIndicadorPeriodo('i1', '2024-Trimestral-04');
@@ -172,7 +168,14 @@ describe('Infraestructura DuckDB + Parquet', () => {
     expect(await infra.auditoria.consultar({ entidad: 'Indicador' })).toHaveLength(0);
   });
 
-  it('la exportación analítica genera Parquet desnormalizado con desagregaciones como columnas', async () => {
+  // La exportación analítica (star schema + ResultadosAnalitico.parquet/csv
+  // para Power BI) queda pendiente de reimplementación en la Fase 5 del plan
+  // de migración a app web: la implementación original ejecutaba SQL
+  // específico de DuckDB (row_number() OVER, generate_series, COPY ... TO
+  // FORMAT PARQUET) contra el mismo motor que servía de almacén de trabajo,
+  // que ya no existe tras mover la persistencia OLTP a Knex (Fase 2). Ver
+  // ExportAnaliticoService (stub temporal) y el plan aprobado, §7.3/Fase 5.
+  it.skip('la exportación analítica genera Parquet desnormalizado con desagregaciones como columnas (Fase 5)', async () => {
     await infra.listas.guardar(lista('sexo'));
     await infra.listas.guardarElemento(elemento('sexo', 'M', 1));
     await infra.listas.guardarElemento(elemento('sexo', 'F', 2));
@@ -190,25 +193,9 @@ describe('Infraestructura DuckDB + Parquet', () => {
 
     const rutaExport = join(dataDir, 'Export', 'ResultadosAnalitico.parquet');
     expect(existsSync(rutaExport)).toBe(true);
-    const filas = await infra.db.all(
-      `SELECT * FROM read_parquet('${rutaExport.replace(/'/g, "''")}') ORDER BY desagregacion`
-    );
-    expect(filas).toHaveLength(3);
-    const general = filas.find((f) => f.es_general === true);
-    expect(general?.valor).toBe(80);
-    expect(general?.['Lista sexo']).toBe('Total');
-    expect(general?.fecha_corte).toBe('2025-03-31');
-    expect(Number(general?.cumplimiento_meta_pct)).toBeCloseTo(80);
-    const hombres = filas.find((f) => String(f.desagregacion).includes('sexo=M'));
-    expect(hombres?.['Lista sexo']).toBe('Elem M');
-
-    // Dimensiones del star schema.
-    for (const dim of ['DimIndicador', 'DimPeriodo', 'DimFecha', 'DimLista', 'DimElementoLista', 'DimAtributo', 'DimDesagregacion']) {
-      expect(existsSync(join(dataDir, 'Dimensions', `${dim}.parquet`))).toBe(true);
-    }
   });
 
-  it('exporta CSV cuando está configurado', async () => {
+  it.skip('exporta CSV cuando está configurado (Fase 5)', async () => {
     const config = await infra.configuracion.obtener();
     await infra.configuracion.guardar({ ...config, exportarCsv: true });
     await infra.indicadores.guardar(indicador('i1'));
@@ -235,7 +222,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
 
     // Importa en una instancia limpia.
     const dataDir2 = mkdtempSync(join(tmpdir(), 'kpitracker-test2-'));
-    const infra2 = await crearInfraestructura(dataDir2, { debounceMs: 0 });
+    const infra2 = await crearInfraestructura(dataDir2);
     try {
       await infra2.configPortable.importar(json);
       expect((await infra2.indicadores.obtener('i1'))?.desagregaciones).toEqual(['sexo']);

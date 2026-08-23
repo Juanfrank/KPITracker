@@ -1,11 +1,19 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
   DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
-  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable
+  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable,
+  Sesion, Usuario
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
-/** Conversión fila DuckDB (snake_case + JSON en texto) <-> entidad de dominio. */
+/**
+ * Conversión fila SQL (snake_case + JSON en texto) <-> entidad de dominio.
+ * `deX` devuelve un objeto con las columnas nombradas explícitamente (no un
+ * arreglo posicional): así el INSERT/UPDATE de Knex liga por NOMBRE de
+ * columna, inmune a que una tabla creada por una versión anterior tenga
+ * columnas migradas fuera de orden (la misma razón por la que los INSERT
+ * crudos de la era DuckDB ya nombraban sus columnas explícitamente).
+ */
 
 type Fila = Record<string, unknown>;
 
@@ -51,17 +59,14 @@ export const aIndicador = (f: Fila): Indicador => ({
 // registros importados de archivos de configuración portable anteriores a
 // estos campos (ver ConfigPortableService), que llegan como `Record<string,
 // unknown>` sin ellos.
-// Las columnas `origen_automatico_id`/`parametros_origen` de la tabla son
-// vestigiales (la configuración de obtención automática vive ahora en
-// `automatizaciones_indicador`, ver AutomatizacionIndicador): se escriben
-// siempre en null para no romper el conteo posicional de columnas.
-export const deIndicador = (i: Indicador): unknown[] => [
-  i.id, i.codigo ?? '', i.nombre, i.definicion, i.formaCalculo ?? null, i.periodicidad, i.lineaBase, i.lineaBasePeriodoId ?? null, i.metaGlobal,
-  JSON.stringify(i.desagregaciones), i.estado, i.responsable, i.categoria,
-  i.unidadMedida, i.periodicidadPersonalizadaId, i.esCalculado ?? false, i.formula ?? null,
-  null, null,
-  i.creadoEn, i.actualizadoEn
-];
+export const deIndicador = (i: Indicador): Fila => ({
+  id: i.id, codigo: i.codigo ?? '', nombre: i.nombre, definicion: i.definicion, forma_calculo: i.formaCalculo ?? null,
+  periodicidad: i.periodicidad, linea_base: i.lineaBase, linea_base_periodo_id: i.lineaBasePeriodoId ?? null,
+  meta_global: i.metaGlobal, desagregaciones: JSON.stringify(i.desagregaciones), estado: i.estado,
+  responsable: i.responsable, categoria: i.categoria, unidad_medida: i.unidadMedida,
+  periodicidad_personalizada_id: i.periodicidadPersonalizadaId, es_calculado: i.esCalculado ?? false,
+  formula: i.formula ?? null, creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
+});
 
 export const aAtributo = (f: Fila): Atributo => ({
   id: s(f.id),
@@ -86,13 +91,15 @@ export const aAtributo = (f: Fila): Atributo => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deAtributo = (a: Atributo): unknown[] => [
-  a.id, a.entidad, a.nombre, a.descripcion, a.grupo, a.orden, a.visible, a.editable,
-  a.obligatorio, a.valorPorDefecto, a.tipoDato, a.listaId, JSON.stringify(a.validaciones),
-  a.condicionVisibilidad == null ? null : JSON.stringify(a.condicionVisibilidad),
-  a.condicionObligatorio == null ? null : JSON.stringify(a.condicionObligatorio),
-  a.filtrable ?? false, a.activo, a.eliminado ?? false, a.creadoEn, a.actualizadoEn
-];
+export const deAtributo = (a: Atributo): Fila => ({
+  id: a.id, entidad: a.entidad, nombre: a.nombre, descripcion: a.descripcion, grupo: a.grupo, orden: a.orden,
+  visible: a.visible, editable: a.editable, obligatorio: a.obligatorio, valor_por_defecto: a.valorPorDefecto,
+  tipo_dato: a.tipoDato, lista_id: a.listaId, validaciones: JSON.stringify(a.validaciones),
+  condicion_visibilidad: a.condicionVisibilidad == null ? null : JSON.stringify(a.condicionVisibilidad),
+  condicion_obligatorio: a.condicionObligatorio == null ? null : JSON.stringify(a.condicionObligatorio),
+  filtrable: a.filtrable ?? false, activo: a.activo, eliminado: a.eliminado ?? false,
+  creado_en: a.creadoEn, actualizado_en: a.actualizadoEn
+});
 
 export const aLista = (f: Fila): Lista => ({
   id: s(f.id),
@@ -108,10 +115,11 @@ export const aLista = (f: Fila): Lista => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deLista = (l: Lista): unknown[] => [
-  l.id, l.nombre, l.descripcion, l.prefijo ?? '', l.estado, l.version, l.orden, l.jerarquica,
-  l.eliminado ?? false, l.creadoEn, l.actualizadoEn
-];
+export const deLista = (l: Lista): Fila => ({
+  id: l.id, nombre: l.nombre, descripcion: l.descripcion, prefijo: l.prefijo ?? '', estado: l.estado,
+  version: l.version, orden: l.orden, jerarquica: l.jerarquica, eliminado: l.eliminado ?? false,
+  creado_en: l.creadoEn, actualizado_en: l.actualizadoEn
+});
 
 export const aElemento = (f: Fila): ElementoLista => ({
   id: s(f.id),
@@ -124,9 +132,10 @@ export const aElemento = (f: Fila): ElementoLista => ({
   activo: b(f.activo)
 });
 
-export const deElemento = (e: ElementoLista): unknown[] => [
-  e.id, e.listaId, e.codigo, e.nombre ?? '', e.descripcion, e.orden, e.padreCodigo, e.activo
-];
+export const deElemento = (e: ElementoLista): Fila => ({
+  id: e.id, lista_id: e.listaId, codigo: e.codigo, nombre: e.nombre ?? '', descripcion: e.descripcion,
+  orden: e.orden, padre_codigo: e.padreCodigo, activo: e.activo
+});
 
 export const aMeta = (f: Fila): Meta => ({
   id: s(f.id),
@@ -141,10 +150,11 @@ export const aMeta = (f: Fila): Meta => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deMeta = (m: Meta): unknown[] => [
-  m.id, m.indicadorId, m.claveDesagregacion, m.valor, m.periodicidadMedicion, m.periodicidadPersonalizadaId ?? null,
-  m.metodoCalculo, m.anioVigencia, m.creadoEn, m.actualizadoEn
-];
+export const deMeta = (m: Meta): Fila => ({
+  id: m.id, indicador_id: m.indicadorId, clave_desagregacion: m.claveDesagregacion, valor: m.valor,
+  periodicidad_medicion: m.periodicidadMedicion, periodicidad_personalizada_id: m.periodicidadPersonalizadaId ?? null,
+  metodo_calculo: m.metodoCalculo, anio_vigencia: m.anioVigencia, creado_en: m.creadoEn, actualizado_en: m.actualizadoEn
+});
 
 export const aRegla = (f: Fila): ReglaNegocio => ({
   id: s(f.id),
@@ -161,10 +171,11 @@ export const aRegla = (f: Fila): ReglaNegocio => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deRegla = (r: ReglaNegocio): unknown[] => [
-  r.id, r.nombre, r.descripcion, r.tipo, r.entidad, r.atributoObjetivoId,
-  JSON.stringify(r.condicion), r.mensajeError, r.activa, r.eliminado ?? false, r.creadoEn, r.actualizadoEn
-];
+export const deRegla = (r: ReglaNegocio): Fila => ({
+  id: r.id, nombre: r.nombre, descripcion: r.descripcion, tipo: r.tipo, entidad: r.entidad,
+  atributo_objetivo_id: r.atributoObjetivoId, condicion: JSON.stringify(r.condicion), mensaje_error: r.mensajeError,
+  activa: r.activa, eliminado: r.eliminado ?? false, creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
+});
 
 export const aResultado = (f: Fila): Resultado => ({
   id: s(f.id),
@@ -176,6 +187,12 @@ export const aResultado = (f: Fila): Resultado => ({
   observacion: sn(f.observacion),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
+});
+
+export const deResultado = (r: Resultado): Fila => ({
+  id: r.id, indicador_id: r.indicadorId, periodo_id: r.periodoId, anio: r.anio,
+  clave_desagregacion: r.claveDesagregacion, valor: r.valor, observacion: r.observacion,
+  creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 
 export const aLevantamiento = (f: Fila): Levantamiento => ({
@@ -190,6 +207,12 @@ export const aLevantamiento = (f: Fila): Levantamiento => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
+export const deLevantamiento = (l: Levantamiento): Fila => ({
+  id: l.id, indicador_id: l.indicadorId, periodo_id: l.periodoId, anio: l.anio, fecha_corte: l.fechaCorte,
+  desagregaciones_excluidas: JSON.stringify(l.desagregacionesExcluidas), comentario: l.comentario,
+  creado_en: l.creadoEn, actualizado_en: l.actualizadoEn
+});
+
 export const aAuditoria = (f: Fila): RegistroAuditoria => ({
   id: s(f.id),
   usuario: s(f.usuario),
@@ -202,6 +225,11 @@ export const aAuditoria = (f: Fila): RegistroAuditoria => ({
   valorNuevo: sn(f.valor_nuevo)
 });
 
+export const deAuditoria = (r: RegistroAuditoria): Fila => ({
+  id: r.id, usuario: r.usuario, fecha_hora: r.fechaHora, accion: r.accion, entidad: r.entidad,
+  entidad_id: r.entidadId, campo: r.campo, valor_anterior: r.valorAnterior, valor_nuevo: r.valorNuevo
+});
+
 export const aDefinicionPeriodicidad = (f: Fila): DefinicionPeriodicidad => ({
   id: s(f.id),
   nombre: s(f.nombre),
@@ -211,9 +239,10 @@ export const aDefinicionPeriodicidad = (f: Fila): DefinicionPeriodicidad => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deDefinicionPeriodicidad = (d: DefinicionPeriodicidad): unknown[] => [
-  d.id, d.nombre, d.descripcion, JSON.stringify(d.cortes), d.creadoEn, d.actualizadoEn
-];
+export const deDefinicionPeriodicidad = (d: DefinicionPeriodicidad): Fila => ({
+  id: d.id, nombre: d.nombre, descripcion: d.descripcion, cortes: JSON.stringify(d.cortes),
+  creado_en: d.creadoEn, actualizado_en: d.actualizadoEn
+});
 
 export const aResponsable = (f: Fila): Responsable => ({
   id: s(f.id),
@@ -225,9 +254,10 @@ export const aResponsable = (f: Fila): Responsable => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deResponsable = (r: Responsable): unknown[] => [
-  r.id, r.nombre, r.correo, r.activo, r.eliminado ?? false, r.creadoEn, r.actualizadoEn
-];
+export const deResponsable = (r: Responsable): Fila => ({
+  id: r.id, nombre: r.nombre, correo: r.correo, activo: r.activo, eliminado: r.eliminado ?? false,
+  creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
+});
 
 export const aCategoria = (f: Fila): Categoria => ({
   id: s(f.id),
@@ -239,9 +269,10 @@ export const aCategoria = (f: Fila): Categoria => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deCategoria = (c: Categoria): unknown[] => [
-  c.id, c.nombre, c.descripcion, c.activo, c.eliminado ?? false, c.creadoEn, c.actualizadoEn
-];
+export const deCategoria = (c: Categoria): Fila => ({
+  id: c.id, nombre: c.nombre, descripcion: c.descripcion, activo: c.activo, eliminado: c.eliminado ?? false,
+  creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
+});
 
 export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
   id: s(f.id),
@@ -256,10 +287,11 @@ export const aOrigenAutomatico = (f: Fila): OrigenAutomatico => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deOrigenAutomatico = (o: OrigenAutomatico): unknown[] => [
-  o.id, o.nombre, o.tipo, o.descripcion, JSON.stringify(o.configuracion),
-  JSON.stringify(o.parametrosGenerales ?? []), o.activo, o.eliminado ?? false, o.creadoEn, o.actualizadoEn
-];
+export const deOrigenAutomatico = (o: OrigenAutomatico): Fila => ({
+  id: o.id, nombre: o.nombre, tipo: o.tipo, descripcion: o.descripcion, configuracion: JSON.stringify(o.configuracion),
+  parametros_generales: JSON.stringify(o.parametrosGenerales ?? []), activo: o.activo, eliminado: o.eliminado ?? false,
+  creado_en: o.creadoEn, actualizado_en: o.actualizadoEn
+});
 
 export const aAutomatizacionIndicador = (f: Fila): AutomatizacionIndicador => ({
   id: s(f.id),
@@ -275,11 +307,12 @@ export const aAutomatizacionIndicador = (f: Fila): AutomatizacionIndicador => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deAutomatizacionIndicador = (a: AutomatizacionIndicador): unknown[] => [
-  a.id, a.indicadorId, a.origenAutomaticoId, JSON.stringify(a.parametrosDinamicos), a.script,
-  a.columnaValor, JSON.stringify(a.mapeoColumnas), JSON.stringify(a.desagregacionesOmitidas), a.medidaDax ?? null,
-  a.creadoEn, a.actualizadoEn
-];
+export const deAutomatizacionIndicador = (a: AutomatizacionIndicador): Fila => ({
+  id: a.id, indicador_id: a.indicadorId, origen_automatico_id: a.origenAutomaticoId,
+  parametros_dinamicos: JSON.stringify(a.parametrosDinamicos), script: a.script, columna_valor: a.columnaValor,
+  mapeo_columnas: JSON.stringify(a.mapeoColumnas), desagregaciones_omitidas: JSON.stringify(a.desagregacionesOmitidas),
+  medida_dax: a.medidaDax ?? null, creado_en: a.creadoEn, actualizado_en: a.actualizadoEn
+});
 
 export const aAliasDesagregacionOrigen = (f: Fila): AliasDesagregacionOrigen => ({
   id: s(f.id),
@@ -290,9 +323,10 @@ export const aAliasDesagregacionOrigen = (f: Fila): AliasDesagregacionOrigen => 
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deAliasDesagregacionOrigen = (a: AliasDesagregacionOrigen): unknown[] => [
-  a.id, a.listaId, a.origenAutomaticoId, a.alias, a.creadoEn, a.actualizadoEn
-];
+export const deAliasDesagregacionOrigen = (a: AliasDesagregacionOrigen): Fila => ({
+  id: a.id, lista_id: a.listaId, origen_automatico_id: a.origenAutomaticoId, alias: a.alias,
+  creado_en: a.creadoEn, actualizado_en: a.actualizadoEn
+});
 
 export const aResultadoHistorial = (f: Fila): ResultadoHistorial => ({
   id: s(f.id),
@@ -306,10 +340,10 @@ export const aResultadoHistorial = (f: Fila): ResultadoHistorial => ({
   actualizadoEn: s(f.actualizado_en)
 });
 
-export const deResultadoHistorial = (h: ResultadoHistorial): unknown[] => [
-  h.id, h.indicadorId, h.periodoId, h.claveDesagregacion, h.version, h.valor,
-  h.observacion, h.usuario, h.actualizadoEn
-];
+export const deResultadoHistorial = (h: ResultadoHistorial): Fila => ({
+  id: h.id, indicador_id: h.indicadorId, periodo_id: h.periodoId, clave_desagregacion: h.claveDesagregacion,
+  version: h.version, valor: h.valor, observacion: h.observacion, usuario: h.usuario, actualizado_en: h.actualizadoEn
+});
 
 export const aAdjunto = (f: Fila): Adjunto => ({
   id: s(f.id),
@@ -322,6 +356,34 @@ export const aAdjunto = (f: Fila): Adjunto => ({
   subidoEn: s(f.subido_en)
 });
 
-export const deAdjunto = (a: Adjunto): unknown[] => [
-  a.id, a.entidad, a.entidadId, a.nombreArchivo, a.rutaRelativa, a.tamanioBytes, a.comentario, a.subidoEn
-];
+export const deAdjunto = (a: Adjunto): Fila => ({
+  id: a.id, entidad: a.entidad, entidad_id: a.entidadId, nombre_archivo: a.nombreArchivo,
+  ruta_relativa: a.rutaRelativa, tamanio_bytes: a.tamanioBytes, comentario: a.comentario, subido_en: a.subidoEn
+});
+
+export const aUsuario = (f: Fila): Usuario => ({
+  id: s(f.id),
+  nombreUsuario: s(f.nombre_usuario),
+  nombreCompleto: s(f.nombre_completo),
+  passwordHash: s(f.password_hash),
+  rol: s(f.rol) as Usuario['rol'],
+  activo: b(f.activo),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deUsuario = (u: Usuario): Fila => ({
+  id: u.id, nombre_usuario: u.nombreUsuario, nombre_completo: u.nombreCompleto, password_hash: u.passwordHash,
+  rol: u.rol, activo: u.activo, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
+});
+
+export const aSesion = (f: Fila): Sesion => ({
+  id: s(f.id),
+  usuarioId: s(f.usuario_id),
+  creadoEn: s(f.creado_en),
+  expiraEn: s(f.expira_en)
+});
+
+export const deSesion = (se: Sesion): Fila => ({
+  id: se.id, usuario_id: se.usuarioId, creado_en: se.creadoEn, expira_en: se.expiraEn
+});

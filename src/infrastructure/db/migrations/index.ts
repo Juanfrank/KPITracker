@@ -1,0 +1,37 @@
+import type { Knex } from 'knex';
+import * as esquemaInicial from './20260101000000_esquema_inicial';
+
+interface ModuloMigracion {
+  up(knex: Knex): Promise<void>;
+  down(knex: Knex): Promise<void>;
+}
+
+const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
+  { nombre: '20260101000000_esquema_inicial', modulo: esquemaInicial }
+];
+
+/**
+ * Fuente de migraciones en memoria: Knex normalmente escanea un directorio
+ * del sistema de archivos, pero eso es fragil bajo un bundler (electron-vite
+ * empaqueta `src/main/**` en un único archivo; un directorio de migraciones
+ * junto a él no se copia automáticamente). Importar los módulos de
+ * migración directamente (arriba) y exponerlos vía esta fuente programática
+ * evita depender de resolución de rutas en tiempo de ejecución — funciona
+ * igual empaquetado o no, y es el mismo mecanismo tanto en la app de
+ * escritorio (Fase 2) como en el futuro servidor (Fase 3+).
+ */
+export class FuenteMigracionesEnMemoria implements Knex.MigrationSource<string> {
+  getMigrations(): Promise<string[]> {
+    return Promise.resolve(MIGRACIONES.map((m) => m.nombre));
+  }
+
+  getMigrationName(migration: string): string {
+    return migration;
+  }
+
+  getMigration(migration: string): Promise<Knex.Migration> {
+    const encontrada = MIGRACIONES.find((m) => m.nombre === migration);
+    if (!encontrada) throw new Error(`Migración "${migration}" no encontrada.`);
+    return Promise.resolve(encontrada.modulo);
+  }
+}

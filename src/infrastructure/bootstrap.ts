@@ -1,14 +1,14 @@
+import type { Knex } from 'knex';
 import type { Categoria, DefinicionPeriodicidad, OrigenAutomatico, Responsable } from '@domain/index';
-import { Db } from './duckdb/Db';
-import { crearEsquema, restaurarDesdeParquetSiVacio } from './duckdb/esquema';
+import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
-import { ParquetSyncService } from './parquet/ParquetSyncService';
 import {
-  AdjuntoRepositoryDuckDb, AliasDesagregacionOrigenRepositoryDuckDb, AtributoRepositoryDuckDb,
-  AuditoriaRepositoryDuckDb, AutomatizacionIndicadorRepositoryDuckDb, CatalogoRepositoryDuckDb,
-  IndicadorRepositoryDuckDb, ListaRepositoryDuckDb, MetaRepositoryDuckDb, ReglaRepositoryDuckDb,
-  ResultadoRepositoryDuckDb, crearRepositorioDefinicionesPeriodicidad, crearRepositorioOrigenesAutomaticos
-} from './repositories/RepositoriosDuckDb';
+  AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
+  AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex,
+  IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex, ReglaRepositoryKnex,
+  ResultadoRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
+  crearRepositorioDefinicionesPeriodicidad, crearRepositorioOrigenesAutomaticos
+} from './repositories/RepositoriosKnex';
 import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
@@ -19,27 +19,28 @@ import { ArchivoService } from './soporte/ArchivoService';
 import { ConectorOrigenFactory } from './conectores/ConectorOrigenFactory';
 
 export interface Infraestructura {
-  db: Db;
+  knex: Knex;
   rutas: RutasDataLake;
-  sync: ParquetSyncService;
   reloj: RelojSistema;
   ids: GeneradorUuid;
   configuracion: ConfiguracionRepositoryJson;
-  indicadores: IndicadorRepositoryDuckDb;
-  atributos: AtributoRepositoryDuckDb;
-  listas: ListaRepositoryDuckDb;
-  metas: MetaRepositoryDuckDb;
-  reglas: ReglaRepositoryDuckDb;
-  periodicidades: CatalogoRepositoryDuckDb<DefinicionPeriodicidad>;
-  responsables: CatalogoRepositoryDuckDb<Responsable>;
-  categorias: CatalogoRepositoryDuckDb<Categoria>;
-  origenesAutomaticos: CatalogoRepositoryDuckDb<OrigenAutomatico>;
-  automatizaciones: AutomatizacionIndicadorRepositoryDuckDb;
-  aliasDesagregacionOrigen: AliasDesagregacionOrigenRepositoryDuckDb;
+  indicadores: IndicadorRepositoryKnex;
+  atributos: AtributoRepositoryKnex;
+  listas: ListaRepositoryKnex;
+  metas: MetaRepositoryKnex;
+  reglas: ReglaRepositoryKnex;
+  periodicidades: CatalogoRepositoryKnex<DefinicionPeriodicidad>;
+  responsables: CatalogoRepositoryKnex<Responsable>;
+  categorias: CatalogoRepositoryKnex<Categoria>;
+  origenesAutomaticos: CatalogoRepositoryKnex<OrigenAutomatico>;
+  automatizaciones: AutomatizacionIndicadorRepositoryKnex;
+  aliasDesagregacionOrigen: AliasDesagregacionOrigenRepositoryKnex;
   conectorOrigen: ConectorOrigenFactory;
-  resultados: ResultadoRepositoryDuckDb;
-  adjuntos: AdjuntoRepositoryDuckDb;
-  auditoria: AuditoriaRepositoryDuckDb;
+  resultados: ResultadoRepositoryKnex;
+  adjuntos: AdjuntoRepositoryKnex;
+  auditoria: AuditoriaRepositoryKnex;
+  usuarios: UsuarioRepositoryKnex;
+  sesiones: SesionRepositoryKnex;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
   respaldoPerfil: RespaldoPerfilService;
@@ -48,16 +49,16 @@ export interface Infraestructura {
 }
 
 export interface OpcionesInfraestructura {
-  /** Debounce de sincronización Parquet/export (0 en tests). */
-  debounceMs?: number;
   /** Versión de la app (p. ej. `app.getVersion()`), incluida en los respaldos exportados. */
   appVersion?: string;
 }
 
 /**
- * Composition root de la infraestructura: crea el Data Lake local, abre
- * DuckDB embebido, restaura desde Parquet si corresponde y cablea los
- * repositorios. Es la única función que conoce implementaciones concretas.
+ * Composition root de la infraestructura: crea el Data Lake local (para
+ * adjuntos y la futura exportación analítica — ver ExportAnaliticoService),
+ * abre la conexión Knex (SQLite local o SQL Server, según `DB_CLIENT`),
+ * aplica las migraciones pendientes y cablea los repositorios. Es la única
+ * función que conoce implementaciones concretas.
  */
 export async function crearInfraestructura(
   dataDir: string,
@@ -66,36 +67,27 @@ export async function crearInfraestructura(
   const rutas = new RutasDataLake(dataDir);
   rutas.crearDirectorios();
 
-  const db = await Db.abrir(rutas.baseTrabajo);
-  await crearEsquema(db);
-  await restaurarDesdeParquetSiVacio(db, dataDir);
-
-  const debounceMs = opciones.debounceMs ?? 500;
-  const sync = new ParquetSyncService(db, rutas, debounceMs);
+  const knex = await crearInstanciaKnex({ dataDir });
   const configuracion = new ConfiguracionRepositoryJson(rutas);
 
-  const indicadores = new IndicadorRepositoryDuckDb(db, sync);
-  const atributos = new AtributoRepositoryDuckDb(db, sync);
-  const listas = new ListaRepositoryDuckDb(db, sync);
-  const metas = new MetaRepositoryDuckDb(db, sync);
-  const reglas = new ReglaRepositoryDuckDb(db, sync);
-  const periodicidades = crearRepositorioDefinicionesPeriodicidad(db, sync);
-  const responsables = new CatalogoRepositoryDuckDb(
-    db, sync, 'responsables', aResponsable, deResponsable,
-    ['id', 'nombre', 'correo', 'activo', 'eliminado', 'creado_en', 'actualizado_en'], true
-  );
-  const categorias = new CatalogoRepositoryDuckDb(
-    db, sync, 'categorias', aCategoria, deCategoria,
-    ['id', 'nombre', 'descripcion', 'activo', 'eliminado', 'creado_en', 'actualizado_en'], true
-  );
-  const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(db, sync);
-  const automatizaciones = new AutomatizacionIndicadorRepositoryDuckDb(db, sync);
-  const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryDuckDb(db, sync);
+  const indicadores = new IndicadorRepositoryKnex(knex);
+  const atributos = new AtributoRepositoryKnex(knex);
+  const listas = new ListaRepositoryKnex(knex);
+  const metas = new MetaRepositoryKnex(knex);
+  const reglas = new ReglaRepositoryKnex(knex);
+  const periodicidades = crearRepositorioDefinicionesPeriodicidad(knex);
+  const responsables = new CatalogoRepositoryKnex(knex, 'responsables', aResponsable, deResponsable, true);
+  const categorias = new CatalogoRepositoryKnex(knex, 'categorias', aCategoria, deCategoria, true);
+  const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(knex);
+  const automatizaciones = new AutomatizacionIndicadorRepositoryKnex(knex);
+  const aliasDesagregacionOrigen = new AliasDesagregacionOrigenRepositoryKnex(knex);
   const conectorOrigen = new ConectorOrigenFactory((origen) => origenesAutomaticos.guardar(origen));
-  const resultados = new ResultadoRepositoryDuckDb(db, sync);
-  const adjuntos = new AdjuntoRepositoryDuckDb(db, sync);
-  const exportacion = new ExportAnaliticoService(db, rutas, configuracion, periodicidades, responsables, categorias, debounceMs * 2);
-  const auditoria = new AuditoriaRepositoryDuckDb(db, sync);
+  const resultados = new ResultadoRepositoryKnex(knex);
+  const adjuntos = new AdjuntoRepositoryKnex(knex);
+  const auditoria = new AuditoriaRepositoryKnex(knex);
+  const usuarios = new UsuarioRepositoryKnex(knex);
+  const sesiones = new SesionRepositoryKnex(knex);
+  const exportacion = new ExportAnaliticoService(rutas);
   const configPortable = new ConfigPortableService(
     configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
   );
@@ -109,9 +101,8 @@ export async function crearInfraestructura(
   const archivos = new ArchivoService(rutas);
 
   return {
-    db,
+    knex,
     rutas,
-    sync,
     reloj: new RelojSistema(),
     ids: new GeneradorUuid(),
     configuracion,
@@ -130,13 +121,14 @@ export async function crearInfraestructura(
     resultados,
     adjuntos,
     auditoria,
+    usuarios,
+    sesiones,
     exportacion,
     configPortable,
     respaldoPerfil,
     archivos,
     async cerrar() {
-      await sync.sincronizar();
-      db.cerrar();
+      await knex.destroy();
     }
   };
 }

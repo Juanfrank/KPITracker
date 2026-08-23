@@ -35,9 +35,6 @@ export class RutasDataLake {
   get archivoConfiguracion(): string {
     return join(this.raiz, 'Configuracion.json');
   }
-  get baseTrabajo(): string {
-    return join(this.raiz, 'trabajo.duckdb');
-  }
   get factResultadosDir(): string {
     return join(this.facts, 'FactResultados');
   }
