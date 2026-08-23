@@ -5,7 +5,7 @@ import { CLAVE_GENERAL, crearClave } from '../value-objects/ClaveDesagregacion';
 export interface CombinacionDesagregacion {
   clave: ClaveDesagregacion;
   /** Descripciones legibles por lista, en el mismo orden que la clave. Ausente = desagregación "enrollada" (subtotal) en esta combinación. */
-  etiquetas: Array<{ listaId: string; codigo: string; descripcion: string }>;
+  etiquetas: Array<{ listaId: string; codigo: string; descripcion: string; orden: number }>;
   /** Cantidad de desagregaciones presentes en esta combinación (0 = General, N = detalle completo). */
   nivel: number;
 }
@@ -34,7 +34,7 @@ export class ProductoCartesiano {
     const listasActivas = desagregaciones.filter((id) => !excluidas.includes(id));
     if (listasActivas.length === 0) return [{ clave: CLAVE_GENERAL, etiquetas: [], nivel: 0 }];
 
-    type Opcion = { listaId: string; codigo: string; descripcion: string } | null;
+    type Opcion = { listaId: string; codigo: string; descripcion: string; orden: number } | null;
 
     // Para cada lista, sus opciones de fila: `null` (enrollada/ausente en esta
     // combinación) + un elemento activo por opción. El producto cartesiano de
@@ -45,7 +45,7 @@ export class ProductoCartesiano {
       const elementos = (elementosPorLista.get(listaId) ?? [])
         .filter((e) => e.activo)
         .sort((a, b) => a.orden - b.orden);
-      const opciones: Opcion[] = [null, ...elementos.map((e) => ({ listaId, codigo: e.codigo, descripcion: e.nombre }))];
+      const opciones: Opcion[] = [null, ...elementos.map((e) => ({ listaId, codigo: e.codigo, descripcion: e.nombre, orden: e.orden }))];
       const siguientes: Opcion[][] = [];
       for (const parcial of parciales) {
         for (const opcion of opciones) siguientes.push([...parcial, opcion]);

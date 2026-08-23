@@ -91,6 +91,32 @@ test('un indicador con 2 desagregaciones muestra General + subtotales + detalle 
   await expect(pagina.locator('[data-testid="grilla-captura"] td.celda-enrollada').first()).toHaveText('Todos');
 });
 
+test('las filas quedan ordenadas como árbol por la 1a desagregación configurada, y se pueden colapsar/expandir', async () => {
+  // "Sexo cubo E2E" se configuró primero que "Provincia cubo E2E" en el indicador
+  // (test anterior): sus subtotales (y el detalle que cuelga de ellos) deben
+  // aparecer TODOS antes que los subtotales "puros" de Provincia (Sexo enrollado).
+  const textos = await pagina.locator('[data-testid="grilla-captura"] tbody tr').allTextContents();
+  const indiceMasculino = textos.findIndex((t) => t.includes('Masculino') && t.includes('Todos'));
+  const indiceFemenino = textos.findIndex((t) => t.includes('Femenino') && t.includes('Todos'));
+  const indiceDetalleMasculinoSD = textos.findIndex((t) => t.includes('Masculino') && t.includes('Santo Domingo'));
+  const indiceProvinciaSola = textos.findIndex((t) => t.includes('Todos') && t.includes('Santo Domingo') && !t.includes('Masculino') && !t.includes('Femenino'));
+  expect(indiceMasculino).toBeGreaterThanOrEqual(0);
+  expect(indiceFemenino).toBeGreaterThan(indiceMasculino);
+  expect(indiceProvinciaSola).toBeGreaterThan(indiceFemenino);
+  // El detalle completo de Masculino cuelga de su propio subtotal, antes del de Femenino.
+  expect(indiceDetalleMasculinoSD).toBeGreaterThan(indiceMasculino);
+  expect(indiceDetalleMasculinoSD).toBeLessThan(indiceFemenino);
+
+  // Colapsar el subtotal de Masculino oculta sus 2 filas de detalle (9 → 7),
+  // sin tocar las de Femenino; expandir de nuevo las trae de vuelta.
+  const filaMasculino = pagina.locator('[data-testid="grilla-captura"] tbody tr').filter({ hasText: 'Masculino' }).filter({ hasText: 'Todos' });
+  await filaMasculino.locator('.boton-arbol').click();
+  await expect(pagina.locator('[data-testid="grilla-captura"] tbody tr')).toHaveCount(7);
+  await expect(pagina.locator('[data-testid="grilla-captura"] tbody tr').filter({ hasText: 'Femenino' })).toHaveCount(3); // subtotal + 2 detalle
+  await filaMasculino.locator('.boton-arbol').click();
+  await expect(pagina.locator('[data-testid="grilla-captura"] tbody tr')).toHaveCount(9);
+});
+
 test('el mapeo de columnas ofrece "segmentador de subtotal" para una desagregación ya mapeada, y el origen escribe subtotales vía el segmentador', async () => {
   await pagina.getByTestId('nav-admin').click();
   await pagina.getByTestId('nuevo-origen').click();

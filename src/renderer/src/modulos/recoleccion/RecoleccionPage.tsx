@@ -3,7 +3,41 @@ import { useSearchParams } from 'react-router-dom';
 import { Encabezado, Campo, Vacio } from '../../componentes/basicos';
 import { HistorialCelda } from '../../componentes/HistorialCelda';
 import { PanelAdjuntos } from '../../componentes/PanelAdjuntos';
+import { Icono } from '../../componentes/Icono';
 import { useRecoleccion } from '../../stores/recoleccion';
+import type { FilaCaptura } from '@application/use-cases/ServicioRecoleccion';
+
+interface FilaVisible {
+  fila: FilaCaptura;
+  /** Profundidad en el árbol de exploración — coincide con la cantidad de desagregaciones presentes en la fila. */
+  nivel: number;
+  tieneHijos: boolean;
+}
+
+/**
+ * Las filas ya llegan del servidor en recorrido en profundidad (DFS
+ * pre-order, ver `ArbolDesagregaciones` en el dominio), con `nivel` como
+ * profundidad — así que una fila colapsada oculta exactamente el tramo
+ * contiguo siguiente cuya profundidad sea mayor que la suya, sin necesitar
+ * reconstruir el árbol acá.
+ */
+function calcularFilasVisibles(filas: FilaCaptura[], colapsadas: Set<string>): FilaVisible[] {
+  const visibles: FilaVisible[] = [];
+  let ocultarDesdeNivel: number | null = null;
+  for (let i = 0; i < filas.length; i++) {
+    const fila = filas[i]!;
+    const nivel = fila.etiquetas.length;
+    if (ocultarDesdeNivel !== null) {
+      if (nivel > ocultarDesdeNivel) continue;
+      ocultarDesdeNivel = null;
+    }
+    const siguiente = filas[i + 1];
+    const tieneHijos = siguiente != null && siguiente.etiquetas.length > nivel;
+    visibles.push({ fila, nivel, tieneHijos });
+    if (tieneHijos && colapsadas.has(fila.claveDesagregacion)) ocultarDesdeNivel = nivel;
+  }
+  return visibles;
+}
 
 /**
  * Recolección de resultados: edición tipo hoja de cálculo con navegación
@@ -14,6 +48,21 @@ export function RecoleccionPage(): React.JSX.Element {
   const vm = useRecoleccion();
   const [parametros] = useSearchParams();
   const cuerpoTabla = useRef<HTMLTableSectionElement>(null);
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+
+  // Se reinicia solo al cambiar de indicador/período (no en cada autoguardado:
+  // `captura` cambia de referencia con cada celda guardada, pero eso no debe
+  // volver a expandir todo lo que el usuario ya colapsó).
+  useEffect(() => setColapsadas(new Set()), [vm.indicadorId, vm.periodoId]);
+
+  const alternarColapso = (clave: string): void => {
+    setColapsadas((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(clave)) siguiente.delete(clave);
+      else siguiente.add(clave);
+      return siguiente;
+    });
+  };
 
   useEffect(() => {
     // Con un indicadorId explícito en la navegación (deep link desde Seguimiento,
@@ -55,6 +104,7 @@ export function RecoleccionPage(): React.JSX.Element {
   // es General puede tener menos etiquetas que el total (las demás vienen enrolladas).
   const desagregacionesActivas = captura?.desagregacionesDisponibles.filter((d) => !d.excluida) ?? [];
   const indicadorSeleccionado = vm.indicadores.find((i) => i.id === vm.indicadorId);
+  const filasVisibles = captura ? calcularFilasVisibles(captura.filas, colapsadas) : [];
 
   return (
     <>
@@ -180,6 +230,7 @@ export function RecoleccionPage(): React.JSX.Element {
           <table className="tabla grilla-captura" data-testid="grilla-captura">
             <thead>
               <tr>
+                <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
                 {desagregacionesActivas.map((d) => <th key={d.listaId}>{d.nombre}</th>)}
                 {desagregacionesActivas.length === 0 && <th>Desagregación</th>}
                 <th style={{ textAlign: 'right', width: 160 }}>Resultado — {captura.periodoEtiqueta}</th>
@@ -187,12 +238,27 @@ export function RecoleccionPage(): React.JSX.Element {
               </tr>
             </thead>
             <tbody ref={cuerpoTabla}>
-              {captura.filas.map((fila, indice) => {
+              {filasVisibles.map((entrada, indice) => {
+                const fila = entrada.fila;
                 const estado = vm.estadoCeldas.get(fila.claveDesagregacion);
                 const error = vm.erroresCeldas.get(fila.claveDesagregacion);
+                const colapsada = colapsadas.has(fila.claveDesagregacion);
                 const clases = [fila.esGeneral ? 'fila-general' : '', fila.esSubtotal ? 'fila-subtotal' : ''].filter(Boolean).join(' ');
                 return (
                   <tr key={fila.claveDesagregacion} className={clases} data-indice={indice}>
+                    <td className="celda-arbol" style={{ paddingLeft: 6 + entrada.nivel * 18 }}>
+                      {entrada.tieneHijos && (
+                        <button
+                          type="button"
+                          className={`boton-arbol ${colapsada ? '' : 'expandido'}`}
+                          onClick={() => alternarColapso(fila.claveDesagregacion)}
+                          title={colapsada ? 'Expandir' : 'Colapsar'}
+                          data-testid={`colapsar-${fila.claveDesagregacion}`}
+                        >
+                          <Icono nombre="flecha" tamano={13} />
+                        </button>
+                      )}
+                    </td>
                     {fila.esGeneral ? (
                       <td colSpan={Math.max(desagregacionesActivas.length, 1)}>
                         {indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'General (total del indicador)'}
@@ -220,7 +286,10 @@ export function RecoleccionPage(): React.JSX.Element {
                           invalida={Boolean(error)}
                           deshabilitada={!captura.fechaCorte}
                           alConfirmar={(texto) => void vm.guardarCelda(fila.claveDesagregacion, texto)}
-                          alPegar={(texto) => void vm.pegarDesde(indice, texto)}
+                          alPegar={(texto) => void vm.pegarDesde(
+                            filasVisibles.slice(indice).map((e) => e.fila.claveDesagregacion),
+                            texto
+                          )}
                           alMover={(delta) => enfocarFila(indice + delta)}
                         />
                       )}

@@ -521,6 +521,37 @@ table.tabla tbody tr.fila-eliminada:hover {
   color: var(--texto-3);
 }
 
+/* Columna de jerarquía: indentación (inline, por nivel) + botón expandir/colapsar. */
+.grilla-captura td.celda-arbol {
+  padding: 0 2px;
+  width: 32px;
+}
+
+.boton-arbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radio-sm);
+  background: transparent;
+  color: var(--texto-2);
+  cursor: pointer;
+}
+
+.boton-arbol:hover {
+  background: var(--superficie-3);
+}
+
+.boton-arbol svg {
+  transition: transform var(--transicion);
+}
+
+.boton-arbol.expandido svg {
+  transform: rotate(90deg);
+}
+
 /* ============ Chips y estados ============ */
 .chip {
   display: inline-flex;

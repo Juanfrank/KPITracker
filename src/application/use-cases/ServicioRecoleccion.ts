@@ -1,7 +1,7 @@
 import {
   CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
   ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, crearClave,
-  evaluarValidacionesCaptura, resolverParametrosGenerales, sustituirTokens
+  etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
   DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
@@ -27,6 +27,16 @@ export interface FilaCaptura {
   claveDesagregacion: string;
   /** Solo las desagregaciones PRESENTES en esta fila (ausente = enrollada/subtotal en ella; ver ProductoCartesiano). */
   etiquetas: Array<{ listaId: string; listaNombre: string; codigo: string; descripcion: string }>;
+  /**
+   * La desagregación+valor que distingue esta fila de su fila padre en el
+   * árbol de exploración (ver ArbolDesagregaciones) — `null` para General.
+   * Es exactamente la que corresponde "drillear" al expandir la fila padre:
+   * las filas ya llegan ordenadas en recorrido en profundidad (incluida
+   * esta fila) con `etiquetas.length` como profundidad, así que el
+   * renderer arma la jerarquía completa con solo este campo + ese orden,
+   * sin reimplementar la regla de padre/hijo.
+   */
+  etiquetaReciente: { listaId: string; listaNombre: string; descripcion: string } | null;
   esGeneral: boolean;
   /** true en el nivel intermedio del cubo (algunas desagregaciones presentes, otras enrolladas) — ni General ni detalle completo. */
   esSubtotal: boolean;
@@ -115,6 +125,7 @@ export class ServicioRecoleccion extends ServicioBase {
         filas: [{
           claveDesagregacion: 'GENERAL',
           etiquetas: [],
+          etiquetaReciente: null,
           esGeneral: true,
           esSubtotal: false,
           esDetalleCompleto: false,
@@ -137,7 +148,12 @@ export class ServicioRecoleccion extends ServicioBase {
       elementosPorLista.set(listaId, await this.listas.listarElementos(listaId));
     }
 
-    const combinaciones = this.productoCartesiano.generar(indicador.desagregaciones, elementosPorLista, excluidas);
+    const combinacionesCubo = this.productoCartesiano.generar(indicador.desagregaciones, elementosPorLista, excluidas);
+    // Reordenadas como árbol de "drill-down" en el orden en que se configuraron
+    // las desagregaciones del indicador — ver ArbolDesagregaciones. `nivel`
+    // (ya presente en cada combinación) coincide con la profundidad en este
+    // árbol, así que alcanza para que el renderer arme expansión/colapso.
+    const combinaciones = ordenarComoArbol(combinacionesCubo, indicador.desagregaciones);
     const totalDesagregacionesActivas = indicador.desagregaciones.filter((id) => !excluidas.includes(id)).length;
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const porClave = new Map(existentes.map((r) => [r.claveDesagregacion, r]));
@@ -146,9 +162,17 @@ export class ServicioRecoleccion extends ServicioBase {
       const clave = claveATexto(c.clave);
       const existente = porClave.get(clave);
       const esDetalleCompleto = totalDesagregacionesActivas > 0 && c.nivel === totalDesagregacionesActivas;
+      const reciente = etiquetaMasReciente(c.etiquetas, indicador.desagregaciones);
       return {
         claveDesagregacion: clave,
-        etiquetas: c.etiquetas.map((e) => ({ ...e, listaNombre: nombresListas.get(e.listaId) ?? e.listaId })),
+        etiquetas: c.etiquetas.map((e) => ({
+          listaId: e.listaId, codigo: e.codigo, descripcion: e.descripcion,
+          listaNombre: nombresListas.get(e.listaId) ?? e.listaId
+        })),
+        etiquetaReciente: reciente && {
+          listaId: reciente.listaId, descripcion: reciente.descripcion,
+          listaNombre: nombresListas.get(reciente.listaId) ?? reciente.listaId
+        },
         esGeneral: clave === 'GENERAL',
         esSubtotal: c.nivel > 0 && !esDetalleCompleto,
         esDetalleCompleto,

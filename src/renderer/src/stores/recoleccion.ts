@@ -48,8 +48,13 @@ interface EstadoRecoleccion {
   establecerFechaCorte(fechaCorte: string | null): Promise<void>;
   establecerComentario(comentario: string | null): Promise<void>;
   alternarExclusion(listaId: string, excluir: boolean): Promise<void>;
-  /** Pegado desde Excel: aplica valores TSV a partir de una fila. */
-  pegarDesde(filaInicio: number, textoPortapapeles: string): Promise<void>;
+  /**
+   * Pegado desde Excel: aplica valores TSV a partir de la celda donde se
+   * pegó. Recibe las claves de las filas destino YA en el orden visible en
+   * pantalla (que con la grilla como árbol puede tener filas colapsadas
+   * de por medio) — así el pegado nunca cae en una fila oculta.
+   */
+  pegarDesde(clavesEnOrden: string[], textoPortapapeles: string): Promise<void>;
   /** Restaura una versión anterior de una celda (registra el estado actual en el historial). */
   restaurarVersion(claveDesagregacion: string, version: number): Promise<void>;
   /** Solicita el resultado automático del período actual al origen configurado del indicador. */
@@ -241,19 +246,15 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     }
   },
 
-  async pegarDesde(filaInicio, textoPortapapeles) {
-    const { captura } = get();
-    if (!captura) return;
+  async pegarDesde(clavesEnOrden, textoPortapapeles) {
     // Formato Excel: filas separadas por \n, columnas por \t (se usa la primera columna).
     const valores = textoPortapapeles
       .replace(/\r/g, '')
       .split('\n')
       .filter((linea) => linea.trim() !== '')
       .map((linea) => linea.split('\t')[0] ?? '');
-    for (let i = 0; i < valores.length; i++) {
-      const fila = captura.filas[filaInicio + i];
-      if (!fila) break;
-      await get().guardarCelda(fila.claveDesagregacion, valores[i] ?? '');
+    for (let i = 0; i < valores.length && i < clavesEnOrden.length; i++) {
+      await get().guardarCelda(clavesEnOrden[i]!, valores[i] ?? '');
     }
   }
 }));
