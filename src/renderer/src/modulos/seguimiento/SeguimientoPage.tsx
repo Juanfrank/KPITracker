@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Categoria, Responsable } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
+import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
 import { BarraProgreso, ChipEstado, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
-import { useNavegacion } from '../../stores/navegacion';
+import { Icono } from '../../componentes/Icono';
 
 const PESTANAS = [
   { id: 'estado', etiqueta: 'Estado' },
@@ -41,7 +43,22 @@ export function SeguimientoPage(): React.JSX.Element {
   const [responsablesCatalogo, setResponsablesCatalogo] = useState<Responsable[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<Categoria[]>([]);
   const [reasignando, setReasignando] = useState(false);
-  const { navegar } = useNavegacion();
+  const [avisoDescartado, setAvisoDescartado] = useState(false);
+  const navigate = useNavigate();
+
+  /**
+   * Reemplazo mínimo (Fase 4 §9.1/§9.7) de la notificación proactiva
+   * nativa de Electron (`Notification` del proceso main, cada hora — ver
+   * `src/main/index.ts`, sin equivalente en un servidor web): un banner
+   * descartable, calculado en el cliente contra el tablero ya cargado con
+   * la misma función pura que usaba el disparo original. Sin persistencia
+   * entre sesiones ni permisos del navegador — un rediseño real (cron +
+   * email/webhook) queda fuera de esta fase, ver "Riesgos residuales" del plan.
+   */
+  const avisosVencimiento = useMemo(
+    () => indicadoresQueRequierenNotificacion(filas, new Date().toISOString().slice(0, 10)),
+    [filas]
+  );
 
   const cargarTablero = (): void => {
     void invocar('seguimiento:tablero', undefined)
@@ -132,6 +149,22 @@ export function SeguimientoPage(): React.JSX.Element {
         titulo="Seguimiento"
         descripcion="Estado de cumplimiento de los levantamientos por indicador. El estado se calcula dinámicamente con la fecha límite configurada."
       />
+      {!avisoDescartado && avisosVencimiento.length > 0 && (
+        <div className="aviso info" data-testid="aviso-vencimientos" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <strong>{avisosVencimiento.length}</strong> indicador{avisosVencimiento.length === 1 ? '' : 'es'} vencido{avisosVencimiento.length === 1 ? '' : 's'} o próximo{avisosVencimiento.length === 1 ? '' : 's'} a vencer:
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+              {avisosVencimiento.slice(0, 5).map((a) => (
+                <li key={a.indicadorId}>{a.nombre} — {a.motivo === 'Vencido' ? 'vencido' : `vence ${a.fechaLimite}`}</li>
+              ))}
+              {avisosVencimiento.length > 5 && <li className="texto-suave">y {avisosVencimiento.length - 5} más…</li>}
+            </ul>
+          </div>
+          <button className="boton sutil" onClick={() => setAvisoDescartado(true)} aria-label="Descartar aviso" data-testid="descartar-aviso-vencimientos">
+            <Icono nombre="cerrar" tamano={13} />
+          </button>
+        </div>
+      )}
       <div className="filtros-chips">
         {PESTANAS.map((p) => (
           <button
@@ -379,7 +412,7 @@ export function SeguimientoPage(): React.JSX.Element {
           </div>
           <button
             className="boton primario"
-            onClick={() => navegar('recoleccion', { indicadorId: detalle.indicadorId })}
+            onClick={() => navigate(`/recoleccion?indicadorId=${encodeURIComponent(detalle.indicadorId)}`)}
           >
             Ir a la captura
           </button>

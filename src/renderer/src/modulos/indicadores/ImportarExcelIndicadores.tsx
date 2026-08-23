@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { MapeoImportacionIndicadores, ResultadoImportacionIndicadores } from '@application/use-cases/ServicioCatalogos';
 import { invocar } from '../../api';
+import { subirArchivo } from '../../rest';
 import { Campo, PanelLateral } from '../../componentes/basicos';
 
 const CAMPOS_OBLIGATORIOS: (keyof MapeoImportacionIndicadores)[] = ['nombre', 'definicion'];
@@ -25,28 +26,28 @@ export function ImportarExcelIndicadores({
   alCerrar, alTerminar
 }: { alCerrar: () => void; alTerminar: () => void }): React.JSX.Element {
   const [paso, setPaso] = useState<'archivo' | 'mapeo' | 'resultado'>('archivo');
-  const [ruta, setRuta] = useState<string | null>(null);
+  const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const [columnas, setColumnas] = useState<string[]>([]);
   const [filas, setFilas] = useState<Record<string, string>[]>([]);
   const [mapeo, setMapeo] = useState<Partial<MapeoImportacionIndicadores>>({});
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacionIndicadores | null>(null);
+  const selectorArchivo = useRef<HTMLInputElement>(null);
 
-  const elegirArchivo = async (): Promise<void> => {
+  const procesarArchivo = async (archivo: File): Promise<void> => {
     setError(null);
-    const seleccionada = await invocar('sistema:seleccionarArchivo', {
-      filtros: [{ nombre: 'Hojas de cálculo', extensiones: ['xlsx', 'xls', 'csv'] }]
-    });
-    if (!seleccionada) return;
     setCargando(true);
     try {
-      const leido = await invocar('sistema:leerHojaCalculo', { rutaArchivo: seleccionada });
+      const leido = await subirArchivo<{ columnas: string[]; filas: Record<string, string>[] }>(
+        '/api/importacion/hoja-calculo',
+        { archivo }
+      );
       if (leido.columnas.length === 0) {
         setError('El archivo no tiene columnas reconocibles en la primera fila.');
         return;
       }
-      setRuta(seleccionada);
+      setNombreArchivo(archivo.name);
       setColumnas(leido.columnas);
       setFilas(leido.filas);
       // Auto-mapeo por coincidencia de nombre (insensible a mayúsculas).
@@ -57,6 +58,8 @@ export function ImportarExcelIndicadores({
       }
       setMapeo(auto);
       setPaso('mapeo');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo leer el archivo.');
     } finally {
       setCargando(false);
     }
@@ -109,16 +112,27 @@ export function ImportarExcelIndicadores({
             Seleccione un archivo Excel (.xlsx) o CSV cuya primera fila tenga encabezados de columna. En el siguiente paso podrá
             indicar qué columna corresponde a cada campo del indicador.
           </p>
-          <button className="boton primario" onClick={() => void elegirArchivo()} disabled={cargando} data-testid="elegir-archivo-excel">
+          <button className="boton primario" onClick={() => selectorArchivo.current?.click()} disabled={cargando} data-testid="elegir-archivo-excel">
             {cargando ? 'Leyendo…' : 'Elegir archivo…'}
           </button>
+          <input
+            ref={selectorArchivo}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const archivo = e.target.files?.[0];
+              if (archivo) void procesarArchivo(archivo);
+              e.target.value = '';
+            }}
+          />
         </>
       )}
 
       {paso === 'mapeo' && (
         <>
           <p className="texto-suave">
-            Archivo: <strong>{ruta?.split(/[/\\]/).pop()}</strong> — {filas.length} fila(s) de datos, {columnas.length} columna(s).
+            Archivo: <strong>{nombreArchivo}</strong> — {filas.length} fila(s) de datos, {columnas.length} columna(s).
           </p>
           {[...CAMPOS_OBLIGATORIOS, ...CAMPOS_OPCIONALES].map((campo) => (
             <Campo key={campo} etiqueta={ETIQUETA_CAMPO[campo]} obligatorio={CAMPOS_OBLIGATORIOS.includes(campo)}>

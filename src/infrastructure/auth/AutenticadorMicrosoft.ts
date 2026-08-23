@@ -1,6 +1,5 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { URL, URLSearchParams } from 'node:url';
-import { BrowserWindow, safeStorage } from 'electron';
 import type { OrigenAutomatico } from '@domain/index';
 
 /**
@@ -206,7 +205,8 @@ export function renovarToken(cfg: Record<string, string>, refreshToken: string):
   return pedirToken(cfg, cuerpo);
 }
 
-function extraerRedireccion(url: string, redirectUriEsperada: string): { codigo?: string; error?: string; state?: string } {
+/** Sin caller hoy (la ventana de Electron que la usaba se retiró en la Fase 4) — se conserva exportada para el futuro flujo de redirección del servidor, ver `iniciarSesionEnVentana`. */
+export function extraerRedireccion(url: string, redirectUriEsperada: string): { codigo?: string; error?: string; state?: string } {
   if (!url.startsWith(redirectUriEsperada)) return {};
   const q = new URL(url).searchParams;
   return {
@@ -217,91 +217,47 @@ function extraerRedireccion(url: string, redirectUriEsperada: string): { codigo?
 }
 
 /**
- * Abre una ventana emergente con la página de inicio de sesión de
- * Microsoft y espera a que el usuario la complete. Devuelve el código de
- * autorización una vez que Azure AD redirige a la redirect URI configurada.
- * Requiere el proceso principal de Electron con una sesión humana real —
- * por eso queda fuera del alcance de las pruebas automatizadas (igual que
- * cualquier flujo de login interactivo de terceros).
+ * En la app de escritorio esto abría una `BrowserWindow` de Electron con la
+ * página de login de Microsoft y esperaba la redirección a `redirectUri`
+ * para capturar el código de autorización. Sin proceso Electron (Fase 4:
+ * retiro del escritorio), no hay ventana nativa que abrir — un rediseño
+ * real requiere un flujo de redirección del lado del servidor (una ruta
+ * REST que redirija al navegador a Azure AD + una ruta de callback que
+ * reciba el `code`), que es trabajo nuevo, no una migración de transporte,
+ * y queda fuera del alcance de la Fase 4 (`extraerRedireccion`/
+ * `construirUrlAutorizacion`/`intercambiarCodigoPorToken` de arriba ya son
+ * exactamente las piezas que ese flujo reutilizaría). Hasta entonces, el
+ * modo `autenticacion: 'microsoft'` sigue configurable en la UI (Admin) —
+ * intencionalmente, para no perder la configuración guardada — pero
+ * `probar`/`ejecutar` sobre un origen que lo usa falla con este mensaje en
+ * vez de colgarse; `autenticacion: 'oauth2'` (Client Credentials,
+ * app-únicamente) sigue funcionando sin cambios como alternativa no
+ * interactiva.
  */
-function iniciarSesionEnVentana(urlAutorizacion: string, stateEsperado: string, redirectUriEsperada: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const ventana = new BrowserWindow({
-      width: 500,
-      height: 700,
-      title: 'Iniciar sesión con Microsoft',
-      autoHideMenuBar: true,
-      webPreferences: { partition: 'persist:kpitracker-msal', nodeIntegration: false, contextIsolation: true }
-    });
-
-    let resuelta = false;
-    const manejarUrl = (url: string): void => {
-      const { codigo, error, state } = extraerRedireccion(url, redirectUriEsperada);
-      if (!codigo && !error) return;
-      if (resuelta) return;
-      resuelta = true;
-      if (state !== stateEsperado) {
-        reject(new Error('La respuesta de Microsoft no coincide con la solicitud (state inválido).'));
-      } else if (codigo) {
-        resolve(codigo);
-      } else {
-        reject(new Error(error || 'Microsoft denegó el inicio de sesión.'));
-      }
-      ventana.close();
-    };
-
-    // Un error como "redirect URI no registrada" (AADSTS50011) o "app no
-    // existe en el tenant" (AADSTS700016) no produce una redirección: Azure
-    // AD nunca deja login.microsoftonline.com, solo renderiza una página de
-    // error ahí mismo. will-redirect/will-navigate jamás disparan en ese
-    // caso y la ventana quedaría congelada sin que el resto de la app se
-    // entere. Tras cada carga se revisa el texto visible en busca de un
-    // código AADSTS para capturar ese mensaje y cerrar la ventana en vez de
-    // dejarla varada.
-    const revisarErrorEnPagina = (): void => {
-      if (resuelta) return;
-      ventana.webContents
-        .executeJavaScript('document.body ? document.body.innerText : ""')
-        .then((texto: unknown) => {
-          if (resuelta || typeof texto !== 'string') return;
-          const m = /AADSTS\d+:[^\n]*/.exec(texto);
-          if (!m) return;
-          resuelta = true;
-          reject(new Error(mensajeAmigable(m[0])));
-          ventana.close();
-        })
-        .catch(() => { /* la ventana pudo haberse cerrado entre medio; se ignora */ });
-    };
-
-    ventana.webContents.on('will-redirect', (_evento, url) => manejarUrl(url));
-    ventana.webContents.on('will-navigate', (_evento, url) => manejarUrl(url));
-    ventana.webContents.on('did-finish-load', revisarErrorEnPagina);
-    ventana.on('closed', () => {
-      if (!resuelta) reject(new Error('Se cerró la ventana de inicio de sesión antes de completarlo.'));
-    });
-
-    ventana.loadURL(urlAutorizacion).catch((error: unknown) => {
-      if (resuelta) return;
-      resuelta = true;
-      reject(error instanceof Error ? error : new Error(String(error)));
-    });
-  });
+function iniciarSesionEnVentana(_urlAutorizacion: string, _stateEsperado: string, _redirectUriEsperada: string): Promise<string> {
+  return Promise.reject(
+    new Error(
+      'El inicio de sesión interactivo con Microsoft no está disponible en esta versión web (requería una ventana nativa de Electron, retirada en la Fase 4). Use "OAuth2 (Client Credentials, app-únicamente)" en su lugar, o contacte al equipo para priorizar el flujo de redirección del lado del servidor.'
+    )
+  );
 }
 
+/**
+ * El cifrado con `safeStorage` (claves del sistema operativo, vía Electron)
+ * tampoco tiene equivalente en un proceso de servidor sin ventana — se
+ * guarda el refresh token en el mismo formato "plano:" que ya usaba como
+ * respaldo cuando `safeStorage` no estaba disponible (comportamiento ya
+ * probado, solo que ahora es el único camino). Brecha de seguridad
+ * disclosed, no de esta fase: un cifrado real del lado del servidor
+ * (clave simétrica en variable de entorno) es trabajo futuro.
+ */
 function cifrar(texto: string): string {
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
-      return `enc:${safeStorage.encryptString(texto).toString('base64')}`;
-    }
-  } catch {
-    // Sin soporte de cifrado del sistema operativo: se guarda en claro como respaldo (ver descifrar()).
-  }
   return `plano:${texto}`;
 }
 
 function descifrar(valor: string): string {
-  if (valor.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(valor.slice(4), 'base64'));
   if (valor.startsWith('plano:')) return valor.slice(6);
+  if (valor.startsWith('enc:')) throw new Error('Refresh token cifrado con safeStorage de una instalación de escritorio anterior — vuelva a iniciar sesión.');
   return valor;
 }
 

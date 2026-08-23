@@ -1,62 +1,50 @@
 # KPITracker
 
-Aplicación de escritorio **100% local (offline-first)** para la configuración, recolección periódica, seguimiento y exportación analítica de indicadores institucionales.
+Aplicación **web multi-usuario** para la configuración, recolección periódica, seguimiento y exportación analítica de indicadores institucionales.
 
-- **Sin servidores ni motores de base de datos externos**: DuckDB embebido + Data Lake local en Apache Parquet.
+- **Multi-usuario con autenticación real**: usuario/contraseña (bcrypt) + sesión de servidor, preparada para reemplazarse por Azure AD sin tocar el andamiaje de sesiones/roles.
+- **Doble backend de base de datos**: SQLite local (sin instalación, ideal para desarrollo/pruebas) o SQL Server en producción, ambos vía Knex — `knex migrate:latest` crea el esquema completo desde cero apuntando a un SQL Server vacío.
 - **Todo configurable desde la aplicación**: indicadores, atributos dinámicos, listas de selección (incl. jerárquicas), desagregaciones multinivel, metas, reglas de negocio declarativas y reglas de fecha límite.
 - **Exportación automática para Power BI**: capa desnormalizada siempre sincronizada (Parquet y CSV opcional).
 - **Arquitectura preparada para crecer**: Clean Architecture, DDD táctico, MVVM, Repository Pattern e inyección de dependencias explícita.
 
 ## Inicio rápido
 
-```bash
-npm install        # instala dependencias (incluye Electron)
-npx electron-builder install-app-deps  # recompila módulos nativos (better-sqlite3) contra el ABI de Electron — una sola vez, ver nota abajo
-npm run dev        # ejecuta la aplicación de escritorio en modo desarrollo
-npm run build      # compila la app de escritorio para producción
-npm run dev:server # servidor web (Express + tRPC) en modo desarrollo, con recarga — ver "Servidor web" abajo
-npm run start:server # servidor web, sin recarga (equivalente a producción)
-npm test           # pruebas unitarias + integración (Vitest)
-npm run test:e2e   # pruebas de aceptación (Playwright sobre Electron)
-npm run typecheck  # verificación de tipos
-npm run lint       # linter
-```
-
-> **Nota — módulos nativos y Electron**: la persistencia ahora usa Knex sobre
-> `better-sqlite3` (local) o `mssql` (producción, ver más abajo). `better-sqlite3`
-> es un binding nativo compilado contra el ABI de Node — el de Electron es
-> distinto del de Node "normal", así que tras `npm install` hace falta
-> `npx electron-builder install-app-deps` (una sola vez, requiere acceso de red
-> normal a `electronjs.org` para descargar los headers) antes de `npm run dev`/
-> `npm run test:e2e`. `npm test` (Vitest, sin Electron) no lo necesita —
-> corre sobre Node directamente y ya usa el binario tal cual se instaló.
-> Este paso desaparece por completo en la Fase 4 del plan de migración a app
-> web (retiro de Electron a favor de un servidor Node/Express normal).
-
-Los datos viven en `Data/` dentro del directorio de usuario de la aplicación (`userData`), con esta estructura:
-
-```
-/Data
-  /Config       Indicadores, Atributos, Reglas, Listas, ElementosLista, Metas (Parquet)
-  /Dimensions   DimIndicador, DimPeriodo, DimFecha, DimDesagregacion, ... (Parquet)
-  /Facts        FactResultados (particionado por año), FactSeguimiento, FactValoresAtributos
-  /Logs         Auditoria.parquet
-  /Export       ResultadosAnalitico.parquet (+ .csv opcional)  ← conectar Power BI aquí
-  Configuracion.json
-```
-
-## Servidor web (Fase 3 de la migración a app web)
-
-Además de la app de escritorio, `src/server/` levanta un servidor Express con
-una API tRPC (`/api/trpc`) y unas pocas rutas REST planas para archivos
-(`/api/adjuntos`, `/api/importacion`, `/api/respaldo`, `/api/portable` —
-subida/descarga multipart, fuera de tRPC a propósito). Comparte capa de
-dominio/aplicación/infraestructura con la app de escritorio; lo único que
-cambia es el transporte y que ahora hay sesiones multi-usuario reales.
+El servidor (Express + tRPC + API REST de archivos) y el frontend (SPA de React
+servida por Vite) son dos procesos en desarrollo; en producción el servidor
+sirve el build de la SPA desde el mismo puerto.
 
 ```bash
-KPITRACKER_DATA_DIR=./data npm run dev:server   # http://localhost:3000
+npm install                                   # instala dependencias
+
+# Terminal 1 — servidor (API + datos)
+KPITRACKER_DATA_DIR=./data npm run dev:server # http://localhost:3000
+
+# Terminal 2 — frontend (SPA con recarga en caliente)
+npm run dev                                   # http://localhost:5173, proxya /api al puerto 3000
+
+npm run build          # compila la SPA a out/renderer/ (build de producción)
+npm run start:server   # servidor de producción — sirve la API y, si existe, out/renderer/ (un solo puerto)
+
+npm test               # pruebas unitarias + integración (Vitest)
+npm run test:e2e       # pruebas de aceptación (Playwright, servidor + SPA reales)
+npm run typecheck      # verificación de tipos
+npm run lint           # linter
 ```
+
+Al primer arranque del servidor, si la tabla `usuarios` está vacía se crea
+automáticamente un administrador inicial (ver `ADMIN_INICIAL_USUARIO`/
+`ADMIN_INICIAL_PASSWORD` más abajo) — con eso ya se puede iniciar sesión.
+
+## Servidor y API
+
+`src/server/` levanta un servidor Express con una API tRPC (`/api/trpc`) y
+unas pocas rutas REST planas para archivos (`/api/adjuntos`,
+`/api/importacion`, `/api/respaldo`, `/api/portable` — subida/descarga
+multipart, fuera de tRPC a propósito). En producción, el mismo servidor sirve
+además el build estático de la SPA (`out/renderer/`, generado por
+`npm run build`) desde el mismo puerto, con fallback a `index.html` para las
+rutas de cliente.
 
 **Variables de entorno** (todas con default razonable para desarrollo local, salvo donde se indica):
 
@@ -80,9 +68,40 @@ fila, ver `ServicioAutenticacion`). Preparado para reemplazarse por Azure AD
 más adelante sin tocar sesiones/roles (`IAuthProvider`, hoy solo
 `ProveedorPassword`). Dos roles: `admin` (gestión de usuarios + pantallas de
 administración, `usuarios.*` y varios `*.eliminar`/`*.restaurar`) y `usuario`
-(el resto). Todavía no hay frontend que consuma esta API (eso es la Fase 4);
-se verifica con un cliente tRPC de Node — ver
-`tests/integration/servidorTrpc.test.ts` y `servidorRest.test.ts`.
+(el resto). El frontend consume esta API con un cliente tRPC vanilla
+(`src/renderer/src/trpc.ts`) más un pequeño helper REST para archivos
+(`src/renderer/src/rest.ts`).
+
+**Brechas conocidas, no resueltas en silencio** (documentadas como trabajo
+futuro, no descartadas):
+- El inicio de sesión interactivo de Microsoft para orígenes XMLA/Power BI
+  (`AutenticadorMicrosoft`) requería una ventana nativa de Electron; en la
+  versión web no hay equivalente todavía y el intento falla con un error
+  explícito — falta implementar un flujo de redirección OAuth del lado del
+  servidor.
+- El almacenamiento del refresh token de ese mismo flujo usa siempre el
+  formato de respaldo en texto plano (antes se intentaba cifrar con el
+  llavero del sistema operativo vía Electron `safeStorage`).
+- Las notificaciones de vencimientos son un banner descartable calculado al
+  visitar Seguimiento, no el aviso nativo por hora que había en la app de
+  escritorio; un mecanismo proactivo real (cron del lado del servidor +
+  email/webhook) queda pendiente.
+
+## Datos y exportación analítica
+
+Los archivos generados por la aplicación (adjuntos subidos, exportación
+analítica para Power BI) viven en `KPITRACKER_DATA_DIR`:
+
+```
+/Data
+  /Export       ResultadosAnalitico.parquet (+ .csv opcional)  ← conectar Power BI aquí
+  /Adjuntos     Archivos subidos como evidencia de resultados
+```
+
+La configuración e indicadores en sí ya no viven en archivos Parquet — se
+persisten en la base de datos relacional (SQLite local o SQL Server) vía
+Knex; DuckDB se conserva acotado exclusivamente al trabajo de exportación
+analítica descrito arriba.
 
 ## Documentación
 
@@ -104,12 +123,13 @@ src/
   domain/           Dominio puro (entidades, servicios, motor de reglas) — sin dependencias
   application/      Casos de uso y puertos (interfaces de repositorio)
   infrastructure/   Knex (SQLite local / SQL Server), auth, exportación, configuración portable
-  composicion/      Cableado compartido de servicios de aplicación (usado por main/ Y server/)
-  main/             Proceso principal de Electron (composition root + IPC)
-  preload/          Puente seguro renderer ⇄ main
-  server/           Servidor Express + tRPC (multi-usuario, ver "Servidor web" arriba)
-  renderer/         Interfaz React (MVVM con stores Zustand) — app de escritorio, Electron
-  shared/           Contrato IPC tipado (app de escritorio)
+  composicion/      Composition root — cablea aplicación + infraestructura, mapa de manejadores por canal
+  server/           Servidor Express + tRPC (API multi-usuario, rutas REST de archivos, servido de la SPA)
+  renderer/         Interfaz React (MVVM con stores Zustand) — SPA servida por Vite
+    src/auth/         Sesión de cliente (AuthContext, LoginPage) y rutas protegidas
+    src/trpc.ts        Cliente tRPC vanilla
+    src/rest.ts        Helper de subida/descarga de archivos (fuera de tRPC)
+  shared/           Contrato tipado de canales (usado por composicion/ y por el cliente tRPC del renderer)
 tests/
   unit/ integration/ acceptance/
 ```

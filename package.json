@@ -1,26 +1,22 @@
 {
   "name": "kpitracker",
   "version": "0.1.0",
-  "description": "Aplicación local (offline-first) para configuración, recolección y seguimiento de indicadores institucionales",
-  "main": "out/main/index.js",
+  "description": "Aplicación web multi-usuario para configuración, recolección y seguimiento de indicadores institucionales",
   "type": "module",
   "author": "KPITracker",
   "license": "MIT",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "start": "electron-vite preview",
+    "dev": "vite",
+    "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint src tests --max-warnings 0",
     "test": "vitest run --exclude 'tests/acceptance/**'",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && playwright test tests/acceptance",
+    "test:e2e": "playwright test tests/acceptance",
     "dev:server": "tsx watch src/server/index.ts",
-    "start:server": "tsx src/server/index.ts",
-    "package": "electron-vite build && electron-builder --dir",
-    "package:win": "electron-vite build && electron-builder --win --x64"
+    "start:server": "tsx src/server/index.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.4.5-r.1",
@@ -38,6 +34,7 @@
     "multer": "^2.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6",
     "zod": "^3.24.1",
     "zustand": "^5.0.2"
   },
@@ -52,64 +49,11 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.1",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "^2.3.0",
     "eslint": "^9.17.0",
     "tsx": "^4.23.12",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
-  },
-  "build": {
-    "appId": "com.kpitracker.desktop",
-    "productName": "KPITracker",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "out/**/*",
-      "package.json",
-      "node_modules/**/*",
-      "!src/**",
-      "!tests/**",
-      "!docs/**",
-      "!*.md",
-      "!tsconfig*.json",
-      "!vitest.config.ts",
-      "!playwright.config.ts",
-      "!eslint.config.js",
-      "!electron.vite.config.ts"
-    ],
-    "asarUnpack": [
-      "node_modules/@duckdb/**"
-    ],
-    "publish": null,
-    "toolsets": {
-      "wine": "1.0.1"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
   }
 }

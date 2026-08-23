@@ -5,7 +5,8 @@ import type { CategoriaRespaldo, CategoriaResumen, ResumenRespaldo, SeleccionRes
  * (Batch N): checkboxes de categoría con estado tri-estado (todos/parcial/
  * ninguno) y checkboxes de ítem dentro de cada categoría. Toda la lógica
  * vive aquí, testeable con unit tests puros — `SelectorImportacion.tsx`
- * (Batch P) solo renderiza este estado.
+ * (Batch P; movido a `modulos/admin/` en la Fase 4 junto con `TarjetaRespaldo.tsx`,
+ * ver plan §9.4/§9.5) solo renderiza este estado.
  *
  * Representación interna: cada categoría vale `'todos'` (todo seleccionado,
  * incluye ítems que se agreguen después) o un `Set<string>` de ids

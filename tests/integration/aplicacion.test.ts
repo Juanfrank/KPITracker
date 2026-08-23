@@ -4,13 +4,13 @@ import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { componerAplicacion } from '../../src/main/composicion';
-import type { Aplicacion } from '../../src/main/composicion';
+import { componerAplicacionServidor } from '../../src/server/composicionServidor';
+import type { AplicacionServidor } from '../../src/server/composicionServidor';
 import { Periodicidad, TipoDato, generarConsultaDax } from '@domain/index';
 import type { DefinicionPeriodicidad, Indicador, Meta, ReglaNegocio } from '@domain/index';
 
 let dataDir: string;
-let app: Aplicacion;
+let app: AplicacionServidor;
 
 function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
@@ -32,7 +32,7 @@ function reglaValidacionCruzada(parcial: Partial<ReglaNegocio> & { condicion: Re
 
 beforeEach(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-app-test-'));
-  app = await componerAplicacion(dataDir);
+  app = await componerAplicacionServidor(dataDir);
 });
 
 afterEach(async () => {

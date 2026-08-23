@@ -1,10 +1,8 @@
-import { test, expect, _electron as electron } from '@playwright/test';
-import type { ElectronApplication, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { iniciarAppWeb } from './fixtures';
 
 /**
  * Prueba de aceptación del cubo de subtotales (cada indicador con N
@@ -16,9 +14,8 @@ import { join } from 'node:path';
  * fila — como `ROLLUPADDISSUBTOTAL` en DAX `SUMMARIZECOLUMNS`).
  */
 
-let aplicacion: ElectronApplication;
 let pagina: Page;
-let dataDir: string;
+let cerrarApp: () => Promise<void>;
 let servidor: Server;
 let puerto: number;
 
@@ -38,19 +35,13 @@ test.beforeAll(async () => {
   const direccion = servidor.address();
   puerto = typeof direccion === 'object' && direccion ? direccion.port : 0;
 
-  dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-e2e-subtotales-'));
-  aplicacion = await electron.launch({
-    args: ['out/main/index.js'],
-    env: { ...process.env, KPITRACKER_DATA_DIR: dataDir, ELECTRON_DISABLE_SANDBOX: '1' }
-  });
-  pagina = await aplicacion.firstWindow();
-  await pagina.setViewportSize({ width: 1440, height: 900 });
-  await pagina.waitForLoadState('domcontentloaded');
+  const app = await iniciarAppWeb('subtotales');
+  pagina = app.pagina;
+  cerrarApp = app.cerrar;
 });
 
 test.afterAll(async () => {
-  await aplicacion.close();
-  rmSync(dataDir, { recursive: true, force: true });
+  await cerrarApp();
   await new Promise<void>((resolve) => servidor.close(() => resolve()));
 });
 

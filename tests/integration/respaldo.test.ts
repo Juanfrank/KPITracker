@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { componerAplicacion } from '../../src/main/composicion';
-import type { Aplicacion } from '../../src/main/composicion';
-import { seleccionInicial, aSeleccionIpc, alternarCategoria } from '../../src/renderer/src/modulos/perfiles/modeloSeleccion';
+import { componerAplicacionServidor } from '../../src/server/composicionServidor';
+import type { AplicacionServidor } from '../../src/server/composicionServidor';
+import { seleccionInicial, aSeleccionIpc, alternarCategoria } from '../../src/renderer/src/modulos/admin/modeloSeleccion';
 import { Periodicidad, TipoDato } from '@domain/index';
 import type { Atributo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable, Categoria } from '@domain/index';
 
@@ -13,7 +13,7 @@ import type { Atributo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Respon
  * opera sobre el perfil ACTIVO. Prueba `RespaldoPerfilService` directamente
  * (sin pasar por `respaldo:*` IPC, que envuelve diálogos nativos de
  * Electron no disponibles en este entorno headless) contra dos instancias
- * reales de `componerAplicacion` en tmpdirs distintos.
+ * reales de `componerAplicacionServidor` en tmpdirs distintos.
  */
 
 function indicador(parcial: Partial<Indicador> = {}): Indicador {
@@ -71,14 +71,14 @@ function origen(parcial: Partial<OrigenAutomatico> = {}): OrigenAutomatico {
 
 let dataDirA: string;
 let dataDirB: string;
-let appA: Aplicacion;
-let appB: Aplicacion;
+let appA: AplicacionServidor;
+let appB: AplicacionServidor;
 
 beforeEach(async () => {
   dataDirA = mkdtempSync(join(tmpdir(), 'kpitracker-respaldo-a-'));
   dataDirB = mkdtempSync(join(tmpdir(), 'kpitracker-respaldo-b-'));
-  appA = await componerAplicacion(dataDirA, '9.9.9');
-  appB = await componerAplicacion(dataDirB);
+  appA = await componerAplicacionServidor(dataDirA, '9.9.9');
+  appB = await componerAplicacionServidor(dataDirB);
 });
 
 afterEach(async () => {

@@ -12,7 +12,6 @@ import type { DetalleSeguimiento, FilaHistorico, FilaTablero } from '@applicatio
 import type { ReglaFechaLimiteDisponible } from '@application/use-cases/ServicioConfiguracion';
 import type { ReporteConciliacion } from '@domain/services/ConciliacionLista';
 import type { ResultadoImportacionRespaldo, ResumenRespaldo, SeleccionRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
-import type { PerfilRegistrado } from './perfiles';
 
 /** Filas máximas que devuelve `origenes:probarCodigo` — tope de VISUALIZACIÓN, aplicado tras ejecutar la consulta completa. */
 export const LIMITE_FILAS_PRUEBA_ORIGEN = 100;
@@ -26,8 +25,18 @@ export interface ResultadoPruebaCodigo {
 }
 
 /**
- * Contrato IPC tipado entre renderer y main. Cada canal define su petición
- * y respuesta; el preload solo expone los canales aquí declarados.
+ * Contrato tipado de canal→{req,res}: nació como el contrato IPC de la app
+ * de escritorio, y sigue siendo el tipo que implementa
+ * `Aplicacion.manejadores` (`src/composicion/manejadores.ts`) — agnóstico
+ * de Electron (solo TypeScript), por eso sobrevivió a su retiro en la
+ * Fase 4. También sigue tipando `invocar<C>()` en el renderer
+ * (`src/renderer/src/api.ts`), aunque ahí una tabla de traducción interna
+ * enruta la mayoría de los canales por tRPC — los que la Fase 3 movió a
+ * rutas REST planas (`adjuntos:subir`/`abrir`, `sistema:seleccionarArchivo`/
+ * `leerHojaCalculo`, `respaldo:*`, `portable:*`) siguen aquí porque
+ * `Aplicacion.manejadores` y los tests de integración los siguen usando
+ * directamente, pero `invocar()` los rechaza (ver `src/server/rest/`).
+ * `perfiles:*` no existe (retirado en la Fase 4, espacio de trabajo único).
  */
 export interface CanalesIpc {
   'config:obtener': { req: void; res: ConfiguracionGeneral };
@@ -155,22 +164,21 @@ export interface CanalesIpc {
   'portable:exportar': { req: void; res: { json: string } };
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };
 
-  /**
-   * Respaldo/importación selectiva de perfil (Batch N) — siempre opera
-   * sobre el perfil ACTIVO; complementa, sin reemplazar, `portable:*`.
-   */
+  /** Respaldo/importación selectiva sobre el espacio de trabajo compartido (complementa, sin reemplazar, `portable:*`). */
   'respaldo:exportar': { req: void; res: { ruta: string | null } };
-  /** Abre el diálogo de apertura, lee y valida el archivo; devuelve la ruta (para pasarla luego a `respaldo:importar`) + el resumen para armar el selector. */
+  /** Solo tiene sentido en el composition root de escritorio (diálogo nativo) — en la web, ver `POST /api/respaldo/leer`. */
   'respaldo:seleccionar': { req: void; res: { ruta: string; resumen: ResumenRespaldo } | null };
   'respaldo:importar': { req: { ruta: string; seleccion: SeleccionRespaldo }; res: ResultadoImportacionRespaldo };
 
   'tipos:listar': { req: void; res: Array<{ tipo: string; etiqueta: string; editorHint: string }> };
 
   'adjuntos:listar': { req: { entidad: EntidadAdjunto; entidadId: string }; res: Adjunto[] };
+  /** Solo tiene sentido en el composition root de escritorio (diálogo nativo) — en la web, ver `POST /api/adjuntos`. */
   'adjuntos:subir': { req: { entidad: EntidadAdjunto; entidadId: string; comentario?: string | null }; res: Adjunto | null };
   'adjuntos:abrir': { req: { id: string }; res: void };
   'adjuntos:eliminar': { req: { id: string }; res: void };
 
+  /** Solo tiene sentido en el composition root de escritorio (diálogo nativo) — en la web, ver `POST /api/importacion/hoja-calculo`. */
   'sistema:seleccionarArchivo': {
     req: { filtros?: { nombre: string; extensiones: string[] }[] } | void;
     res: string | null;
@@ -179,79 +187,11 @@ export interface CanalesIpc {
   /** Metadatos estáticos de la aplicación (versión, autor, soporte) para la sección "Acerca de". */
   'sistema:info': {
     req: void;
-    res: {
-      nombre: string; version: string; autor: string; licencia: string; urlSoporte: string;
-      electron: string; node: string; chrome: string;
-    };
+    res: { nombre: string; version: string; autor: string; licencia: string; urlSoporte: string; electron: string; node: string; chrome: string };
   };
-
-  /**
-   * Sistema de Perfiles (Batch P): crear/renombrar/eliminar/cambiar entre
-   * distintos "modelos" (bases de datos completas e independientes). Como
-   * `sistema:info`, operan *entre* instancias de `Aplicacion` — son
-   * manejadores locales de `src/main/index.ts`, nunca canales por-perfil.
-   */
-  'perfiles:listar': { req: void; res: { perfiles: PerfilRegistrado[]; activoId: string } };
-  'perfiles:crear': { req: { nombre: string }; res: PerfilRegistrado };
-  'perfiles:renombrar': { req: { id: string; nombre: string }; res: PerfilRegistrado };
-  'perfiles:eliminar': { req: { id: string; borrarArchivos: boolean }; res: void };
-  'perfiles:cambiar': { req: { id: string }; res: { activoId: string } };
 }
 
 export type NombreCanal = keyof CanalesIpc;
 
-/**
- * Canales que NO dependen de una `Aplicacion` concreta (no son por-perfil):
- * se resuelven en `src/main/index.ts` como "manejadores locales", nunca en
- * el mapa `Aplicacion.manejadores` del composition root. Mantenerlos aquí
- * permite excluirlos del tipo que exige implementar cada canal en
- * `composicion.ts`.
- */
-export type CanalLocal = 'sistema:info' | 'perfiles:listar' | 'perfiles:crear' | 'perfiles:renombrar' | 'perfiles:eliminar' | 'perfiles:cambiar';
-
-export const NOMBRES_CANALES: NombreCanal[] = [
-  'config:obtener', 'config:guardar', 'config:reglasFechaLimite',
-  'indicadores:listar', 'indicadores:obtener', 'indicadores:guardar', 'indicadores:eliminar',
-  'indicadores:reasignarMasivo', 'indicadores:importarExcel',
-  'atributos:listar', 'atributos:guardar', 'atributos:eliminar', 'atributos:restaurar', 'atributos:valores', 'atributos:guardarValor',
-  'listas:listar', 'listas:guardar', 'listas:eliminar', 'listas:restaurar',
-  'listas:elementos', 'listas:guardarElemento', 'listas:eliminarElemento',
-  'metas:listar', 'metas:guardar', 'metas:eliminar',
-  'reglas:listar', 'reglas:guardar', 'reglas:eliminar', 'reglas:restaurar',
-  'periodicidades:listar', 'periodicidades:guardar', 'periodicidades:eliminar',
-  'responsables:listar', 'responsables:guardar', 'responsables:eliminar', 'responsables:restaurar',
-  'categorias:listar', 'categorias:guardar', 'categorias:eliminar', 'categorias:restaurar',
-  'origenes:listar', 'origenes:guardar', 'origenes:eliminar', 'origenes:restaurar', 'origenes:probar', 'origenes:probarCodigo',
-  'listas:aliasOrigen', 'listas:aliasPorOrigen', 'listas:guardarAliasOrigen', 'listas:eliminarAliasOrigen',
-  'automatizacion:obtener', 'automatizacion:guardar', 'automatizacion:eliminar',
-  'automatizacion:ejecutarPrueba', 'automatizacion:validarColumna', 'automatizacion:agregarElementosFaltantes',
-  'recoleccion:periodos', 'recoleccion:captura', 'recoleccion:guardarCelda', 'recoleccion:fechaCorte', 'recoleccion:comentario',
-  'recoleccion:exclusion', 'recoleccion:historial', 'recoleccion:restaurarVersion', 'recoleccion:obtenerAutomatico',
-  'seguimiento:tablero', 'seguimiento:detalle', 'seguimiento:historico',
-  'exportacion:regenerar', 'exportacion:ruta',
-  'auditoria:consultar',
-  'portable:exportar', 'portable:importar',
-  'respaldo:exportar', 'respaldo:seleccionar', 'respaldo:importar',
-  'tipos:listar',
-  'adjuntos:listar', 'adjuntos:subir', 'adjuntos:abrir', 'adjuntos:eliminar',
-  'sistema:seleccionarArchivo', 'sistema:leerHojaCalculo', 'sistema:info',
-  'perfiles:listar', 'perfiles:crear', 'perfiles:renombrar', 'perfiles:eliminar', 'perfiles:cambiar'
-];
-
-/** Respuesta serializada por IPC: éxito con datos o error de negocio legible. */
-export type RespuestaIpc<T> =
-  | { ok: true; datos: T }
-  | { ok: false; error: string; detalles?: string[] };
-
-/**
- * API expuesta al renderer por el preload (window.api). Devuelve el sobre
- * `RespuestaIpc` completo (nunca lanza) — quien construye y lanza el `Error`
- * final es `src/renderer/src/api.ts`, ya en el "main world" de la página.
- * Necesario porque `contextBridge` clona excepciones lanzadas dentro del
- * mundo aislado del preload solo con sus propiedades estándar (`message`):
- * propiedades propias como `detalles` (usada para listar qué bloquea un
- * borrado) se pierden si el `throw` ocurre del lado del preload.
- */
-export interface ApiRenderer {
-  invocar<C extends NombreCanal>(canal: C, payload: CanalesIpc[C]['req']): Promise<RespuestaIpc<CanalesIpc[C]['res']>>;
-}
+/** `sistema:info` no pasa por `Aplicacion.manejadores` (no depende de infraestructura) — tiene su propio procedimiento en `sistemaRouter`. */
+export type CanalLocal = 'sistema:info';

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { CategoriaResumen, ResultadoImportacionRespaldo, ResumenRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
-import { invocar } from '../../api';
+import { subirArchivo } from '../../rest';
 import { PanelLateral } from '../../componentes/basicos';
 import {
   alternarCategoria, alternarItem, aSeleccionIpc, contarSeleccionados, estadoDeCategoria, seleccionInicial,
@@ -90,11 +90,16 @@ function PanelItems({
  * funciones puras de `modeloSeleccion.ts` — cero lógica de selección
  * inline. Checkbox tri-estado por categoría + panel de ítems puntuales
  * ("Editar") para incluir solo algunos.
+ *
+ * Recibe el `File` ya elegido por el usuario (no una ruta de servidor — ver
+ * plan Fase 4 §9.4): `importar()` lo vuelve a subir junto con la selección
+ * a `POST /api/respaldo/importar`, ya que el servidor no retiene el archivo
+ * entre la llamada de preview (`/api/respaldo/leer`) y la de importación.
  */
 export function SelectorImportacion({
-  ruta, resumen, alCerrar
+  archivo, resumen, alCerrar
 }: {
-  ruta: string;
+  archivo: File;
   resumen: ResumenRespaldo;
   alCerrar: () => void;
 }): React.JSX.Element {
@@ -111,7 +116,9 @@ export function SelectorImportacion({
     setImportando(true);
     setError(null);
     try {
-      setResultado(await invocar('respaldo:importar', { ruta, seleccion }));
+      setResultado(
+        await subirArchivo<ResultadoImportacionRespaldo>('/api/respaldo/importar', { archivo, seleccion: JSON.stringify(seleccion) })
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {

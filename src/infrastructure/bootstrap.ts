@@ -53,13 +53,12 @@ export interface OpcionesInfraestructura {
   /** Versión de la app (p. ej. `app.getVersion()`), incluida en los respaldos exportados. */
   appVersion?: string;
   /**
-   * Fábrica de `IArchivoService` — por defecto `ArchivoServiceWeb` (sin
-   * dependencia de Electron, segura en cualquier entorno). El composition
-   * root de Electron (`src/main/composicion.ts`) la sobrescribe con la
-   * implementación basada en diálogos nativos. Deliberadamente NO se
-   * importa `ArchivoService` (electron-coupled) aquí: este archivo lo
-   * comparten tanto el proceso principal de Electron como el futuro
-   * servidor Express, y solo el primero debe cargar ese módulo.
+   * Fábrica de `IArchivoService` — por defecto `ArchivoServiceWeb`. Desde
+   * la Fase 4 (retiro de Electron) el único consumidor de
+   * `crearInfraestructura` es `src/server/composicionServidor.ts`, que
+   * nunca la sobrescribe; se mantiene como punto de extensión explícito en
+   * vez de instanciar `ArchivoServiceWeb` directamente, por si un futuro
+   * entorno (worker, CLI de administración) necesita otra implementación.
    */
   crearArchivos?: (rutas: RutasDataLake) => IArchivoService;
 }

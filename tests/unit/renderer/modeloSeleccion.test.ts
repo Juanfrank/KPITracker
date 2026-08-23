@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   alternarCategoria, alternarItem, aSeleccionIpc, contarSeleccionados, estadoDeCategoria, seleccionInicial,
   seleccionarTodosItems
-} from '@renderer/src/modulos/perfiles/modeloSeleccion';
-import type { EstadoSeleccion } from '@renderer/src/modulos/perfiles/modeloSeleccion';
+} from '@renderer/src/modulos/admin/modeloSeleccion';
+import type { EstadoSeleccion } from '@renderer/src/modulos/admin/modeloSeleccion';
 import type { CategoriaResumen, ResumenRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
 
 const listas: CategoriaResumen = {

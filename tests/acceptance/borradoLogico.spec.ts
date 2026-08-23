@@ -1,8 +1,6 @@
-import { test, expect, _electron as electron } from '@playwright/test';
-import type { ElectronApplication, Page } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { iniciarAppWeb } from './fixtures';
 
 /**
  * Prueba de aceptación del borrado lógico (Batch M): un responsable en uso
@@ -11,24 +9,17 @@ import { join } from 'node:path';
  * revela atenuado, y "Restaurar" lo devuelve a la lista normal.
  */
 
-let aplicacion: ElectronApplication;
 let pagina: Page;
-let dataDir: string;
+let cerrarApp: () => Promise<void>;
 
 test.beforeAll(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-e2e-borrado-logico-'));
-  aplicacion = await electron.launch({
-    args: ['out/main/index.js'],
-    env: { ...process.env, KPITRACKER_DATA_DIR: dataDir, ELECTRON_DISABLE_SANDBOX: '1' }
-  });
-  pagina = await aplicacion.firstWindow();
-  await pagina.setViewportSize({ width: 1440, height: 900 });
-  await pagina.waitForLoadState('domcontentloaded');
+  const app = await iniciarAppWeb('borrado-logico');
+  pagina = app.pagina;
+  cerrarApp = app.cerrar;
 });
 
 test.afterAll(async () => {
-  await aplicacion.close();
-  rmSync(dataDir, { recursive: true, force: true });
+  await cerrarApp();
 });
 
 test.describe.configure({ mode: 'serial' });

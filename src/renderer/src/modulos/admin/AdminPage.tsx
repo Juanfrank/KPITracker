@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, TipoOrigenAutomatico } from '@domain/index';
+import type { Categoria, FuenteParametroGeneral, OrigenAutomatico, ParametroGeneral, Responsable, RolUsuario, TipoOrigenAutomatico } from '@domain/index';
 import { ejemploParaFuente } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
+import { descargar, postTexto } from '../../rest';
+import { trpcClient } from '../../trpc';
+import { useAuth } from '../../auth/AuthContext';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+import { TarjetaRespaldo } from './TarjetaRespaldo';
 
 function responsableVacio(): Responsable {
   return { id: '', nombre: '', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
@@ -837,24 +841,209 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
   );
 }
 
+interface UsuarioFila {
+  id: string;
+  nombreUsuario: string;
+  nombreCompleto: string;
+  rol: RolUsuario;
+  activo: boolean;
+}
+
+function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; password: string; rol: RolUsuario } {
+  return { nombreUsuario: '', nombreCompleto: '', password: '', rol: 'usuario' };
+}
+
+/**
+ * Gestión de usuarios (nueva en la Fase 4 — sin equivalente en la app de
+ * escritorio, que operaba con un único `USUARIO_LOCAL` implícito). Habla
+ * directo con el cliente tRPC (no pasa por el shim `invocar()`, ya que
+ * `usuarios:*` nunca tuvo canal IPC — ver plan §9.7). El componente padre
+ * (`AdminPage`) solo la monta si `usuario.rol === 'admin'`; los
+ * procedimientos además son `adminProcedure` del lado del servidor, así que
+ * ocultarla aquí es una conveniencia de UX, no la única barrera.
+ */
+function SeccionUsuarios(): React.JSX.Element {
+  const [items, setItems] = useState<UsuarioFila[]>([]);
+  const [creando, setCreando] = useState<ReturnType<typeof usuarioNuevoVacio> | null>(null);
+  const [editandoPassword, setEditandoPassword] = useState<UsuarioFila | null>(null);
+  const [passwordNueva, setPasswordNueva] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setItems(await trpcClient.usuarios.listar.query());
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const crear = async (): Promise<void> => {
+    if (!creando) return;
+    setError(null);
+    try {
+      await trpcClient.usuarios.crear.mutate(creando);
+      setCreando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear el usuario.');
+    }
+  };
+
+  const alternarActivo = async (u: UsuarioFila): Promise<void> => {
+    await trpcClient.usuarios.establecerActivo.mutate({ id: u.id, activo: !u.activo });
+    await cargar();
+  };
+
+  const cambiarRol = async (u: UsuarioFila, rol: RolUsuario): Promise<void> => {
+    await trpcClient.usuarios.establecerRol.mutate({ id: u.id, rol });
+    await cargar();
+  };
+
+  const guardarPassword = async (): Promise<void> => {
+    if (!editandoPassword || !passwordNueva) return;
+    setError(null);
+    try {
+      await trpcClient.usuarios.cambiarPassword.mutate({ id: editandoPassword.id, passwordNueva });
+      setEditandoPassword(null);
+      setPasswordNueva('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cambiar la contraseña.');
+    }
+  };
+
+  return (
+    <div className="tarjeta">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Usuarios</h3>
+        <div className="separador" />
+        <button className="boton primario" onClick={() => setCreando(usuarioNuevoVacio())} data-testid="nuevo-usuario">
+          <Icono nombre="mas" /> Usuario
+        </button>
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Nombre completo</th>
+              <th>Rol</th>
+              <th>Activo</th>
+              <th style={{ width: 110 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((u) => (
+              <tr key={u.id} data-testid={`usuario-${u.nombreUsuario}`}>
+                <td>{u.nombreUsuario}</td>
+                <td>{u.nombreCompleto}</td>
+                <td>
+                  <select
+                    value={u.rol}
+                    onChange={(e) => void cambiarRol(u, e.target.value as RolUsuario)}
+                    data-testid={`usuario-rol-${u.nombreUsuario}`}
+                  >
+                    <option value="usuario">Usuario</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </td>
+                <td>
+                  <button className="boton sutil" onClick={() => void alternarActivo(u)} data-testid={`usuario-activo-${u.nombreUsuario}`}>
+                    {u.activo ? 'Sí' : 'No'}
+                  </button>
+                </td>
+                <td>
+                  <button className="boton sutil" onClick={() => setEditandoPassword(u)} title="Cambiar contraseña">
+                    Contraseña
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={5}>
+                  <Vacio mensaje="Sin usuarios" />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {creando && (
+        <PanelLateral
+          titulo="Nuevo usuario"
+          alCerrar={() => { setCreando(null); setError(null); }}
+          pie={
+            <>
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setCreando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void crear()} data-testid="guardar-usuario">Crear</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Usuario" obligatorio>
+            <input
+              type="text"
+              value={creando.nombreUsuario}
+              onChange={(e) => setCreando({ ...creando, nombreUsuario: e.target.value })}
+              autoFocus
+              data-testid="usuario-nombreUsuario"
+            />
+          </Campo>
+          <Campo etiqueta="Nombre completo" obligatorio>
+            <input type="text" value={creando.nombreCompleto} onChange={(e) => setCreando({ ...creando, nombreCompleto: e.target.value })} />
+          </Campo>
+          <Campo etiqueta="Contraseña" obligatorio>
+            <input
+              type="password"
+              value={creando.password}
+              onChange={(e) => setCreando({ ...creando, password: e.target.value })}
+              data-testid="usuario-password"
+            />
+          </Campo>
+          <Campo etiqueta="Rol">
+            <select value={creando.rol} onChange={(e) => setCreando({ ...creando, rol: e.target.value as RolUsuario })}>
+              <option value="usuario">Usuario</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </Campo>
+        </PanelLateral>
+      )}
+      {editandoPassword && (
+        <PanelLateral
+          titulo={`Cambiar contraseña — ${editandoPassword.nombreUsuario}`}
+          alCerrar={() => { setEditandoPassword(null); setPasswordNueva(''); setError(null); }}
+          pie={
+            <>
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditandoPassword(null); setPasswordNueva(''); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardarPassword()} data-testid="confirmar-cambiar-password">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Contraseña nueva" obligatorio>
+            <input type="password" value={passwordNueva} onChange={(e) => setPasswordNueva(e.target.value)} autoFocus data-testid="usuario-password-nueva" />
+          </Campo>
+        </PanelLateral>
+      )}
+    </div>
+  );
+}
+
 /**
  * Administración: configuración portable (export/import de TODA la
  * configuración en un único JSON versionado, preparado para migraciones) y
  * catálogos de responsables/categorías asignables a indicadores.
  */
 export function AdminPage(): React.JSX.Element {
+  const { usuario } = useAuth();
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | 'info'; texto: string } | null>(null);
   const selectorArchivo = useRef<HTMLInputElement>(null);
 
   const exportar = async (): Promise<void> => {
     try {
-      const { json } = await invocar('portable:exportar', undefined);
-      const blob = new Blob([json], { type: 'application/json' });
-      const enlace = document.createElement('a');
-      enlace.href = URL.createObjectURL(blob);
-      enlace.download = `kpitracker-config-${new Date().toISOString().slice(0, 10)}.json`;
-      enlace.click();
-      URL.revokeObjectURL(enlace.href);
+      await descargar('/api/portable/exportar', `kpitracker-config-${new Date().toISOString().slice(0, 10)}.json`);
       setMensaje({ tipo: 'exito', texto: 'Configuración exportada correctamente.' });
     } catch (error) {
       setMensaje({ tipo: 'error', texto: (error as Error).message });
@@ -864,7 +1053,7 @@ export function AdminPage(): React.JSX.Element {
   const importar = async (archivo: File): Promise<void> => {
     try {
       const json = await archivo.text();
-      const { advertencias } = await invocar('portable:importar', { json });
+      const { advertencias } = await postTexto<{ advertencias: string[] }>('/api/portable/importar', json);
       setMensaje({
         tipo: 'exito',
         texto:
@@ -913,17 +1102,13 @@ export function AdminPage(): React.JSX.Element {
         </div>
       </div>
 
+      <TarjetaRespaldo />
+
       <SeccionResponsables />
       <SeccionCategorias />
       <SeccionOrigenesAutomaticos />
 
-      <div className="tarjeta">
-        <h3 style={{ marginTop: 0 }}>Usuarios</h3>
-        <p className="texto-suave" style={{ marginBottom: 0 }}>
-          Esta versión opera con un único usuario local. La arquitectura ya contempla usuarios, aprobadores y flujos
-          de revisión; se habilitarán en versiones futuras (ver roadmap en la documentación).
-        </p>
-      </div>
+      {usuario?.rol === 'admin' && <SeccionUsuarios />}
     </>
   );
 }

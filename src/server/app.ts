@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
@@ -9,6 +11,9 @@ import { crearRouterAdjuntos } from './rest/adjuntos';
 import { crearRouterImportacion } from './rest/importacion';
 import { crearRouterRespaldo } from './rest/respaldo';
 import { crearRouterPortable } from './rest/portable';
+
+/** `out/renderer` (build de `vite.config.ts`) relativo a este archivo — no a `process.cwd()`, para no depender de dónde se invoque el proceso. */
+const RUTA_SPA = fileURLToPath(new URL('../../out/renderer', import.meta.url));
 
 export interface OpcionesApp {
   dataDir: string;
@@ -46,6 +51,21 @@ export async function crearApp(opciones: OpcionesApp): Promise<AppConstruida> {
   app.use('/api/importacion', crearRouterImportacion(aplicacion));
   app.use('/api/respaldo', crearRouterRespaldo(aplicacion));
   app.use('/api/portable', crearRouterPortable(aplicacion));
+
+  // Bundle de la SPA (`npm run build`, ver plan Fase 4 §9.8) — montado
+  // DESPUÉS de toda ruta /api/*, así nunca la intercepta. En dev, la SPA la
+  // sirve el propio `vite` (proxy /api hacia este servidor, ver
+  // `vite.config.ts`) — este bloque solo importa en producción/E2E, donde
+  // `out/renderer` puede no existir todavía (p. ej. tests que no construyen
+  // la SPA), de ahí el `existsSync`.
+  if (existsSync(RUTA_SPA)) {
+    app.use(express.static(RUTA_SPA));
+    // Sin path (no `'*'`): Express 5 cambió a path-to-regexp v7, que ya no
+    // acepta el comodín suelto de Express 4 — un middleware sin ruta es el
+    // catch-all portable entre versiones, y de todas formas solo se llega
+    // aquí para lo que `express.static` no resolvió.
+    app.use((_req, res) => res.sendFile(`${RUTA_SPA}/index.html`));
+  }
 
   return { app, aplicacion, cerrar: () => aplicacion.cerrar() };
 }

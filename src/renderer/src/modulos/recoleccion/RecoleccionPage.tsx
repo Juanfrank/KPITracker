@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Encabezado, Campo, Vacio } from '../../componentes/basicos';
 import { HistorialCelda } from '../../componentes/HistorialCelda';
 import { PanelAdjuntos } from '../../componentes/PanelAdjuntos';
 import { useRecoleccion } from '../../stores/recoleccion';
-import { useNavegacion } from '../../stores/navegacion';
 
 /**
  * Recolección de resultados: edición tipo hoja de cálculo con navegación
@@ -12,7 +12,7 @@ import { useNavegacion } from '../../stores/navegacion';
  */
 export function RecoleccionPage(): React.JSX.Element {
   const vm = useRecoleccion();
-  const { parametros } = useNavegacion();
+  const [parametros] = useSearchParams();
   const cuerpoTabla = useRef<HTMLTableSectionElement>(null);
 
   useEffect(() => {
@@ -20,8 +20,9 @@ export function RecoleccionPage(): React.JSX.Element {
     // p. ej.), se selecciona ese indicador de cero. Si no, se refresca la selección
     // que ya hubiera en el store (singleton de módulo: sobrevive a haber estado en
     // otra página) sin perderla — ver el docstring de `refrescar` en el store.
-    if (parametros.indicadorId) {
-      void vm.cargarIndicadores().then(() => void vm.seleccionarIndicador(parametros.indicadorId!));
+    const indicadorId = parametros.get('indicadorId');
+    if (indicadorId) {
+      void vm.cargarIndicadores().then(() => void vm.seleccionarIndicador(indicadorId));
     } else {
       void vm.refrescar();
     }

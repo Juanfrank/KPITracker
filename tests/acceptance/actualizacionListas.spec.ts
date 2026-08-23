@@ -1,8 +1,6 @@
-import { test, expect, _electron as electron } from '@playwright/test';
-import type { ElectronApplication, Page } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { iniciarAppWeb } from './fixtures';
 
 /**
  * Recolección usa un store (Zustand) que es un singleton de módulo: sobrevive
@@ -16,24 +14,17 @@ import { join } from 'node:path';
  * el selector de indicador — la fila nueva debe aparecer sola.
  */
 
-let aplicacion: ElectronApplication;
 let pagina: Page;
-let dataDir: string;
+let cerrarApp: () => Promise<void>;
 
 test.beforeAll(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-e2e-actualizacion-listas-'));
-  aplicacion = await electron.launch({
-    args: ['out/main/index.js'],
-    env: { ...process.env, KPITRACKER_DATA_DIR: dataDir, ELECTRON_DISABLE_SANDBOX: '1' }
-  });
-  pagina = await aplicacion.firstWindow();
-  await pagina.setViewportSize({ width: 1440, height: 900 });
-  await pagina.waitForLoadState('domcontentloaded');
+  const app = await iniciarAppWeb('actualizacion-listas');
+  pagina = app.pagina;
+  cerrarApp = app.cerrar;
 });
 
 test.afterAll(async () => {
-  await aplicacion.close();
-  rmSync(dataDir, { recursive: true, force: true });
+  await cerrarApp();
 });
 
 test.describe.configure({ mode: 'serial' });

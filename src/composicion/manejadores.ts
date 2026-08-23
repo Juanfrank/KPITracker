@@ -16,16 +16,14 @@ import { ServicioAutomatizacionIndicador } from '@application/use-cases/Servicio
 import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
 
 /**
- * Punto de composición compartido entre el proceso principal de Electron
- * (`src/main/composicion.ts`) y el servidor Express (`src/server/`): arma
- * los ~15 servicios de aplicación sobre una `Infraestructura` YA construida
- * (con su propio `IArchivoService`, distinto en cada entorno) y devuelve el
- * mapa de manejadores por canal, más las pocas instancias de servicio que
- * las rutas REST necesitan invocar directamente (ver `servicios` abajo).
- *
- * Deliberadamente NO importa nada de Electron ni de Node más allá de lo que
- * ya traen los casos de uso — así ambos composition roots pueden compartirlo
- * sin que el servidor arrastre `electron` a su grafo de módulos.
+ * Punto de composición del servidor Express (`src/server/composicionServidor.ts`):
+ * arma los ~15 servicios de aplicación sobre una `Infraestructura` ya
+ * construida y devuelve el mapa de manejadores por canal, más las pocas
+ * instancias de servicio que las rutas REST necesitan invocar directamente
+ * (ver `servicios` abajo). Vivió hasta la Fase 4 compartido también con el
+ * composition root de Electron (`src/main/composicion.ts`, retirado); se
+ * mantiene como módulo aparte de `composicionServidor.ts` porque separa
+ * limpiamente "cablear servicios de aplicación" de "arrancar un servidor".
  */
 export interface Aplicacion {
   infra: Infraestructura;

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { componerAplicacion } from '../../src/main/composicion';
-import type { Aplicacion } from '../../src/main/composicion';
+import { componerAplicacionServidor } from '../../src/server/composicionServidor';
+import type { AplicacionServidor } from '../../src/server/composicionServidor';
 import { Periodicidad, TipoDato } from '@domain/index';
 import type { Atributo, Categoria, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable } from '@domain/index';
 
@@ -16,7 +16,7 @@ import type { Atributo, Categoria, Indicador, Lista, OrigenAutomatico, ReglaNego
  */
 
 let dataDir: string;
-let app: Aplicacion;
+let app: AplicacionServidor;
 
 function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
@@ -73,7 +73,7 @@ function origen(parcial: Partial<OrigenAutomatico> = {}): OrigenAutomatico {
 
 beforeEach(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'kpitracker-borrado-logico-'));
-  app = await componerAplicacion(dataDir);
+  app = await componerAplicacionServidor(dataDir);
 });
 
 afterEach(async () => {
@@ -255,7 +255,7 @@ describe('Borrado lógico — hijos preservados y persistencia', () => {
     await app.manejadores['responsables:eliminar']({ id: r.id });
     await app.cerrar();
 
-    app = await componerAplicacion(dataDir);
+    app = await componerAplicacionServidor(dataDir);
     const conEliminados = await app.manejadores['responsables:listar']({ incluirEliminados: true });
     const restaurado = conEliminados.find((x) => x.id === r.id);
     expect(restaurado?.eliminado).toBe(true);

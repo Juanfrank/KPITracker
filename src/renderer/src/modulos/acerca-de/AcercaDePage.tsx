@@ -43,9 +43,7 @@ export function AcercaDePage(): React.JSX.Element {
           </div>
           <div className="tarjeta">
             <h3 style={{ marginTop: 0 }}>Entorno</h3>
-            <Fila etiqueta="Electron" valor={info.electron} />
             <Fila etiqueta="Node" valor={info.node} />
-            <Fila etiqueta="Chrome" valor={info.chrome} />
           </div>
         </>
       )}

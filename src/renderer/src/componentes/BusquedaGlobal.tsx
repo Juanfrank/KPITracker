@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Indicador } from '@domain/index';
 import { invocar } from '../api';
-import { useNavegacion } from '../stores/navegacion';
 
 /** Búsqueda global (Ctrl+K): localiza indicadores y navega a su captura. */
 export function BusquedaGlobal({ alCerrar }: { alCerrar: () => void }): React.JSX.Element {
@@ -9,7 +9,7 @@ export function BusquedaGlobal({ alCerrar }: { alCerrar: () => void }): React.JS
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
   const [activo, setActivo] = useState(0);
   const entrada = useRef<HTMLInputElement>(null);
-  const { navegar } = useNavegacion();
+  const navigate = useNavigate();
 
   useEffect(() => {
     entrada.current?.focus();
@@ -21,7 +21,7 @@ export function BusquedaGlobal({ alCerrar }: { alCerrar: () => void }): React.JS
     : indicadores.slice(0, 8);
 
   const abrir = (indicadorId: string): void => {
-    navegar('recoleccion', { indicadorId });
+    navigate(`/recoleccion?indicadorId=${encodeURIComponent(indicadorId)}`);
     alCerrar();
   };
 
