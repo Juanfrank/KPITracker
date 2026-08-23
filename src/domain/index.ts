@@ -18,6 +18,7 @@ export * from './entities/Adjunto';
 export * from './entities/OrigenAutomatico';
 export * from './entities/AutomatizacionIndicador';
 export * from './entities/AliasDesagregacionOrigen';
+export * from './entities/Usuario';
 export * from './data-types/TypeDescriptor';
 export * from './data-types/TypeRegistry';
 export * from './data-types/builtinTypes';

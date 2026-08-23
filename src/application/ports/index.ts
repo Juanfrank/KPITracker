@@ -17,7 +17,9 @@ import type {
   ReglaNegocio,
   Responsable,
   Resultado,
-  ResultadoHistorial
+  ResultadoHistorial,
+  Sesion,
+  Usuario
 } from '@domain/index';
 
 /**
@@ -198,6 +200,35 @@ export interface IAliasDesagregacionOrigenRepository {
   obtener(listaId: string, origenAutomaticoId: string): Promise<AliasDesagregacionOrigen | null>;
   guardar(alias: AliasDesagregacionOrigen): Promise<void>;
   eliminar(id: string): Promise<void>;
+}
+
+export interface IUsuarioRepository {
+  listar(): Promise<Usuario[]>;
+  obtener(id: string): Promise<Usuario | null>;
+  obtenerPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null>;
+  guardar(usuario: Usuario): Promise<void>;
+}
+
+export interface ISesionRepository {
+  obtener(id: string): Promise<Sesion | null>;
+  guardar(sesion: Sesion): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/**
+ * Verifica credenciales y devuelve la identidad autenticada, o `null`. Es el
+ * único punto de enganche para reemplazar la autenticación por contraseña
+ * (`ProveedorPassword`, hoy la única implementación) por Azure AD/Entra ID
+ * más adelante (un futuro `ProveedorOidc`) sin tocar `ServicioAutenticacion`
+ * ni el resto del andamiaje de sesión/roles.
+ */
+export interface IAuthProvider {
+  autenticar(nombreUsuario: string, password: string): Promise<{ id: string; rol: Usuario['rol'] } | null>;
+}
+
+/** Separado de `IAuthProvider` porque hashear (alta/cambio de contraseña) y verificar (login) son casos de uso distintos. */
+export interface IPasswordHasher {
+  hashear(password: string): Promise<string>;
 }
 
 /** Resultado de probar la conectividad/credenciales de un origen automático, sin ejecutar ningún script. */
