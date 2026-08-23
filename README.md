@@ -12,8 +12,10 @@ Aplicación de escritorio **100% local (offline-first)** para la configuración,
 ```bash
 npm install        # instala dependencias (incluye Electron)
 npx electron-builder install-app-deps  # recompila módulos nativos (better-sqlite3) contra el ABI de Electron — una sola vez, ver nota abajo
-npm run dev        # ejecuta la aplicación en modo desarrollo
-npm run build      # compila para producción
+npm run dev        # ejecuta la aplicación de escritorio en modo desarrollo
+npm run build      # compila la app de escritorio para producción
+npm run dev:server # servidor web (Express + tRPC) en modo desarrollo, con recarga — ver "Servidor web" abajo
+npm run start:server # servidor web, sin recarga (equivalente a producción)
 npm test           # pruebas unitarias + integración (Vitest)
 npm run test:e2e   # pruebas de aceptación (Playwright sobre Electron)
 npm run typecheck  # verificación de tipos
@@ -43,6 +45,45 @@ Los datos viven en `Data/` dentro del directorio de usuario de la aplicación (`
   Configuracion.json
 ```
 
+## Servidor web (Fase 3 de la migración a app web)
+
+Además de la app de escritorio, `src/server/` levanta un servidor Express con
+una API tRPC (`/api/trpc`) y unas pocas rutas REST planas para archivos
+(`/api/adjuntos`, `/api/importacion`, `/api/respaldo`, `/api/portable` —
+subida/descarga multipart, fuera de tRPC a propósito). Comparte capa de
+dominio/aplicación/infraestructura con la app de escritorio; lo único que
+cambia es el transporte y que ahora hay sesiones multi-usuario reales.
+
+```bash
+KPITRACKER_DATA_DIR=./data npm run dev:server   # http://localhost:3000
+```
+
+**Variables de entorno** (todas con default razonable para desarrollo local, salvo donde se indica):
+
+| Variable | Uso | Default |
+|---|---|---|
+| `KPITRACKER_DATA_DIR` | Directorio de datos (adjuntos, exportación) | `./data` |
+| `PORT` | Puerto HTTP | `3000` |
+| `DB_CLIENT` | `better-sqlite3` (local, sin instalación) o `mssql` (producción) | `better-sqlite3` |
+| `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Conexión SQL Server — **obligatorias** con `DB_CLIENT=mssql` | — |
+| `DB_ENCRYPT`, `DB_TRUST_SERVER_CERTIFICATE` | Opciones TLS de la conexión SQL Server | `true` / `false` |
+| `COOKIE_SECRET` | Firma de la cookie de sesión — **obligatoria en `NODE_ENV=production`** | valor fijo de desarrollo |
+| `ADMIN_INICIAL_USUARIO`, `ADMIN_INICIAL_PASSWORD` | Credenciales del administrador creado automáticamente si `usuarios` está vacía en el primer arranque | `admin` / `admin1234` (¡cambiar de inmediato!) |
+
+Apuntar `DB_CLIENT=mssql` a un servidor/base vacíos y arrancar el servidor
+crea el esquema completo ahí solo (Knex, `knex.migrate.latest()` dentro de
+`crearInstanciaKnex`) — no hace falta ningún paso manual de DBA.
+
+**Autenticación**: usuario/contraseña (bcrypt) + sesión de servidor en una
+cookie firmada (`httpOnly`, no un JWT autocontenido — revocar es borrar la
+fila, ver `ServicioAutenticacion`). Preparado para reemplazarse por Azure AD
+más adelante sin tocar sesiones/roles (`IAuthProvider`, hoy solo
+`ProveedorPassword`). Dos roles: `admin` (gestión de usuarios + pantallas de
+administración, `usuarios.*` y varios `*.eliminar`/`*.restaurar`) y `usuario`
+(el resto). Todavía no hay frontend que consuma esta API (eso es la Fase 4);
+se verifica con un cliente tRPC de Node — ver
+`tests/integration/servidorTrpc.test.ts` y `servidorRest.test.ts`.
+
 ## Documentación
 
 | Documento | Contenido |
@@ -62,11 +103,13 @@ Los datos viven en `Data/` dentro del directorio de usuario de la aplicación (`
 src/
   domain/           Dominio puro (entidades, servicios, motor de reglas) — sin dependencias
   application/      Casos de uso y puertos (interfaces de repositorio)
-  infrastructure/   DuckDB, Parquet, exportación, configuración portable
+  infrastructure/   Knex (SQLite local / SQL Server), auth, exportación, configuración portable
+  composicion/      Cableado compartido de servicios de aplicación (usado por main/ Y server/)
   main/             Proceso principal de Electron (composition root + IPC)
   preload/          Puente seguro renderer ⇄ main
-  renderer/         Interfaz React (MVVM con stores Zustand)
-  shared/           Contrato IPC tipado
+  server/           Servidor Express + tRPC (multi-usuario, ver "Servidor web" arriba)
+  renderer/         Interfaz React (MVVM con stores Zustand) — app de escritorio, Electron
+  shared/           Contrato IPC tipado (app de escritorio)
 tests/
   unit/ integration/ acceptance/
 ```

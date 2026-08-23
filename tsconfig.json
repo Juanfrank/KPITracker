@@ -22,7 +22,9 @@
       "@application/*": ["src/application/*"],
       "@infrastructure/*": ["src/infrastructure/*"],
       "@shared/*": ["src/shared/*"],
-      "@renderer/*": ["src/renderer/*"]
+      "@renderer/*": ["src/renderer/*"],
+      "@composicion/*": ["src/composicion/*"],
+      "@server/*": ["src/server/*"]
     }
   },
   "include": ["src", "tests", "electron.vite.config.ts", "vitest.config.ts", "playwright.config.ts"]

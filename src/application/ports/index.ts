@@ -262,8 +262,13 @@ export interface IArchivoService {
   abrir(rutaRelativa: string): Promise<void>;
   /** Abre un diálogo nativo de selección de archivo; null si el usuario cancela. */
   seleccionarArchivo(filtros?: { nombre: string; extensiones: string[] }[]): Promise<string | null>;
-  /** Lee un archivo de hoja de cálculo (xlsx/xls/csv) y devuelve columnas + filas de la primera pestaña. */
-  leerHojaCalculo(rutaArchivo: string): Promise<{ columnas: string[]; filas: Record<string, string>[] }>;
+  /**
+   * Lee un archivo de hoja de cálculo (xlsx/xls/csv) y devuelve columnas +
+   * filas de la primera pestaña. `nombreOriginal` es opcional y solo hace
+   * falta cuando `rutaArchivo` es un temporal sin extensión (subida web vía
+   * `multer`, ver `src/server/rest/importacion.ts`) — decide csv vs xlsx.
+   */
+  leerHojaCalculo(rutaArchivo: string, nombreOriginal?: string): Promise<{ columnas: string[]; filas: Record<string, string>[] }>;
   /** Abre un diálogo nativo de guardado (p. ej. para exportar un respaldo); null si el usuario cancela. */
   seleccionarDestino(opciones: {
     nombreSugerido: string;

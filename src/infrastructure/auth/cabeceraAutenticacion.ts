@@ -1,5 +1,4 @@
 import type { OrigenAutomatico } from '@domain/index';
-import { obtenerTokenMicrosoftInteractivo } from './AutenticadorMicrosoft';
 import type { GuardarOrigen } from './AutenticadorMicrosoft';
 
 const TIEMPO_TOKEN_MS = 15000;
@@ -69,6 +68,12 @@ export async function obtenerTokenOAuth2(origen: OrigenAutomatico): Promise<stri
 export async function cabeceraBearer(origen: OrigenAutomatico, guardarOrigen?: GuardarOrigen): Promise<Record<string, string>> {
   const cfg = origen.configuracion;
   if (cfg.autenticacion === 'microsoft') {
+    // Import diferido a propósito: `AutenticadorMicrosoft.ts` importa `electron`
+    // (abre una `BrowserWindow` para el login interactivo) — cargarlo de forma
+    // estática arrastraría `electron` a CUALQUIER proceso que importe este
+    // módulo, incluido el servidor Express (que nunca puede mostrar una
+    // ventana nativa). Solo se resuelve si de verdad se usa este modo.
+    const { obtenerTokenMicrosoftInteractivo } = await import('./AutenticadorMicrosoft');
     const token = await obtenerTokenMicrosoftInteractivo(origen, guardarOrigen);
     return { Authorization: `Bearer ${token}` };
   }

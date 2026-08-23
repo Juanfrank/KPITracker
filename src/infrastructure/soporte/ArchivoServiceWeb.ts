@@ -1,17 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { dialog, shell } from 'electron';
+import { NoImplementadoError } from '@domain/index';
 import type { IArchivoService } from '@application/ports/index';
 import type { RutasDataLake } from '../parquet/RutasDataLake';
 import { leerHojaCalculo as leerHojaCalculoCompartido } from './leerHojaCalculo';
 
 /**
- * Implementación de IArchivoService para el proceso main: copia adjuntos a
- * /Data/Adjuntos, abre el diálogo nativo de selección de archivo y lee hojas
- * de cálculo (xlsx/csv) para la importación de indicadores.
+ * Implementación web de `IArchivoService`: idéntica a `ArchivoService` para
+ * todo lo que no depende de Electron (copiar adjuntos, leer hojas de
+ * cálculo, leer/escribir texto), pero SIN `dialog`/`shell` — no tienen
+ * equivalente en un proceso de servidor. Los tres métodos que sí eran
+ * puramente diálogos nativos (`abrir`, `seleccionarArchivo`,
+ * `seleccionarDestino`) están reemplazados por rutas REST reales (ver
+ * `src/server/rest/`): el navegador sube el archivo directamente
+ * (`POST /api/adjuntos`, `POST /api/importacion/hoja-calculo`) o descarga la
+ * respuesta (`GET /api/adjuntos/:id/descarga`, `GET /api/respaldo/exportar`)
+ * — nada en el código del servidor debería llamarlos, así que lanzan en vez
+ * de fallar en silencio si alguna vez se invocan por error.
  */
-export class ArchivoService implements IArchivoService {
+export class ArchivoServiceWeb implements IArchivoService {
   constructor(private readonly rutas: RutasDataLake) {}
 
   async guardarAdjunto(rutaOrigen: string, nombreSugerido: string): Promise<{ rutaRelativa: string; tamanioBytes: number }> {
@@ -32,33 +40,20 @@ export class ArchivoService implements IArchivoService {
     await unlink(this.rutaAbsoluta(rutaRelativa)).catch(() => undefined);
   }
 
-  async abrir(rutaRelativa: string): Promise<void> {
-    await shell.openPath(this.rutaAbsoluta(rutaRelativa));
+  async abrir(): Promise<void> {
+    throw new NoImplementadoError('abrir() no aplica en el servidor — use GET /api/adjuntos/:id/descarga.');
   }
 
-  async seleccionarArchivo(filtros?: { nombre: string; extensiones: string[] }[]): Promise<string | null> {
-    const resultado = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: filtros?.map((f) => ({ name: f.nombre, extensions: f.extensiones }))
-    });
-    if (resultado.canceled || resultado.filePaths.length === 0) return null;
-    return resultado.filePaths[0] ?? null;
+  async seleccionarArchivo(): Promise<string | null> {
+    throw new NoImplementadoError('seleccionarArchivo() no aplica en el servidor — el archivo llega por subida HTTP.');
   }
 
   async leerHojaCalculo(rutaArchivo: string, nombreOriginal?: string): Promise<{ columnas: string[]; filas: Record<string, string>[] }> {
     return leerHojaCalculoCompartido(rutaArchivo, nombreOriginal);
   }
 
-  async seleccionarDestino(opciones: {
-    nombreSugerido: string;
-    filtros?: { nombre: string; extensiones: string[] }[];
-  }): Promise<string | null> {
-    const resultado = await dialog.showSaveDialog({
-      defaultPath: opciones.nombreSugerido,
-      filters: opciones.filtros?.map((f) => ({ name: f.nombre, extensions: f.extensiones }))
-    });
-    if (resultado.canceled || !resultado.filePath) return null;
-    return resultado.filePath;
+  async seleccionarDestino(): Promise<string | null> {
+    throw new NoImplementadoError('seleccionarDestino() no aplica en el servidor — la respuesta HTTP ES la descarga.');
   }
 
   async escribirTexto(ruta: string, contenido: string): Promise<void> {

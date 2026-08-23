@@ -8,7 +8,9 @@ export default defineConfig({
       '@application': resolve(__dirname, 'src/application'),
       '@infrastructure': resolve(__dirname, 'src/infrastructure'),
       '@shared': resolve(__dirname, 'src/shared'),
-      '@renderer': resolve(__dirname, 'src/renderer')
+      '@renderer': resolve(__dirname, 'src/renderer'),
+      '@composicion': resolve(__dirname, 'src/composicion'),
+      '@server': resolve(__dirname, 'src/server')
     }
   },
   test: {

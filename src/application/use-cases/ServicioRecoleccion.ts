@@ -12,8 +12,9 @@ import type {
   IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
   IListaRepository, IReglaRepository, IResultadoRepository
 } from '@application/ports/index';
-import { ServicioBase, USUARIO_LOCAL } from './base';
+import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
+import { usuarioActual } from './contextoUsuario';
 
 /** Resumen de una ejecución automática que escribió resultados directamente en la grilla de captura. */
 export interface ResultadoObtencionAutomatica {
@@ -436,7 +437,7 @@ export class ServicioRecoleccion extends ServicioBase {
       version: historialExistente.length + 1,
       valor,
       observacion,
-      usuario: USUARIO_LOCAL,
+      usuario: usuarioActual(),
       actualizadoEn
     });
   }

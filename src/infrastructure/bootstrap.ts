@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import type { Categoria, DefinicionPeriodicidad, OrigenAutomatico, Responsable } from '@domain/index';
+import type { IArchivoService } from '@application/ports/index';
 import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import {
@@ -15,7 +16,7 @@ import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
 import { RespaldoPerfilService } from './perfiles/RespaldoPerfilService';
 import { GeneradorUuid, RelojSistema } from './soporte/servicios';
-import { ArchivoService } from './soporte/ArchivoService';
+import { ArchivoServiceWeb } from './soporte/ArchivoServiceWeb';
 import { ConectorOrigenFactory } from './conectores/ConectorOrigenFactory';
 
 export interface Infraestructura {
@@ -44,13 +45,23 @@ export interface Infraestructura {
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
   respaldoPerfil: RespaldoPerfilService;
-  archivos: ArchivoService;
+  archivos: IArchivoService;
   cerrar(): Promise<void>;
 }
 
 export interface OpcionesInfraestructura {
   /** Versión de la app (p. ej. `app.getVersion()`), incluida en los respaldos exportados. */
   appVersion?: string;
+  /**
+   * Fábrica de `IArchivoService` — por defecto `ArchivoServiceWeb` (sin
+   * dependencia de Electron, segura en cualquier entorno). El composition
+   * root de Electron (`src/main/composicion.ts`) la sobrescribe con la
+   * implementación basada en diálogos nativos. Deliberadamente NO se
+   * importa `ArchivoService` (electron-coupled) aquí: este archivo lo
+   * comparten tanto el proceso principal de Electron como el futuro
+   * servidor Express, y solo el primero debe cargar ese módulo.
+   */
+  crearArchivos?: (rutas: RutasDataLake) => IArchivoService;
 }
 
 /**
@@ -98,7 +109,7 @@ export async function crearInfraestructura(
     },
     opciones.appVersion ?? null
   );
-  const archivos = new ArchivoService(rutas);
+  const archivos = (opciones.crearArchivos ?? ((r) => new ArchivoServiceWeb(r)))(rutas);
 
   return {
     knex,

@@ -1,8 +1,6 @@
 import type { AccionAuditoria } from '@domain/index';
 import type { IAuditoriaRepository, IClock, IExportService, IIdGenerator } from '@application/ports/index';
-
-/** Usuario local único de esta versión; la arquitectura ya contempla múltiples. */
-export const USUARIO_LOCAL = 'local';
+import { usuarioActual } from './contextoUsuario';
 
 export interface ContextoAplicacion {
   auditoria: IAuditoriaRepository;
@@ -28,7 +26,7 @@ export abstract class ServicioBase {
   ): Promise<void> {
     await this.ctx.auditoria.registrar({
       id: this.ctx.ids.nuevoId(),
-      usuario: USUARIO_LOCAL,
+      usuario: usuarioActual(),
       fechaHora: this.ctx.reloj.ahoraIso(),
       accion,
       entidad,

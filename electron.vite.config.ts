@@ -7,7 +7,8 @@ const alias = {
   '@application': resolve(__dirname, 'src/application'),
   '@infrastructure': resolve(__dirname, 'src/infrastructure'),
   '@shared': resolve(__dirname, 'src/shared'),
-  '@renderer': resolve(__dirname, 'src/renderer')
+  '@renderer': resolve(__dirname, 'src/renderer'),
+  '@composicion': resolve(__dirname, 'src/composicion')
 };
 
 export default defineConfig({
