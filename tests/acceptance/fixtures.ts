@@ -10,6 +10,8 @@ import { crearApp } from '../../src/server/app';
 export interface ServidorWebE2E {
   pagina: Page;
   baseUrl: string;
+  /** Directorio de datos temporal aislado de este spec — expuesto para verificar archivos en disco (p. ej. la exportación analítica). */
+  dataDir: string;
   cerrar(): Promise<void>;
 }
 
@@ -48,6 +50,7 @@ export async function abrirServidorWeb(prefijoDatos: string): Promise<ServidorWe
   return {
     pagina,
     baseUrl,
+    dataDir,
     async cerrar() {
       await navegador.close();
       await new Promise<void>((resolve) => servidor.close(() => resolve()));
@@ -59,17 +62,18 @@ export async function abrirServidorWeb(prefijoDatos: string): Promise<ServidorWe
 
 export interface AppWebE2E {
   pagina: Page;
+  dataDir: string;
   cerrar(): Promise<void>;
 }
 
 /** Como `abrirServidorWeb`, pero además inicia sesión de verdad contra la UI como el administrador auto-sembrado. */
 export async function iniciarAppWeb(prefijoDatos: string): Promise<AppWebE2E> {
-  const { pagina, baseUrl, cerrar } = await abrirServidorWeb(prefijoDatos);
+  const { pagina, baseUrl, dataDir, cerrar } = await abrirServidorWeb(prefijoDatos);
   await pagina.goto(baseUrl);
   await pagina.getByTestId('login-usuario').fill(ADMIN_USUARIO);
   await pagina.getByTestId('login-password').fill(ADMIN_PASSWORD);
   await pagina.getByTestId('login-enviar').click();
   await pagina.getByTestId('pagina-seguimiento').waitFor();
 
-  return { pagina, cerrar };
+  return { pagina, dataDir, cerrar };
 }

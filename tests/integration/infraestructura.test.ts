@@ -168,14 +168,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     expect(await infra.auditoria.consultar({ entidad: 'Indicador' })).toHaveLength(0);
   });
 
-  // La exportación analítica (star schema + ResultadosAnalitico.parquet/csv
-  // para Power BI) queda pendiente de reimplementación en la Fase 5 del plan
-  // de migración a app web: la implementación original ejecutaba SQL
-  // específico de DuckDB (row_number() OVER, generate_series, COPY ... TO
-  // FORMAT PARQUET) contra el mismo motor que servía de almacén de trabajo,
-  // que ya no existe tras mover la persistencia OLTP a Knex (Fase 2). Ver
-  // ExportAnaliticoService (stub temporal) y el plan aprobado, §7.3/Fase 5.
-  it.skip('la exportación analítica genera Parquet desnormalizado con desagregaciones como columnas (Fase 5)', async () => {
+  it('la exportación analítica genera Parquet desnormalizado con desagregaciones como columnas', async () => {
     await infra.listas.guardar(lista('sexo'));
     await infra.listas.guardarElemento(elemento('sexo', 'M', 1));
     await infra.listas.guardarElemento(elemento('sexo', 'F', 2));
@@ -195,7 +188,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     expect(existsSync(rutaExport)).toBe(true);
   });
 
-  it.skip('exporta CSV cuando está configurado (Fase 5)', async () => {
+  it('exporta CSV cuando está configurado', async () => {
     const config = await infra.configuracion.obtener();
     await infra.configuracion.guardar({ ...config, exportarCsv: true });
     await infra.indicadores.guardar(indicador('i1'));

@@ -115,6 +115,7 @@ analítica descrito arriba.
 | [docs/06-exportacion-analitica.md](docs/06-exportacion-analitica.md) | Capa desnormalizada para Power BI y estrategia de sincronización |
 | [docs/07-plan-pruebas.md](docs/07-plan-pruebas.md) | Plan de pruebas (unitarias, integración, rendimiento, aceptación) |
 | [docs/08-roadmap.md](docs/08-roadmap.md) | Roadmap de escalabilidad |
+| [docs/09-despliegue.md](docs/09-despliegue.md) | Despliegue: variables de entorno, runbook de primera instalación contra SQL Server, respaldo, monitoreo |
 
 ## Estructura del código
 

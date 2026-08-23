@@ -530,11 +530,7 @@ describe('Composition root — configuración portable v1 → v2', () => {
   });
 });
 
-// La exportación analítica (star schema + ResultadosAnalitico.parquet para
-// Power BI) queda pendiente de reimplementación en la Fase 5 del plan de
-// migración a app web — ver ExportAnaliticoService (stub temporal) y el
-// plan aprobado, §7.3/Fase 5.
-describe.skip('Composition root — exportación analítica resuelve nombres de catálogo (Fase 5)', () => {
+describe('Composition root — exportación analítica resuelve nombres de catálogo', () => {
   it('ResultadosAnalitico.parquet muestra el nombre del responsable y la categoría, no sus ids', async () => {
     const responsable = await app.manejadores['responsables:guardar']({
       id: '', nombre: 'María Gómez', correo: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''

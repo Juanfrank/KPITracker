@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificación de tipos
+        run: npm run typecheck
+
+      - name: Linter
+        run: npm run lint
+
+      - name: Pruebas unitarias e integración (Vitest, SQLite local)
+        run: npm test
+
+      - name: Instalar navegador para Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas de aceptación (Playwright — servidor + SPA reales)
+        run: npm run test:e2e
+
+      - name: Subir reporte de Playwright en caso de fallo
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

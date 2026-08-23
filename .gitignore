@@ -4,9 +4,10 @@ dist/
 release/
 release-packager/
 coverage/
+data/
 Data/
-*.duckdb
-*.duckdb.wal
+*.sqlite
+*.sqlite-journal
 .vite/
 playwright-report/
 test-results/

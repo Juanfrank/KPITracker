@@ -170,6 +170,8 @@ export interface IExportService {
   solicitarRegeneracion(): void;
   /** Ruta del directorio de exportación, para mostrar en la UI. */
   rutaExportacion(): string;
+  /** Cancela una regeneración diferida pendiente — llamar al cerrar la infraestructura, para no intentar leer de una conexión ya destruida. */
+  cancelar(): void;
 }
 
 export interface IConfigPortableService {

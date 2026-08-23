@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { iniciarAppWeb } from './fixtures';
 
 /**
@@ -9,11 +11,13 @@ import { iniciarAppWeb } from './fixtures';
  */
 
 let pagina: Page;
+let dataDir: string;
 let cerrarApp: () => Promise<void>;
 
 test.beforeAll(async () => {
   const app = await iniciarAppWeb('flujo');
   pagina = app.pagina;
+  dataDir = app.dataDir;
   cerrarApp = app.cerrar;
 });
 
@@ -93,11 +97,15 @@ test('el seguimiento refleja el avance del indicador', async () => {
   await expect(fila).toContainText('Trimestral');
 });
 
-// `ExportAnaliticoService` es un stub desde la Fase 2 (reescritura de persistencia
-// a Knex) — ya no escribe Parquet en cada escritura. La reimplementación real
-// contra el nuevo backend es trabajo de Fase 5 (ver plan §6); hasta entonces
-// este test queda deshabilitado en vez de borrado, documentando la brecha.
-test.skip('la capa analítica Parquet quedó sincronizada en disco', async () => {});
+test('la capa analítica Parquet quedó sincronizada en disco', async () => {
+  // La regeneración de la exportación analítica es diferida (debounce) tras
+  // cada escritura — la última captura de esta suite ya esperó su propio
+  // `waitForTimeout` más arriba, así que a esta altura ya debería haberse
+  // materializado.
+  expect(existsSync(join(dataDir, 'Export', 'ResultadosAnalitico.parquet'))).toBe(true);
+  expect(existsSync(join(dataDir, 'Dimensions', 'DimPeriodo.parquet'))).toBe(true);
+  expect(existsSync(join(dataDir, 'Dimensions', 'DimIndicador.parquet'))).toBe(true);
+});
 
 test('el tema claro/oscuro se puede alternar', async () => {
   // El tema persiste en localStorage entre ejecuciones: se parte del estado actual.

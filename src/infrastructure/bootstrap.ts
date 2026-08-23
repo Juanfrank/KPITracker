@@ -65,7 +65,7 @@ export interface OpcionesInfraestructura {
 
 /**
  * Composition root de la infraestructura: crea el Data Lake local (para
- * adjuntos y la futura exportación analítica — ver ExportAnaliticoService),
+ * adjuntos y la exportación analítica — ver ExportAnaliticoService),
  * abre la conexión Knex (SQLite local o SQL Server, según `DB_CLIENT`),
  * aplica las migraciones pendientes y cablea los repositorios. Es la única
  * función que conoce implementaciones concretas.
@@ -97,7 +97,7 @@ export async function crearInfraestructura(
   const auditoria = new AuditoriaRepositoryKnex(knex);
   const usuarios = new UsuarioRepositoryKnex(knex);
   const sesiones = new SesionRepositoryKnex(knex);
-  const exportacion = new ExportAnaliticoService(rutas);
+  const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, responsables, categorias);
   const configPortable = new ConfigPortableService(
     configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
   );
@@ -138,6 +138,7 @@ export async function crearInfraestructura(
     respaldoPerfil,
     archivos,
     async cerrar() {
+      exportacion.cancelar();
       await knex.destroy();
     }
   };
