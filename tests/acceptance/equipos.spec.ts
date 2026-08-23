@@ -94,3 +94,29 @@ test('vincular un indicador directo desde el panel de Equipos lo muestra como "T
   await expect(seleccionado).toHaveText('— Todo el equipo —');
   await pagina.getByRole('button', { name: 'Cancelar' }).click();
 });
+
+test('Seguimiento — vista "Árbol (Equipo)" agrupa los indicadores por Equipo > Sub-equipo > Categoría', async () => {
+  await pagina.getByTestId('nav-seguimiento').click();
+  await pagina.getByTestId('vista-equipo').click();
+
+  const tabla = pagina.getByTestId('tabla-seguimiento-equipo');
+  await expect(tabla).toBeVisible();
+  // Jerarquía completa visible por defecto (nada colapsado): equipo raíz, su
+  // sub-equipo, y ambos indicadores (vinculados a "Unidad de Estadísticas",
+  // uno directo y otro indirecto vía su responsable) bajo "Sin categoría".
+  await expect(pagina.getByTestId('seguimiento-equipo-equipo-Dirección de Planificación')).toBeVisible();
+  await expect(pagina.getByTestId('seguimiento-equipo-equipo-Unidad de Estadísticas')).toBeVisible();
+  await expect(pagina.getByTestId('seguimiento-Indicador vía responsable')).toBeVisible();
+  await expect(pagina.getByTestId('seguimiento-Indicador vínculo directo')).toBeVisible();
+
+  // Colapsar el sub-equipo oculta sus indicadores; expandir los devuelve.
+  await pagina.getByTestId('colapsar-equipo-equipo-Unidad de Estadísticas').click();
+  await expect(pagina.getByTestId('seguimiento-Indicador vía responsable')).toHaveCount(0);
+  await expect(pagina.getByTestId('seguimiento-Indicador vínculo directo')).toHaveCount(0);
+  // El equipo raíz sigue visible — solo se ocultó lo anidado bajo el sub-equipo colapsado.
+  await expect(pagina.getByTestId('seguimiento-equipo-equipo-Dirección de Planificación')).toBeVisible();
+
+  await pagina.getByTestId('colapsar-equipo-equipo-Unidad de Estadísticas').click();
+  await expect(pagina.getByTestId('seguimiento-Indicador vía responsable')).toBeVisible();
+  await expect(pagina.getByTestId('seguimiento-Indicador vínculo directo')).toBeVisible();
+});

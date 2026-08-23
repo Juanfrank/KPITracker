@@ -1,8 +1,8 @@
 import {
-  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano
+  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo
 } from '@domain/index';
 import type {
-  Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, EstadoPeriodo,
+  Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
   EstadoSeguimiento, Indicador, Responsable
 } from '@domain/index';
 import type {
@@ -33,6 +33,9 @@ export interface FilaTablero {
   responsable: string | null;
   categoriaId: string | null;
   categoria: string | null;
+  /** Equipo EFECTIVO (directo si está seteado, si no indirecto vía el responsable) — ver `equipoEfectivo`. */
+  equipoId: string | null;
+  equipo: string | null;
   totalPeriodos: number;
   periodosCompletos: number;
   atributosFiltro: AtributoFiltro[];
@@ -81,6 +84,7 @@ export class ServicioSeguimiento extends ServicioBase {
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly responsablesRepo: ICatalogoRepository<Responsable>,
     private readonly categoriasRepo: ICatalogoRepository<Categoria>,
+    private readonly equiposRepo: ICatalogoRepository<Equipo>,
     private readonly atributosRepo: IAtributoRepository,
     reglasFechaLimite: DeadlineRuleRegistry
   ) {
@@ -129,19 +133,23 @@ export class ServicioSeguimiento extends ServicioBase {
   }
 
   async tablero(): Promise<FilaTablero[]> {
-    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias, atributosFiltrables] = await Promise.all([
-      this.configuracion.obtener(),
-      this.indicadores.listar(),
-      this.resultados.resumenGlobal(),
-      this.resultados.listarLevantamientos(),
-      this.periodicidadesRepo.listar(),
-      this.responsablesRepo.listar(),
-      this.categoriasRepo.listar(),
-      this.atributosFiltrables()
-    ]);
+    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias, equipos, atributosFiltrables] =
+      await Promise.all([
+        this.configuracion.obtener(),
+        this.indicadores.listar(),
+        this.resultados.resumenGlobal(),
+        this.resultados.listarLevantamientos(),
+        this.periodicidadesRepo.listar(),
+        this.responsablesRepo.listar(),
+        this.categoriasRepo.listar(),
+        this.equiposRepo.listar(),
+        this.atributosFiltrables()
+      ]);
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
     const nombreResponsable = new Map(responsables.map((r) => [r.id, r.nombre]));
     const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
+    const nombreEquipo = new Map(equipos.map((e) => [e.id, e.nombre]));
+    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
     const elementosPorLista = new Map<string, ElementoLista[]>();
     for (const listaId of new Set(atributosFiltrables.map((a) => a.listaId).filter((id): id is string => id != null))) {
       elementosPorLista.set(listaId, await this.listas.listarElementos(listaId));
@@ -180,6 +188,7 @@ export class ServicioSeguimiento extends ServicioBase {
         .map((x) => x.ultimaActualizacion)
         .filter((x): x is string => x != null)
         .sort();
+      const equipoIdEfectivo = equipoEfectivo(indicador, responsablesPorId);
 
       filas.push({
         indicadorId: indicador.id,
@@ -195,6 +204,8 @@ export class ServicioSeguimiento extends ServicioBase {
         responsable: indicador.responsable == null ? null : (nombreResponsable.get(indicador.responsable) ?? indicador.responsable),
         categoriaId: indicador.categoria,
         categoria: indicador.categoria == null ? null : (nombreCategoria.get(indicador.categoria) ?? indicador.categoria),
+        equipoId: equipoIdEfectivo,
+        equipo: equipoIdEfectivo == null ? null : (nombreEquipo.get(equipoIdEfectivo) ?? equipoIdEfectivo),
         totalPeriodos: estados.length,
         periodosCompletos: estados.filter((e) => e.estado === 'Completo').length,
         atributosFiltro: await this.valoresFiltroPara(indicador.id, atributosFiltrables, elementosPorLista)

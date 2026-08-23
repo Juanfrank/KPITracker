@@ -627,7 +627,7 @@ describe('Composition root — generador de consultas DAX (alias por origen + or
   });
 });
 
-describe('Composition root — configuración portable v1 → v2', () => {
+describe('Composition root — configuración portable v1/v2 → v3', () => {
   it('migra un archivo v1 auténtico (sin las secciones nuevas) e importa correctamente', async () => {
     const archivoV1 = {
       formato: 'kpitracker-config',
@@ -650,6 +650,51 @@ describe('Composition root — configuración portable v1 → v2', () => {
     expect(config.nombreInstitucion).toBe('Institución v1');
     // La importación no debe fallar aunque falten las secciones nuevas.
     expect(await app.manejadores['periodicidades:listar'](undefined)).toHaveLength(0);
+  });
+
+  it('migra un archivo v2 auténtico (sin equipos) e importa correctamente', async () => {
+    const archivoV2 = {
+      formato: 'kpitracker-config',
+      schemaVersion: 2,
+      exportadoEn: new Date().toISOString(),
+      configuracionGeneral: { anioInicial: 2024, reglaFechaLimite: { tipo: 'DiaFijoDelMes', parametros: { dia: 10 } }, exportarCsv: false, nombreInstitucion: 'Institución v2', tema: 'sistema', schemaVersion: 2 },
+      indicadores: [],
+      atributos: [],
+      listas: [],
+      elementos: [],
+      reglas: [],
+      metas: [],
+      periodicidades: [],
+      responsables: [],
+      categorias: []
+      // Nótese: sin equipos — así lucía un archivo real de la v2 (Batch R lo agregó en v3).
+    };
+
+    const { advertencias } = await app.manejadores['portable:importar']({ json: JSON.stringify(archivoV2) });
+    expect(advertencias.some((a) => a.includes('versión 3'))).toBe(true);
+
+    const config = await app.manejadores['config:obtener'](undefined);
+    expect(config.nombreInstitucion).toBe('Institución v2');
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(0);
+  });
+
+  it('exporta e importa equipos como parte de la configuración portable (round-trip)', async () => {
+    const equipoRaiz = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Dirección', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Sub-dirección', descripcion: '', activo: true, eliminado: false, padreId: equipoRaiz.id,
+      creadoEn: '', actualizadoEn: ''
+    });
+
+    const { json } = await app.manejadores['portable:exportar'](undefined);
+    const archivo = JSON.parse(json) as { schemaVersion: number; equipos: Array<{ nombre: string }> };
+    expect(archivo.schemaVersion).toBe(3);
+    expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'Sub-dirección']);
+
+    // Reimportar sobre la misma app (upsert por id) no debe duplicar los equipos.
+    await app.manejadores['portable:importar']({ json });
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
   });
 });
 

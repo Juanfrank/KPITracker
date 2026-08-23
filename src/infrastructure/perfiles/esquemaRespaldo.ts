@@ -10,7 +10,7 @@ import { z } from 'zod';
  * real del perfil.
  */
 export const RESPALDO_FORMATO = 'kpitracker-respaldo-perfil';
-export const RESPALDO_SCHEMA_VERSION = 1;
+export const RESPALDO_SCHEMA_VERSION = 2;
 
 /**
  * Categorías seleccionables al importar. `elementos` (hijos de listas) NO
@@ -22,6 +22,7 @@ export type CategoriaRespaldo =
   | 'periodicidades'
   | 'responsables'
   | 'categorias'
+  | 'equipos'
   | 'listas'
   | 'atributos'
   | 'origenes'
@@ -34,10 +35,12 @@ export type CategoriaRespaldo =
 /**
  * Orden de importación: primero lo que otras categorías referencian
  * (catálogos, listas, atributos, orígenes) y al final lo que depende de
- * varias de ellas (metas, automatizaciones, alias).
+ * varias de ellas (metas, automatizaciones, alias). `equipos` va antes de
+ * `responsables` (que referencian `equipoId`) e `indicadores` (que
+ * referencian `equipo` directo).
  */
 export const ORDEN_IMPORTACION: CategoriaRespaldo[] = [
-  'configuracionGeneral', 'periodicidades', 'responsables', 'categorias',
+  'configuracionGeneral', 'periodicidades', 'equipos', 'responsables', 'categorias',
   'listas', 'atributos', 'origenes', 'indicadores', 'metas', 'reglas', 'automatizaciones', 'aliasDesagregacion'
 ];
 
@@ -46,6 +49,7 @@ export const ETIQUETAS_CATEGORIA: Record<CategoriaRespaldo, string> = {
   periodicidades: 'Periodicidades personalizadas',
   responsables: 'Responsables',
   categorias: 'Categorías',
+  equipos: 'Equipos',
   listas: 'Listas de selección',
   atributos: 'Atributos',
   origenes: 'Orígenes automáticos',
@@ -65,6 +69,7 @@ export const esquemaRespaldo = z.object({
   periodicidades: z.array(z.record(z.unknown())).default([]),
   responsables: z.array(z.record(z.unknown())).default([]),
   categorias: z.array(z.record(z.unknown())).default([]),
+  equipos: z.array(z.record(z.unknown())).default([]),
   listas: z.array(z.record(z.unknown())).default([]),
   /** Hijos de listas — no es categoría de selección propia, ver `ORDEN_IMPORTACION`. */
   elementos: z.array(z.record(z.unknown())).default([]),
@@ -79,8 +84,15 @@ export const esquemaRespaldo = z.object({
 
 export type ArchivoRespaldo = z.infer<typeof esquemaRespaldo>;
 
-/** Migraciones encadenables de versión de esquema (v -> v+1); vacío en v1. */
-export const migracionesRespaldo: Record<number, (archivo: ArchivoRespaldo) => ArchivoRespaldo> = {};
+/**
+ * Migraciones encadenables de versión de esquema (v -> v+1); vacío en v1.
+ * v1 -> v2 (Batch S): se agrega la categoría `equipos` — el `.default([])`
+ * de Zod ya la completa al parsear un respaldo v1 (no trae la clave), así
+ * que el único paso real es avanzar el número de versión.
+ */
+export const migracionesRespaldo: Record<number, (archivo: ArchivoRespaldo) => ArchivoRespaldo> = {
+  1: (archivo) => ({ ...archivo, schemaVersion: 2 })
+};
 
 /**
  * Qué categorías importar y, dentro de cada una, qué ítems puntuales:

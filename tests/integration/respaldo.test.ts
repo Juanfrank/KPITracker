@@ -6,7 +6,7 @@ import { componerAplicacionServidor } from '../../src/server/composicionServidor
 import type { AplicacionServidor } from '../../src/server/composicionServidor';
 import { seleccionInicial, aSeleccionIpc, alternarCategoria } from '../../src/renderer/src/modulos/admin/modeloSeleccion';
 import { Periodicidad, TipoDato } from '@domain/index';
-import type { Atributo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable, Categoria } from '@domain/index';
+import type { Atributo, Equipo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable, Categoria } from '@domain/index';
 
 /**
  * Formato de respaldo de perfil + importación selectiva (Batch N): siempre
@@ -67,6 +67,13 @@ function categoria(parcial: Partial<Categoria> = {}): Categoria {
   };
 }
 
+function equipo(parcial: Partial<Equipo> = {}): Equipo {
+  return {
+    id: '', nombre: 'Dirección', descripcion: '', activo: true, eliminado: false, padreId: null,
+    creadoEn: '', actualizadoEn: '', ...parcial
+  };
+}
+
 function origen(parcial: Partial<OrigenAutomatico> = {}): OrigenAutomatico {
   return {
     id: '', nombre: 'API demo', tipo: 'API', descripcion: '', configuracion: { url: 'http://localhost' },
@@ -94,7 +101,7 @@ afterEach(async () => {
   rmSync(dataDirB, { recursive: true, force: true });
 });
 
-/** Puebla el perfil A con al menos un ítem de cada una de las 12 categorías. */
+/** Puebla el perfil A con al menos un ítem de cada una de las 13 categorías. */
 async function poblarPerfilA(): Promise<void> {
   const config = await appA.manejadores['config:obtener'](undefined);
   await appA.manejadores['config:guardar']({ ...config, nombreInstitucion: 'Institución A' });
@@ -107,6 +114,7 @@ async function poblarPerfilA(): Promise<void> {
     ],
     creadoEn: '', actualizadoEn: ''
   });
+  const eq = await appA.manejadores['equipos:guardar'](equipo());
   const resp = await appA.manejadores['responsables:guardar'](responsable());
   const cat = await appA.manejadores['categorias:guardar'](categoria());
   const l = await appA.manejadores['listas:guardar'](lista());
@@ -116,7 +124,7 @@ async function poblarPerfilA(): Promise<void> {
   const at = await appA.manejadores['atributos:guardar'](atributo());
   const or = await appA.manejadores['origenes:guardar'](origen());
   const ind = await appA.manejadores['indicadores:guardar']({
-    indicador: indicador({ nombre: 'Indicador A', responsable: resp.id, categoria: cat.id, desagregaciones: [l.id] }),
+    indicador: indicador({ nombre: 'Indicador A', responsable: resp.id, categoria: cat.id, equipo: eq.id, desagregaciones: [l.id] }),
     valores: []
   });
   await appA.manejadores['metas:guardar']({
@@ -133,14 +141,14 @@ async function poblarPerfilA(): Promise<void> {
 }
 
 describe('RespaldoPerfilService — round-trip completo', () => {
-  it('exporta el perfil A poblado con las 12 categorías e importa "todos" en un perfil B vacío', async () => {
+  it('exporta el perfil A poblado con las 13 categorías e importa "todos" en un perfil B vacío', async () => {
     await poblarPerfilA();
     const json = await appA.infra.respaldoPerfil.exportar();
 
     const resumen = appB.infra.respaldoPerfil.leer(json);
-    expect(resumen.schemaVersion).toBe(1);
+    expect(resumen.schemaVersion).toBe(2);
     expect(resumen.categorias.map((c) => c.categoria).sort()).toEqual(
-      ['aliasDesagregacion', 'atributos', 'automatizaciones', 'categorias', 'configuracionGeneral', 'indicadores',
+      ['aliasDesagregacion', 'atributos', 'automatizaciones', 'categorias', 'configuracionGeneral', 'equipos', 'indicadores',
         'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'responsables'].sort()
     );
     for (const c of resumen.categorias) {
@@ -155,6 +163,7 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     expect(await appB.manejadores['indicadores:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['responsables:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['categorias:listar'](undefined)).toHaveLength(1);
+    expect(await appB.manejadores['equipos:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['listas:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['atributos:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['origenes:listar'](undefined)).toHaveLength(1);
@@ -165,6 +174,8 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     expect(await appB.manejadores['listas:elementos']({ listaId: listaB!.id })).toHaveLength(1);
 
     const [indicadorB] = await appB.manejadores['indicadores:listar'](undefined);
+    const [equipoB] = await appB.manejadores['equipos:listar'](undefined);
+    expect(indicadorB?.equipo).toBe(equipoB!.id);
     expect(await appB.manejadores['metas:listar']({ indicadorId: indicadorB!.id })).toHaveLength(1);
     expect(await appB.manejadores['automatizacion:obtener']({ indicadorId: indicadorB!.id })).not.toBeNull();
     expect(await appB.manejadores['listas:aliasOrigen']({ listaId: listaB!.id })).toHaveLength(1);

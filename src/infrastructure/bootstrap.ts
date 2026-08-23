@@ -101,11 +101,11 @@ export async function crearInfraestructura(
   const sesiones = new SesionRepositoryKnex(knex);
   const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, responsables, categorias);
   const configPortable = new ConfigPortableService(
-    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias
+    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias, equipos
   );
   const respaldoPerfil = new RespaldoPerfilService(
     {
-      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias,
+      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias, equipos,
       origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen
     },
     opciones.appVersion ?? null

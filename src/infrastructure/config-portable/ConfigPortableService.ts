@@ -3,14 +3,14 @@ import type {
   IAtributoRepository, ICatalogoRepository, IConfigPortableService, IConfiguracionRepository,
   IListaRepository, IMetaRepository, IIndicadorRepository, IReglaRepository
 } from '@application/ports/index';
-import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, Responsable } from '@domain/index';
 import { CONFIG_SCHEMA_VERSION } from '@domain/index';
 
 /**
  * Exportación/importación de TODA la configuración en un único JSON
  * versionado: indicadores, atributos, listas, reglas, desagregaciones
  * (dentro de cada indicador), metas, periodicidades personalizadas,
- * catálogos (responsables/categorías) y parámetros generales.
+ * catálogos (responsables/categorías/equipos) y parámetros generales.
  *
  * Estrategia de migración: `migraciones` es una cadena v(n) -> v(n+1);
  * al importar un archivo antiguo se aplican en orden hasta la versión
@@ -33,7 +33,8 @@ const esquemaArchivo = z.object({
   metas: z.array(z.record(z.unknown())),
   periodicidades: z.array(z.record(z.unknown())).optional(),
   responsables: z.array(z.record(z.unknown())).optional(),
-  categorias: z.array(z.record(z.unknown())).optional()
+  categorias: z.array(z.record(z.unknown())).optional(),
+  equipos: z.array(z.record(z.unknown())).optional()
 });
 
 type ArchivoConfig = z.infer<typeof esquemaArchivo>;
@@ -43,6 +44,11 @@ type ArchivoConfig = z.infer<typeof esquemaArchivo>;
  * v1 -> v2: se agregan las secciones de periodicidades personalizadas y
  * catálogos (responsables/categorías); un archivo v1 no las trae, por lo
  * que se completan con arreglos vacíos.
+ * v2 -> v3 (Batch R/S): se agrega la sección de equipos; `Categoria.padreId`/
+ * `prefijo` y `Responsable.equipoId` ya viajaban tal cual dentro de sus
+ * respectivos arreglos (son campos del objeto de dominio serializado
+ * completo, no requieren su propio paso de migración) — solo el arreglo
+ * `equipos`, nuevo por completo, necesita completarse con uno vacío.
  */
 const migraciones: Record<number, (archivo: ArchivoConfig) => ArchivoConfig> = {
   1: (archivo) => ({
@@ -51,6 +57,11 @@ const migraciones: Record<number, (archivo: ArchivoConfig) => ArchivoConfig> = {
     periodicidades: archivo.periodicidades ?? [],
     responsables: archivo.responsables ?? [],
     categorias: archivo.categorias ?? []
+  }),
+  2: (archivo) => ({
+    ...archivo,
+    schemaVersion: 3,
+    equipos: archivo.equipos ?? []
   })
 };
 
@@ -64,11 +75,12 @@ export class ConfigPortableService implements IConfigPortableService {
     private readonly metas: IMetaRepository,
     private readonly periodicidades: ICatalogoRepository<DefinicionPeriodicidad>,
     private readonly responsables: ICatalogoRepository<Responsable>,
-    private readonly categorias: ICatalogoRepository<Categoria>
+    private readonly categorias: ICatalogoRepository<Categoria>,
+    private readonly equipos: ICatalogoRepository<Equipo>
   ) {}
 
   async exportar(): Promise<string> {
-    const [config, indicadores, atributos, listas, reglas, periodicidades, responsables, categorias] = await Promise.all([
+    const [config, indicadores, atributos, listas, reglas, periodicidades, responsables, categorias, equipos] = await Promise.all([
       this.configuracion.obtener(),
       this.indicadores.listar(),
       this.atributos.listar(),
@@ -76,7 +88,8 @@ export class ConfigPortableService implements IConfigPortableService {
       this.reglas.listar(),
       this.periodicidades.listar(),
       this.responsables.listar(),
-      this.categorias.listar()
+      this.categorias.listar(),
+      this.equipos.listar()
     ]);
     const elementos = (
       await Promise.all(listas.map((l) => this.listas.listarElementos(l.id)))
@@ -98,7 +111,8 @@ export class ConfigPortableService implements IConfigPortableService {
       metas: metas as unknown as Record<string, unknown>[],
       periodicidades: periodicidades as unknown as Record<string, unknown>[],
       responsables: responsables as unknown as Record<string, unknown>[],
-      categorias: categorias as unknown as Record<string, unknown>[]
+      categorias: categorias as unknown as Record<string, unknown>[],
+      equipos: equipos as unknown as Record<string, unknown>[]
     };
     return JSON.stringify(archivo, null, 2);
   }
@@ -127,6 +141,7 @@ export class ConfigPortableService implements IConfigPortableService {
     for (const elemento of archivo.elementos) await this.listas.guardarElemento(elemento as never);
     for (const atributo of archivo.atributos) await this.atributos.guardar(atributo as never);
     for (const periodicidad of archivo.periodicidades ?? []) await this.periodicidades.guardar(periodicidad as never);
+    for (const equipo of archivo.equipos ?? []) await this.equipos.guardar(equipo as never);
     for (const indicador of archivo.indicadores) await this.indicadores.guardar(indicador as never);
     for (const regla of archivo.reglas) await this.reglas.guardar(regla as never);
     for (const meta of archivo.metas) await this.metas.guardar(meta as never);

@@ -3,7 +3,7 @@ import type {
   ICatalogoRepository, IConfiguracionRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
   IReglaRepository
 } from '@application/ports/index';
-import type { Categoria, DefinicionPeriodicidad, OrigenAutomatico, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Responsable } from '@domain/index';
 import { ValidacionError } from '@domain/index';
 import type {
   ArchivoRespaldo, CategoriaRespaldo, CategoriaResumen, ItemRespaldo, ResultadoImportacionRespaldo, ResumenRespaldo,
@@ -21,6 +21,7 @@ export interface ReposRespaldoPerfil {
   periodicidades: ICatalogoRepository<DefinicionPeriodicidad>;
   responsables: ICatalogoRepository<Responsable>;
   categorias: ICatalogoRepository<Categoria>;
+  equipos: ICatalogoRepository<Equipo>;
   origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>;
   automatizaciones: IAutomatizacionIndicadorRepository;
   aliasDesagregacionOrigen: IAliasDesagregacionOrigenRepository;
@@ -49,12 +50,13 @@ export class RespaldoPerfilService {
   ) {}
 
   async exportar(): Promise<string> {
-    const [config, periodicidades, responsables, categorias, listas, atributos, origenes, indicadores, reglas] =
+    const [config, periodicidades, responsables, categorias, equipos, listas, atributos, origenes, indicadores, reglas] =
       await Promise.all([
         this.repos.configuracion.obtener(),
         this.repos.periodicidades.listar(true),
         this.repos.responsables.listar(true),
         this.repos.categorias.listar(true),
+        this.repos.equipos.listar(true),
         this.repos.listas.listar(true),
         this.repos.atributos.listar(undefined, true),
         this.repos.origenesAutomaticos.listar(true),
@@ -76,6 +78,7 @@ export class RespaldoPerfilService {
       periodicidades: periodicidades as unknown as Record<string, unknown>[],
       responsables: responsables as unknown as Record<string, unknown>[],
       categorias: categorias as unknown as Record<string, unknown>[],
+      equipos: equipos as unknown as Record<string, unknown>[],
       listas: listas as unknown as Record<string, unknown>[],
       elementos: elementos as unknown as Record<string, unknown>[],
       atributos: atributos as unknown as Record<string, unknown>[],
@@ -180,6 +183,11 @@ export class RespaldoPerfilService {
       importados.categorias++;
     }
 
+    for (const equipo of idsSeleccionados('equipos', archivo.equipos as FilaConId[])) {
+      await this.repos.equipos.guardar(conEliminadoPorDefecto(equipo) as never);
+      importados.equipos++;
+    }
+
     const listasSeleccionadas = idsSeleccionados('listas', archivo.listas as FilaConId[]);
     for (const lista of listasSeleccionadas) {
       await this.repos.listas.guardar(conEliminadoPorDefecto(lista) as never);
@@ -209,13 +217,15 @@ export class RespaldoPerfilService {
     for (const indicador of idsSeleccionados('indicadores', archivo.indicadores as FilaConId[])) {
       const responsableId = indicador.responsable == null ? null : String(indicador.responsable);
       const categoriaId = indicador.categoria == null ? null : String(indicador.categoria);
+      const equipoId = indicador.equipo == null ? null : String(indicador.equipo);
       const periodicidadId = indicador.periodicidadPersonalizadaId == null ? null : String(indicador.periodicidadPersonalizadaId);
       if (
         (responsableId && !(await existe(this.repos.responsables, responsableId))) ||
         (categoriaId && !(await existe(this.repos.categorias, categoriaId))) ||
+        (equipoId && !(await existe(this.repos.equipos, equipoId))) ||
         (periodicidadId && !(await existe(this.repos.periodicidades, periodicidadId)))
       ) {
-        advertencias.push(`Indicador "${String(indicador.nombre ?? idDe(indicador))}" omitido: referencia un responsable, categoría o periodicidad que no existe en el destino.`);
+        advertencias.push(`Indicador "${String(indicador.nombre ?? idDe(indicador))}" omitido: referencia un responsable, categoría, equipo o periodicidad que no existe en el destino.`);
         omitidos.indicadores++;
         continue;
       }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Categoria, Responsable } from '@domain/index';
+import type { Categoria, Equipo, Responsable } from '@domain/index';
 import { etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
@@ -16,30 +16,34 @@ type Pestana = (typeof PESTANAS)[number]['id'];
 
 const VISTAS_ESTADO = [
   { id: 'lista', etiqueta: 'Lista' },
-  { id: 'arbol', etiqueta: 'Árbol' }
+  { id: 'arbol', etiqueta: 'Árbol (Categoría)' },
+  { id: 'equipo', etiqueta: 'Árbol (Equipo)' }
 ] as const;
 type VistaEstado = (typeof VISTAS_ESTADO)[number]['id'];
 
-/** Id sintético del grupo "sin categoría" en la vista Árbol — nunca colisiona con un id de categoría real (uuid). */
+/** Id sintético del grupo "sin categoría" — nunca colisiona con un id de categoría real (uuid). */
 const SIN_CATEGORIA = '__sin-categoria__';
+/** Id sintético del grupo "sin equipo" — nunca colisiona con un id de equipo real (uuid). */
+const SIN_EQUIPO = '__sin-equipo__';
 
 type NodoArbolSeguimiento =
+  | { tipo: 'equipo'; id: string; nivel: number; nombre: string; contador: number; tieneHijos: boolean }
   | { tipo: 'categoria'; id: string; nivel: number; nombre: string; prefijo: string | null; contador: number; tieneHijos: boolean }
   | { tipo: 'indicador'; id: string; nivel: number; fila: FilaTablero };
 
 /**
- * Construye la vista jerárquica Categoría → Subcategoría → Indicador a
- * partir de `filas` (ya filtradas) y el catálogo completo de categorías —
- * 100% en el renderer, sin tocar `ServicioSeguimiento` (no hace falta:
- * `categoriasCatalogo` ya se trae para el filtro plano existente). Bajo
- * cada nodo-categoría van primero sus subcategorías (recursivo, orden
- * alfabético) y luego sus indicadores propios como filas hoja; un grupo
- * final "Sin categoría" agrupa los indicadores con `categoriaId == null`.
- * DFS pre-order + `nivel` como profundidad — misma convención que
- * `ArbolDesagregaciones`/`calcularFilasVisibles` (RecoleccionPage), para
- * poder expandir/colapsar sin reconstruir el árbol.
+ * Nodos categoría → subcategoría → indicador para un subconjunto de
+ * `filas`, partiendo de `nivelBase` — reutilizado tal cual por
+ * `construirArbolSeguimiento` (vista "Árbol (Categoría)", `nivelBase=0`,
+ * `prefijoId=''`) y por `construirArbolEquipoSeguimiento` (anidado bajo
+ * cada equipo). `prefijoId` evita que dos grupos "Sin categoría" —o la
+ * misma categoría repetida bajo dos equipos distintos, ya que una
+ * categoría no pertenece a un único equipo— compartan id: sin esto,
+ * colapsar uno colapsaría el otro y React vería `key`s duplicadas.
  */
-function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+function construirNodosCategoria(
+  filas: FilaTablero[], categorias: Categoria[], nivelBase: number, prefijoId = ''
+): NodoArbolSeguimiento[] {
   const categoriasPorId = new Map(categorias.map((c) => [c.id, c]));
   const hijosDe = new Map<string | null, Categoria[]>();
   for (const c of categorias) {
@@ -73,31 +77,112 @@ function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]
     const hijos = hijosDe.get(categoria.id) ?? [];
     const propias = [...(filasPorCategoria.get(categoria.id) ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
     nodos.push({
-      tipo: 'categoria', id: categoria.id, nivel, nombre: categoria.nombre, prefijo: categoria.prefijo,
+      tipo: 'categoria', id: `${prefijoId}${categoria.id}`, nivel, nombre: categoria.nombre, prefijo: categoria.prefijo,
       contador: contarTotal(categoria.id), tieneHijos: hijos.length > 0 || propias.length > 0
     });
     for (const hijo of hijos) visitar(hijo, nivel + 1);
     for (const f of propias) nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivel + 1, fila: f });
   };
-  for (const raiz of hijosDe.get(null) ?? []) visitar(raiz, 0);
+  for (const raiz of hijosDe.get(null) ?? []) visitar(raiz, nivelBase);
 
   if (sinCategoria.length > 0) {
     nodos.push({
-      tipo: 'categoria', id: SIN_CATEGORIA, nivel: 0, nombre: 'Sin categoría', prefijo: null,
+      tipo: 'categoria', id: `${prefijoId}${SIN_CATEGORIA}`, nivel: nivelBase, nombre: 'Sin categoría', prefijo: null,
       contador: sinCategoria.length, tieneHijos: true
     });
     for (const f of [...sinCategoria].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
-      nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: 1, fila: f });
+      nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivelBase + 1, fila: f });
     }
   }
   return nodos;
 }
 
 /**
+ * Construye la vista jerárquica Categoría → Subcategoría → Indicador a
+ * partir de `filas` (ya filtradas) y el catálogo completo de categorías —
+ * 100% en el renderer, sin tocar `ServicioSeguimiento` (no hace falta:
+ * `categoriasCatalogo` ya se trae para el filtro plano existente). Bajo
+ * cada nodo-categoría van primero sus subcategorías (recursivo, orden
+ * alfabético) y luego sus indicadores propios como filas hoja; un grupo
+ * final "Sin categoría" agrupa los indicadores con `categoriaId == null`.
+ * DFS pre-order + `nivel` como profundidad — misma convención que
+ * `ArbolDesagregaciones`/`calcularFilasVisibles` (RecoleccionPage), para
+ * poder expandir/colapsar sin reconstruir el árbol.
+ */
+function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+  return construirNodosCategoria(filas, categorias, 0);
+}
+
+/**
+ * Construye la vista jerárquica Equipo → Sub-equipo → Categoría →
+ * Subcategoría → Indicador: agrupa primero por `equipoId` (el equipo
+ * EFECTIVO ya resuelto por `ServicioSeguimiento.tablero()` — directo si
+ * está seteado, si no indirecto vía el responsable, ver `equipoEfectivo`),
+ * y bajo cada equipo anida el mismo árbol de categorías que
+ * `construirArbolSeguimiento` (vía `construirNodosCategoria`), solo con
+ * los indicadores de ese equipo. Un grupo final "Sin equipo" agrupa los
+ * indicadores sin equipo efectivo, con su propio árbol de categorías.
+ */
+function construirArbolEquipoSeguimiento(filas: FilaTablero[], equipos: Equipo[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+  const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
+  const hijosDe = new Map<string | null, Equipo[]>();
+  for (const e of equipos) {
+    const clave = e.padreId && equiposPorId.has(e.padreId) ? e.padreId : null;
+    const lista = hijosDe.get(clave) ?? [];
+    lista.push(e);
+    hijosDe.set(clave, lista);
+  }
+  for (const lista of hijosDe.values()) lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const filasPorEquipo = new Map<string, FilaTablero[]>();
+  const sinEquipo: FilaTablero[] = [];
+  for (const f of filas) {
+    if (f.equipoId && equiposPorId.has(f.equipoId)) {
+      const lista = filasPorEquipo.get(f.equipoId) ?? [];
+      lista.push(f);
+      filasPorEquipo.set(f.equipoId, lista);
+    } else {
+      sinEquipo.push(f);
+    }
+  }
+
+  const contarTotal = (equipoId: string): number => {
+    let total = (filasPorEquipo.get(equipoId) ?? []).length;
+    for (const hijo of hijosDe.get(equipoId) ?? []) total += contarTotal(hijo.id);
+    return total;
+  };
+
+  const nodos: NodoArbolSeguimiento[] = [];
+  const visitar = (equipo: Equipo, nivel: number): void => {
+    const hijos = hijosDe.get(equipo.id) ?? [];
+    const nodosCategoria = construirNodosCategoria(filasPorEquipo.get(equipo.id) ?? [], categorias, nivel + 1, `${equipo.id}:`);
+    nodos.push({
+      tipo: 'equipo', id: equipo.id, nivel, nombre: equipo.nombre,
+      contador: contarTotal(equipo.id), tieneHijos: hijos.length > 0 || nodosCategoria.length > 0
+    });
+    for (const hijo of hijos) visitar(hijo, nivel + 1);
+    nodos.push(...nodosCategoria);
+  };
+  for (const raiz of hijosDe.get(null) ?? []) visitar(raiz, 0);
+
+  if (sinEquipo.length > 0) {
+    const nodosCategoria = construirNodosCategoria(sinEquipo, categorias, 1, `${SIN_EQUIPO}:`);
+    nodos.push({
+      tipo: 'equipo', id: SIN_EQUIPO, nivel: 0, nombre: 'Sin equipo',
+      contador: sinEquipo.length, tieneHijos: nodosCategoria.length > 0
+    });
+    nodos.push(...nodosCategoria);
+  }
+  return nodos;
+}
+
+/**
  * Igual convención que `calcularFilasVisibles` (RecoleccionPage): las filas
- * llegan en DFS pre-order con `nivel` como profundidad, así que una
- * categoría colapsada oculta exactamente el tramo contiguo siguiente cuya
- * profundidad sea mayor que la suya, sin reconstruir el árbol.
+ * llegan en DFS pre-order con `nivel` como profundidad, así que un nodo de
+ * agrupación (categoría o equipo) colapsado oculta exactamente el tramo
+ * contiguo siguiente cuya profundidad sea mayor que la suya, sin
+ * reconstruir el árbol. Solo los nodos que agrupan (todo menos
+ * `'indicador'`) son colapsables.
  */
 function nodosVisibles(nodos: NodoArbolSeguimiento[], colapsadas: Set<string>): NodoArbolSeguimiento[] {
   const visibles: NodoArbolSeguimiento[] = [];
@@ -108,7 +193,7 @@ function nodosVisibles(nodos: NodoArbolSeguimiento[], colapsadas: Set<string>): 
       ocultarDesdeNivel = null;
     }
     visibles.push(nodo);
-    if (nodo.tipo === 'categoria' && nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
+    if (nodo.tipo !== 'indicador' && nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
   }
   return visibles;
 }
@@ -130,6 +215,7 @@ export function SeguimientoPage(): React.JSX.Element {
   const [pestana, setPestana] = useState<Pestana>('estado');
   const [vistaEstado, setVistaEstado] = useState<VistaEstado>('lista');
   const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
+  const [colapsadasEquipo, setColapsadasEquipo] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
   const [historico, setHistorico] = useState<FilaHistorico[] | null>(null);
   const [cargandoHistorico, setCargandoHistorico] = useState(false);
@@ -144,6 +230,7 @@ export function SeguimientoPage(): React.JSX.Element {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [responsablesCatalogo, setResponsablesCatalogo] = useState<Responsable[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<Categoria[]>([]);
+  const [equiposCatalogo, setEquiposCatalogo] = useState<Equipo[]>([]);
   const [reasignando, setReasignando] = useState(false);
   const [avisoDescartado, setAvisoDescartado] = useState(false);
   const navigate = useNavigate();
@@ -172,6 +259,7 @@ export function SeguimientoPage(): React.JSX.Element {
     cargarTablero();
     void invocar('responsables:listar', undefined).then(setResponsablesCatalogo);
     void invocar('categorias:listar', undefined).then(setCategoriasCatalogo);
+    void invocar('equipos:listar', undefined).then(setEquiposCatalogo);
   }, []);
 
   useEffect(() => {
@@ -211,6 +299,7 @@ export function SeguimientoPage(): React.JSX.Element {
   const idsVisibles = new Set(visibles.map((f) => f.indicadorId));
   const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
   const arbol = nodosVisibles(construirArbolSeguimiento(visibles, categoriasCatalogo), colapsadasCategorias);
+  const arbolEquipo = nodosVisibles(construirArbolEquipoSeguimiento(visibles, equiposCatalogo, categoriasCatalogo), colapsadasEquipo);
   const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string }>();
   for (const fila of historicoVisible) {
     for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio });
@@ -226,6 +315,15 @@ export function SeguimientoPage(): React.JSX.Element {
       const nuevo = new Set(previo);
       if (nuevo.has(categoriaId)) nuevo.delete(categoriaId);
       else nuevo.add(categoriaId);
+      return nuevo;
+    });
+  };
+
+  const alternarColapsoEquipo = (id: string): void => {
+    setColapsadasEquipo((previo) => {
+      const nuevo = new Set(previo);
+      if (nuevo.has(id)) nuevo.delete(id);
+      else nuevo.add(id);
       return nuevo;
     });
   };
@@ -510,6 +608,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   </tr>
                 );
               }
+              if (nodo.tipo === 'equipo') return null; // Esta vista no agrupa por equipo — ver `arbolEquipo` abajo.
               const f = nodo.fila;
               return (
                 <tr
@@ -541,6 +640,101 @@ export function SeguimientoPage(): React.JSX.Element {
               );
             })}
             {arbol.length === 0 && (
+              <tr>
+                <td colSpan={10}>
+                  {cargando ? (
+                    <Vacio mensaje="Cargando…" />
+                  ) : (
+                    <Vacio icono="▤" mensaje="Sin indicadores que mostrar" detalle="Ajuste los filtros o configure indicadores." />
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {pestana === 'estado' && vistaEstado === 'equipo' && (
+      <div className="tabla-envoltura">
+        <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-seguimiento-equipo">
+          <thead>
+            <tr>
+              <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+              <th>Equipo / Categoría / Indicador</th>
+              <th>Estado</th>
+              <th>Periodicidad</th>
+              <th>Responsable</th>
+              <th>Período pendiente</th>
+              <th>Fecha límite</th>
+              <th>Fecha de corte</th>
+              <th>Progreso</th>
+              <th>Última actualización</th>
+            </tr>
+          </thead>
+          <tbody>
+            {arbolEquipo.map((nodo) => {
+              if (nodo.tipo === 'indicador') {
+                const f = nodo.fila;
+                return (
+                  <tr
+                    key={`i-${nodo.id}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
+                    data-testid={`seguimiento-${f.nombre}`}
+                  >
+                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
+                    <td>
+                      <strong>{f.nombre}</strong>
+                      {f.codigo && (
+                        <div className="texto-suave" style={{ fontSize: '0.85em' }}>
+                          {etiquetaConPrefijo(categoriasCatalogo.find((c) => c.id === f.categoriaId)?.prefijo, f.codigo)}
+                        </div>
+                      )}
+                    </td>
+                    <td><ChipEstado estado={f.estado} /></td>
+                    <td>{f.periodicidad}</td>
+                    <td className="texto-suave">{f.responsable ?? '—'}</td>
+                    <td>{f.periodoPendiente ?? '—'}</td>
+                    <td>{f.fechaLimite ?? '—'}</td>
+                    <td>{f.fechaCorte ?? '—'}</td>
+                    <td><BarraProgreso valor={f.periodosCompletos} total={f.totalPeriodos} /></td>
+                    <td className="texto-suave">
+                      {f.ultimaActualizacion ? new Date(f.ultimaActualizacion).toLocaleDateString('es') : '—'}
+                    </td>
+                  </tr>
+                );
+              }
+              // Nodo de agrupación (equipo o categoría anidada bajo un equipo) — misma fila visual para ambos.
+              const colapsada = colapsadasEquipo.has(nodo.id);
+              const etiqueta = nodo.tipo === 'categoria' ? etiquetaConPrefijo(nodo.prefijo, nodo.nombre) : nodo.nombre;
+              return (
+                <tr
+                  key={`g-${nodo.id}`}
+                  className="fila-categoria"
+                  data-testid={`seguimiento-equipo-${nodo.tipo}-${nodo.nombre}`}
+                >
+                  <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    {nodo.tieneHijos && (
+                      <button
+                        type="button"
+                        className={`boton-arbol ${colapsada ? '' : 'expandido'}`}
+                        onClick={() => alternarColapsoEquipo(nodo.id)}
+                        title={colapsada ? 'Expandir' : 'Colapsar'}
+                        data-testid={`colapsar-equipo-${nodo.tipo}-${nodo.nombre}`}
+                      >
+                        <Icono nombre="flecha" tamano={13} />
+                      </button>
+                    )}
+                  </td>
+                  <td colSpan={9}>
+                    {etiqueta}
+                    <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
+                  </td>
+                </tr>
+              );
+            })}
+            {arbolEquipo.length === 0 && (
               <tr>
                 <td colSpan={10}>
                   {cargando ? (

@@ -211,7 +211,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     const json = await infra.configPortable.exportar();
     const archivo = JSON.parse(json);
     expect(archivo.formato).toBe('kpitracker-config');
-    expect(archivo.schemaVersion).toBe(2);
+    expect(archivo.schemaVersion).toBe(3);
     expect(archivo.indicadores).toHaveLength(1);
 
     // Importa en una instancia limpia.
