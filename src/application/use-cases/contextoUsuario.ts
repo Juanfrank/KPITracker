@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { ContextoPermisos } from '@domain/index';
 
 /**
  * Identidad del usuario autenticado "ambiente" para la cadena de llamadas
@@ -26,4 +27,37 @@ export function usuarioActual(): string {
 /** Ejecuta `fn` con `usuarioId` como identidad ambiente para toda la auditoría que ocurra durante esa llamada. */
 export function conUsuario<T>(usuarioId: string, fn: () => Promise<T>): Promise<T> {
   return almacen.run(usuarioId, fn);
+}
+
+/**
+ * Igual mecanismo que arriba (`AsyncLocalStorage`), esta vez para el
+ * `ContextoPermisos` resuelto por `ServicioPermisos` (Batch T) — lo puebla
+ * `protectedProcedure` (`src/server/trpc/trpc.ts`) al inicio de cada request,
+ * junto a `conUsuario`. Evita threadear un parámetro de permisos a través de
+ * cada `Servicio*` y cada método que necesita filtrar/gatear por permiso,
+ * exactamente por la misma razón documentada arriba para `usuarioActual`.
+ *
+ * Fuera de una llamada `conPermisos` (los 300+ tests de integración que
+ * invocan `app.manejadores[canal](...)` directo, y cualquier tarea de
+ * arranque) se resuelve a "sin restricción" — mismo criterio que
+ * `usuarioActual()` cayendo a `'local'`: nada de este batch debía romper el
+ * camino que no pasa por tRPC.
+ */
+const almacenPermisos = new AsyncLocalStorage<ContextoPermisos>();
+
+const PERMISOS_SIN_RESTRICCION: ContextoPermisos = {
+  esAdministrador: true,
+  responsableId: null,
+  equipoId: null,
+  permisosGenerales: new Set(),
+  permisosEquipo: new Set(),
+  permisosExcepcionales: new Set()
+};
+
+export function permisosActuales(): ContextoPermisos {
+  return almacenPermisos.getStore() ?? PERMISOS_SIN_RESTRICCION;
+}
+
+export function conPermisos<T>(permisos: ContextoPermisos, fn: () => Promise<T>): Promise<T> {
+  return almacenPermisos.run(permisos, fn);
 }

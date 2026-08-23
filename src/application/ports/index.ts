@@ -19,6 +19,7 @@ import type {
   Responsable,
   Resultado,
   ResultadoHistorial,
+  Rol,
   Sesion,
   Usuario
 } from '@domain/index';
@@ -213,6 +214,26 @@ export interface IUsuarioRepository {
   guardar(usuario: Usuario): Promise<void>;
 }
 
+/** Catálogo de roles (Batch T) — sin borrado lógico (catálogo pequeño, bloqueado por referencias en la capa de aplicación). */
+export interface IRolRepository {
+  listar(): Promise<Rol[]>;
+  obtener(id: string): Promise<Rol | null>;
+  guardar(rol: Rol): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Un permiso concedido individualmente a un usuario, fuera de su rol nativo — ver docstring de `Usuario`. */
+export interface PermisoExcepcional {
+  usuarioId: string;
+  permiso: string;
+}
+
+export interface IPermisoExcepcionalRepository {
+  listarPorUsuario(usuarioId: string): Promise<string[]>;
+  /** Reemplaza el conjunto completo de permisos excepcionales del usuario (borra los que no vengan en `permisos`). */
+  establecer(usuarioId: string, permisos: string[]): Promise<void>;
+}
+
 export interface ISesionRepository {
   obtener(id: string): Promise<Sesion | null>;
   guardar(sesion: Sesion): Promise<void>;
@@ -227,7 +248,7 @@ export interface ISesionRepository {
  * ni el resto del andamiaje de sesión/roles.
  */
 export interface IAuthProvider {
-  autenticar(nombreUsuario: string, password: string): Promise<{ id: string; rol: Usuario['rol'] } | null>;
+  autenticar(nombreUsuario: string, password: string): Promise<{ id: string } | null>;
 }
 
 /** Separado de `IAuthProvider` porque hashear (alta/cambio de contraseña) y verificar (login) son casos de uso distintos. */

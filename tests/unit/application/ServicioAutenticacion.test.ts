@@ -41,7 +41,8 @@ async function construir() {
   const ahora = reloj.ahoraIso();
   await usuarios.guardar({
     id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', passwordHash,
-    rol: 'usuario', activo: true, creadoEn: ahora, actualizadoEn: ahora
+    esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
+    activo: true, creadoEn: ahora, actualizadoEn: ahora
   });
 
   return { servicio, usuarios, sesiones, ids, reloj };
@@ -51,7 +52,7 @@ describe('ServicioAutenticacion', () => {
   it('inicia sesión con credenciales correctas y crea una fila de sesión real', async () => {
     const { servicio, sesiones } = await construir();
     const { sesionId, identidad } = await servicio.iniciarSesion('jperez', 'correcta123');
-    expect(identidad).toEqual({ id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', rol: 'usuario' });
+    expect(identidad).toEqual({ id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', esAdministrador: false });
     expect(await sesiones.obtener(sesionId)).not.toBeNull();
   });
 

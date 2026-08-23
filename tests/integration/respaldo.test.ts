@@ -146,10 +146,10 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     const json = await appA.infra.respaldoPerfil.exportar();
 
     const resumen = appB.infra.respaldoPerfil.leer(json);
-    expect(resumen.schemaVersion).toBe(2);
+    expect(resumen.schemaVersion).toBe(3);
     expect(resumen.categorias.map((c) => c.categoria).sort()).toEqual(
       ['aliasDesagregacion', 'atributos', 'automatizaciones', 'categorias', 'configuracionGeneral', 'equipos', 'indicadores',
-        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'responsables'].sort()
+        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'responsables', 'roles'].sort()
     );
     for (const c of resumen.categorias) {
       if (c.atomica) continue;
@@ -162,8 +162,10 @@ describe('RespaldoPerfilService — round-trip completo', () => {
 
     expect(await appB.manejadores['indicadores:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['responsables:listar'](undefined)).toHaveLength(1);
-    expect(await appB.manejadores['categorias:listar'](undefined)).toHaveLength(1);
-    expect(await appB.manejadores['equipos:listar'](undefined)).toHaveLength(1);
+    // +1 en categorías/equipos: la fila "General" (Batch T, id fijo) ya existía en B y se
+    // actualiza in situ al importar la de A (mismo id) — no se duplica, pero sigue contando.
+    expect(await appB.manejadores['categorias:listar'](undefined)).toHaveLength(2);
+    expect(await appB.manejadores['equipos:listar'](undefined)).toHaveLength(2);
     expect(await appB.manejadores['listas:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['atributos:listar'](undefined)).toHaveLength(1);
     expect(await appB.manejadores['origenes:listar'](undefined)).toHaveLength(1);

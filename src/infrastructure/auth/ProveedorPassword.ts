@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import type { IAuthProvider, IPasswordHasher, IUsuarioRepository } from '@application/ports/index';
-import type { Usuario } from '@domain/index';
 
 /** Costo de bcrypt: 12 rondas es el estándar actual (balance costo/seguridad) sin parámetros de memoria que ajustar. */
 const RONDAS_BCRYPT = 12;
@@ -29,11 +28,11 @@ export class ProveedorPassword implements IAuthProvider, IPasswordHasher {
     return bcrypt.hash(password, RONDAS_BCRYPT);
   }
 
-  async autenticar(nombreUsuario: string, password: string): Promise<{ id: string; rol: Usuario['rol'] } | null> {
+  async autenticar(nombreUsuario: string, password: string): Promise<{ id: string } | null> {
     const usuario = await this.usuarios.obtenerPorNombreUsuario(nombreUsuario.trim());
     if (!usuario || !usuario.activo) return null;
     const valido = await bcrypt.compare(password, usuario.passwordHash);
     if (!valido) return null;
-    return { id: usuario.id, rol: usuario.rol };
+    return { id: usuario.id };
   }
 }

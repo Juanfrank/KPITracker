@@ -1,6 +1,17 @@
+/** Flujo de aprobación de resultados (Batch T) — capa de validación post-registro, no bloquea la captura. */
+export type EstadoValidacionResultado = 'Pendiente' | 'Validado' | 'Rechazado';
+
 /**
  * Resultado levantado para un indicador, un período y una combinación de
  * desagregación (o la fila General). Grano de FactResultados.
+ *
+ * `estadoValidacion`/`validadoPor`/`validadoEn`/`comentarioValidacion`
+ * (Batch T): capa de aprobación posterior al registro — puramente
+ * informativa, nunca impide guardar un valor nuevo. Editar `valor`/
+ * `observacion` de un resultado ya `Validado`/`Rechazado` lo regresa a
+ * `Pendiente` y limpia los tres campos de validación (ver
+ * `ServicioRecoleccion.guardarCelda`), para que un valor validado en pantalla
+ * siempre corresponda a lo último capturado.
  */
 export interface Resultado {
   readonly id: string;
@@ -13,6 +24,11 @@ export interface Resultado {
   valor: number | null;
   /** Comentario u observación opcional del levantamiento. */
   observacion: string | null;
+  estadoValidacion: EstadoValidacionResultado;
+  /** Id del usuario que validó/rechazó — null mientras esté `Pendiente`. */
+  validadoPor: string | null;
+  validadoEn: string | null;
+  comentarioValidacion: string | null;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

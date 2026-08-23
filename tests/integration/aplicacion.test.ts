@@ -113,11 +113,13 @@ describe('Composition root — catálogos', () => {
       id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
-    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
+    // +1: la categoría raíz "General" (Batch T) ya existe desde el arranque — ver la migración
+    // 20260901000000_roles_permisos.ts.
+    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(2);
     await app.manejadores['responsables:eliminar']({ id: responsable.id });
     await app.manejadores['categorias:eliminar']({ id: categoria.id });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(0);
-    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(0);
+    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
   });
 });
 
@@ -198,7 +200,8 @@ describe('Composition root — equipos jerárquicos (Batch R)', () => {
       id: '', nombre: 'Sub-dirección', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, creadoEn: '', actualizadoEn: ''
     });
     expect(hijo.padreId).toBe(raiz.id);
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
+    // +1: el equipo raíz "General" (Batch T) ya existe desde el arranque.
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(3);
   });
 
   it('rechaza asignar como padre a un equipo que generaría un ciclo', async () => {
@@ -675,7 +678,8 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
 
     const config = await app.manejadores['config:obtener'](undefined);
     expect(config.nombreInstitucion).toBe('Institución v2');
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(0);
+    // El equipo raíz "General" (Batch T) ya existe desde el arranque, independiente de la importación.
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(1);
   });
 
   it('exporta e importa equipos como parte de la configuración portable (round-trip)', async () => {
@@ -689,12 +693,13 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
 
     const { json } = await app.manejadores['portable:exportar'](undefined);
     const archivo = JSON.parse(json) as { schemaVersion: number; equipos: Array<{ nombre: string }> };
-    expect(archivo.schemaVersion).toBe(3);
-    expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'Sub-dirección']);
+    expect(archivo.schemaVersion).toBe(4);
+    // "General" (Batch T) viaja junto con los dos equipos creados en este test.
+    expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'General', 'Sub-dirección']);
 
     // Reimportar sobre la misma app (upsert por id) no debe duplicar los equipos.
     await app.manejadores['portable:importar']({ json });
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(3);
   });
 });
 

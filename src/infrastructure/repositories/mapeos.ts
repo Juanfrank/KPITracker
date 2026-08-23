@@ -2,7 +2,7 @@ import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
   DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
   ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable,
-  Sesion, Usuario
+  Rol, Sesion, Usuario
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -186,6 +186,10 @@ export const aResultado = (f: Fila): Resultado => ({
   claveDesagregacion: s(f.clave_desagregacion),
   valor: nn(f.valor),
   observacion: sn(f.observacion),
+  estadoValidacion: (sn(f.estado_validacion) ?? 'Pendiente') as Resultado['estadoValidacion'],
+  validadoPor: sn(f.validado_por),
+  validadoEn: sn(f.validado_en),
+  comentarioValidacion: sn(f.comentario_validacion),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -193,6 +197,8 @@ export const aResultado = (f: Fila): Resultado => ({
 export const deResultado = (r: Resultado): Fila => ({
   id: r.id, indicador_id: r.indicadorId, periodo_id: r.periodoId, anio: r.anio,
   clave_desagregacion: r.claveDesagregacion, valor: r.valor, observacion: r.observacion,
+  estado_validacion: r.estadoValidacion, validado_por: r.validadoPor, validado_en: r.validadoEn,
+  comentario_validacion: r.comentarioValidacion,
   creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 
@@ -386,7 +392,11 @@ export const aUsuario = (f: Fila): Usuario => ({
   nombreUsuario: s(f.nombre_usuario),
   nombreCompleto: s(f.nombre_completo),
   passwordHash: s(f.password_hash),
-  rol: s(f.rol) as Usuario['rol'],
+  esAdministrador: b(f.es_administrador),
+  rolGeneralId: sn(f.rol_general_id),
+  equipoId: sn(f.equipo_id),
+  rolEquipoId: sn(f.rol_equipo_id),
+  responsableId: sn(f.responsable_id),
   activo: b(f.activo),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
@@ -394,7 +404,24 @@ export const aUsuario = (f: Fila): Usuario => ({
 
 export const deUsuario = (u: Usuario): Fila => ({
   id: u.id, nombre_usuario: u.nombreUsuario, nombre_completo: u.nombreCompleto, password_hash: u.passwordHash,
-  rol: u.rol, activo: u.activo, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
+  es_administrador: u.esAdministrador, rol_general_id: u.rolGeneralId, equipo_id: u.equipoId,
+  rol_equipo_id: u.rolEquipoId, responsable_id: u.responsableId,
+  activo: u.activo, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
+});
+
+export const aRol = (f: Fila): Rol => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  ambito: s(f.ambito) as Rol['ambito'],
+  permisos: json<string[]>(f.permisos, []),
+  esSistema: b(f.es_sistema),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deRol = (r: Rol): Fila => ({
+  id: r.id, nombre: r.nombre, ambito: r.ambito, permisos: JSON.stringify(r.permisos), es_sistema: r.esSistema,
+  creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 
 export const aSesion = (f: Fila): Sesion => ({

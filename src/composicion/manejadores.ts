@@ -1,19 +1,21 @@
 import type { Infraestructura } from '@infrastructure/bootstrap';
 import type { ContextoAplicacion } from '@application/use-cases/base';
 import type { CanalesIpc, CanalLocal, NombreCanal } from '@shared/ipc';
-import { crearRegistroReglasFechaLimite, crearRegistroTiposBase } from '@domain/index';
+import { ID_CATEGORIA_GENERAL, ID_EQUIPO_GENERAL, crearRegistroReglasFechaLimite, crearRegistroTiposBase } from '@domain/index';
 import { ServicioConfiguracion } from '@application/use-cases/ServicioConfiguracion';
 import {
   ServicioAtributos, ServicioCategorias, ServicioEquipos, ServicioIndicadores, ServicioListas, ServicioMetas,
-  ServicioReglas
+  ServicioReglas, ServicioResponsables
 } from '@application/use-cases/ServicioCatalogos';
 import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalogoGenerico';
-import { referenciasDeOrigen, referenciasDeResponsable } from '@application/use-cases/referencias';
+import { referenciasDeOrigen } from '@application/use-cases/referencias';
 import { ServicioPeriodicidades } from '@application/use-cases/ServicioPeriodicidades';
 import { ServicioRecoleccion } from '@application/use-cases/ServicioRecoleccion';
 import { ServicioSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
+import { ServicioAuditoria } from '@application/use-cases/ServicioAuditoria';
 import { ServicioAutomatizacionIndicador } from '@application/use-cases/ServicioAutomatizacionIndicador';
+import { ServicioRoles } from '@application/use-cases/ServicioRoles';
 import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
 
 /**
@@ -56,7 +58,10 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   };
 
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
-  const indicadores = new ServicioIndicadores(ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos);
+  const indicadores = new ServicioIndicadores(
+    ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos,
+    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.responsables
+  );
   const atributos = new ServicioAtributos(ctx, infra.atributos, infra.reglas, infra.automatizaciones, infra.indicadores);
   const listas = new ServicioListas(
     ctx, infra.listas, infra.aliasDesagregacionOrigen, infra.atributos, infra.indicadores, infra.automatizaciones
@@ -64,9 +69,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const metas = new ServicioMetas(ctx, infra.metas, infra.periodicidades);
   const reglas = new ServicioReglas(ctx, infra.reglas);
   const periodicidades = new ServicioPeriodicidades(ctx, infra.periodicidades);
-  const responsables = new ServicioCatalogoGenerico(
-    ctx, infra.responsables, 'Responsable', (id) => referenciasDeResponsable({ indicadores: infra.indicadores }, id)
-  );
+  const responsables = new ServicioResponsables(ctx, infra.responsables, infra.indicadores, infra.equipos, ID_EQUIPO_GENERAL);
   const categorias = new ServicioCategorias(ctx, infra.categorias, infra.indicadores);
   const equipos = new ServicioEquipos(ctx, infra.equipos, infra.responsables, infra.indicadores);
   const origenesAutomaticos = new ServicioCatalogoGenerico(
@@ -78,7 +81,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   );
   const recoleccion = new ServicioRecoleccion(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos,
-    infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen
+    infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen, infra.responsables
   );
   const seguimiento = new ServicioSeguimiento(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
@@ -89,6 +92,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     ctx, infra.automatizaciones, infra.indicadores, infra.origenesAutomaticos, infra.atributos,
     infra.listas, infra.periodicidades, infra.conectorOrigen
   );
+  const roles = new ServicioRoles(ctx, infra.roles, { usuarios: infra.usuarios });
+  const auditoria = new ServicioAuditoria(infra.auditoria, infra.indicadores, infra.responsables);
 
   const manejadores: Aplicacion['manejadores'] = {
     'config:obtener': () => configuracion.obtener(),
@@ -190,6 +195,10 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
       recoleccion.restaurarVersion(indicadorId, periodoId, claveDesagregacion, version),
     'recoleccion:obtenerAutomatico': ({ indicadorId, periodoId }) =>
       recoleccion.obtenerResultadoAutomatico(indicadorId, periodoId),
+    'recoleccion:validar': ({ indicadorId, periodoId, claveDesagregacion, comentario }) =>
+      recoleccion.validarResultado(indicadorId, periodoId, claveDesagregacion, comentario ?? null),
+    'recoleccion:rechazar': ({ indicadorId, periodoId, claveDesagregacion, comentario }) =>
+      recoleccion.rechazarResultado(indicadorId, periodoId, claveDesagregacion, comentario ?? null),
 
     'seguimiento:tablero': () => seguimiento.tablero(),
     'seguimiento:detalle': ({ indicadorId }) => seguimiento.detalle(indicadorId),
@@ -201,7 +210,11 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     },
     'exportacion:ruta': async () => ({ ruta: infra.exportacion.rutaExportacion() }),
 
-    'auditoria:consultar': (filtro) => infra.auditoria.consultar(filtro ?? {}),
+    'auditoria:consultar': (filtro) => auditoria.consultar(filtro ?? {}),
+
+    'roles:listar': () => roles.listar(),
+    'roles:guardar': (rol) => roles.guardar(rol),
+    'roles:eliminar': ({ id }) => roles.eliminar(id),
 
     'portable:exportar': async () => ({ json: await infra.configPortable.exportar() }),
     'portable:importar': ({ json }) => infra.configPortable.importar(json),

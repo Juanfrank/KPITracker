@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { PropsWithChildren } from 'react';
-import type { IdentidadSesion } from '@application/use-cases/ServicioAutenticacion';
 import { trpcClient } from '../trpc';
+
+/** Identidad + permisos efectivos (Batch T) — misma forma que devuelve `auth.yo`/`auth.login` en el servidor. */
+export type IdentidadConPermisos = NonNullable<Awaited<ReturnType<typeof trpcClient.auth.yo.query>>>;
 
 interface EstadoAuth {
   /** `null` mientras se restaura la sesión (`cargando: true`) o si no hay sesión válida. */
-  usuario: IdentidadSesion | null;
+  usuario: IdentidadConPermisos | null;
   cargando: boolean;
   login(nombreUsuario: string, password: string): Promise<void>;
   logout(): Promise<void>;
@@ -21,7 +23,7 @@ const ContextoAuth = createContext<EstadoAuth | null>(null);
  * servidor en la respuesta, aquí solo se refleja el estado resultante.
  */
 export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element {
-  const [usuario, setUsuario] = useState<IdentidadSesion | null>(null);
+  const [usuario, setUsuario] = useState<IdentidadConPermisos | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {

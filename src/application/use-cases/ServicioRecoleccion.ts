@@ -1,20 +1,21 @@
 import {
   CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
   ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, crearClave,
-  etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, resolverParametrosGenerales, sustituirTokens
+  equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, puedeSobreIndicador,
+  resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
-  DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
+  AccionResultado, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
   ResultadoHistorial, TypeRegistry
 } from '@domain/index';
 import type {
   IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IConectorOrigen,
   IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
-  IListaRepository, IReglaRepository, IResultadoRepository
+  IListaRepository, IReglaRepository, IResponsableRepository, IResultadoRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
-import { usuarioActual } from './contextoUsuario';
+import { permisosActuales, usuarioActual } from './contextoUsuario';
 
 /** Resumen de una ejecución automática que escribió resultados directamente en la grilla de captura. */
 export interface ResultadoObtencionAutomatica {
@@ -45,6 +46,9 @@ export interface FilaCaptura {
   valor: number | null;
   observacion: string | null;
   actualizadoEn: string | null;
+  /** Estado de validación post-registro (Batch T) — 'Pendiente' si la celda todavía no tiene resultado guardado. */
+  estadoValidacion: 'Pendiente' | 'Validado' | 'Rechazado';
+  comentarioValidacion: string | null;
 }
 
 export interface DatosCaptura {
@@ -86,9 +90,30 @@ export class ServicioRecoleccion extends ServicioBase {
     private readonly automatizaciones: IAutomatizacionIndicadorRepository,
     private readonly origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>,
     private readonly atributosRepo: IAtributoRepository,
-    private readonly conector: IConectorOrigen
+    private readonly conector: IConectorOrigen,
+    private readonly responsablesRepo: IResponsableRepository
   ) {
     super(ctx);
+  }
+
+  /**
+   * Resuelve el indicador y exige, según el permiso efectivo del usuario en
+   * curso (`permisosActuales()`, ver `contextoUsuario.ts`), que pueda
+   * `accion` sobre él (Batch T) — admin, permiso general, permiso de su
+   * propio equipo, o ser su responsable directo (nunca para `'validar'`),
+   * ver `puedeSobreIndicador`. Único punto de gating: todo método público
+   * que lee/escribe resultados de un indicador concreto pasa por acá.
+   */
+  private async indicadorConPermiso(indicadorId: string, accion: AccionResultado): Promise<Indicador> {
+    const indicador = await this.indicadores.obtener(indicadorId);
+    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    const responsable = indicador.responsable ? await this.responsablesRepo.obtener(indicador.responsable) : null;
+    const responsablesPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
+    const equipoEfectivoId = equipoEfectivo(indicador, responsablesPorId);
+    if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable })) {
+      throw new ValidacionError('No tiene permiso para esta acción sobre este indicador.');
+    }
+    return indicador;
   }
 
   /** Resuelve la definición de periodicidad personalizada del indicador, si aplica. */
@@ -101,16 +126,14 @@ export class ServicioRecoleccion extends ServicioBase {
 
   /** Períodos disponibles según periodicidad del indicador y año inicial global. */
   async periodosDisponibles(indicadorId: string): Promise<Periodo[]> {
-    const indicador = await this.indicadores.obtener(indicadorId);
-    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    const indicador = await this.indicadorConPermiso(indicadorId, 'ver');
     const config = await this.configuracion.obtener();
     const definicion = await this.definicionPara(indicador);
     return this.generadorPeriodos.periodosDisponibles(config.anioInicial, indicador.periodicidad, this.ctx.reloj.hoyIso(), definicion);
   }
 
   async obtenerCaptura(indicadorId: string, periodoId: string): Promise<DatosCaptura> {
-    const indicador = await this.indicadores.obtener(indicadorId);
-    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    const indicador = await this.indicadorConPermiso(indicadorId, 'ver');
 
     if (indicador.esCalculado && indicador.formula) {
       const valor = await this.calcularValorIndicador(indicador.formula, periodoId);
@@ -131,7 +154,9 @@ export class ServicioRecoleccion extends ServicioBase {
           esDetalleCompleto: false,
           valor,
           observacion: null,
-          actualizadoEn: null
+          actualizadoEn: null,
+          estadoValidacion: 'Pendiente',
+          comentarioValidacion: null
         }],
         advertencias: []
       };
@@ -178,7 +203,9 @@ export class ServicioRecoleccion extends ServicioBase {
         esDetalleCompleto,
         valor: existente?.valor ?? null,
         observacion: existente?.observacion ?? null,
-        actualizadoEn: existente?.actualizadoEn ?? null
+        actualizadoEn: existente?.actualizadoEn ?? null,
+        estadoValidacion: existente?.estadoValidacion ?? 'Pendiente',
+        comentarioValidacion: existente?.comentarioValidacion ?? null
       };
     });
 
@@ -218,8 +245,8 @@ export class ServicioRecoleccion extends ServicioBase {
     valorCrudo: string,
     observacion: string | null = null
   ): Promise<{ valor: number | null; advertencias: string[] }> {
-    const indicadorActual = await this.indicadores.obtener(indicadorId);
-    if (indicadorActual?.esCalculado) {
+    const indicadorActual = await this.indicadorConPermiso(indicadorId, 'registrar');
+    if (indicadorActual.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene automáticamente de la fórmula y no admite captura manual.');
     }
     const levantamientoActual = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
@@ -253,8 +280,7 @@ export class ServicioRecoleccion extends ServicioBase {
    * cuenta como error en vez de escribirse con una clave fantasma.
    */
   async obtenerResultadoAutomatico(indicadorId: string, periodoId: string): Promise<ResultadoObtencionAutomatica> {
-    const indicador = await this.indicadores.obtener(indicadorId);
-    if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
+    const indicador = await this.indicadorConPermiso(indicadorId, 'registrar');
     if (indicador.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene de la fórmula, no de un origen automático.');
     }
@@ -383,6 +409,12 @@ export class ServicioRecoleccion extends ServicioBase {
       await this.registrarVersionAnterior(indicadorId, periodoId, claveDesagregacion, anterior.valor, anterior.observacion, anterior.actualizadoEn);
     }
 
+    // Batch T: un resultado ya Validado/Rechazado que se vuelve a editar regresa a
+    // Pendiente — un valor validado en pantalla siempre debe corresponder a lo último
+    // capturado (decisión confirmada con el usuario, ver docstring de Resultado).
+    const seEdito = anterior != null && (anterior.valor !== valor || (observacion != null && observacion !== anterior.observacion));
+    const reiniciaValidacion = anterior != null && anterior.estadoValidacion !== 'Pendiente' && seEdito;
+
     await this.resultados.guardar({
       id: anterior?.id ?? this.ctx.ids.nuevoId(),
       indicadorId,
@@ -391,6 +423,10 @@ export class ServicioRecoleccion extends ServicioBase {
       claveDesagregacion,
       valor,
       observacion: observacion ?? anterior?.observacion ?? null,
+      estadoValidacion: reiniciaValidacion ? 'Pendiente' : (anterior?.estadoValidacion ?? 'Pendiente'),
+      validadoPor: reiniciaValidacion ? null : (anterior?.validadoPor ?? null),
+      validadoEn: reiniciaValidacion ? null : (anterior?.validadoEn ?? null),
+      comentarioValidacion: reiniciaValidacion ? null : (anterior?.comentarioValidacion ?? null),
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });
@@ -398,8 +434,49 @@ export class ServicioRecoleccion extends ServicioBase {
       'valor', anterior?.valor ?? null, valor);
   }
 
+  /**
+   * Marca un resultado como `Validado`/`Rechazado` (Batch T) — capa de
+   * aprobación puramente informativa: no impide seguir capturando (ver
+   * `persistirValorCelda`, que reinicia a `Pendiente` si el valor vuelve a
+   * cambiar después). Exige el permiso `resultados.validar.*` (nunca lo
+   * concede la regla del responsable directo, ver `puedeSobreIndicador`).
+   */
+  private async establecerValidacion(
+    indicadorId: string,
+    periodoId: string,
+    claveDesagregacion: string,
+    estado: 'Validado' | 'Rechazado',
+    comentario: string | null
+  ): Promise<void> {
+    await this.indicadorConPermiso(indicadorId, 'validar');
+    const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
+    const actual = existentes.find((r) => r.claveDesagregacion === claveDesagregacion);
+    if (!actual) throw new EntidadNoEncontradaError('Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`);
+
+    const guardado = {
+      ...actual,
+      estadoValidacion: estado,
+      validadoPor: usuarioActual(),
+      validadoEn: this.ctx.reloj.ahoraIso(),
+      comentarioValidacion: comentario,
+      actualizadoEn: this.ctx.reloj.ahoraIso()
+    };
+    await this.resultados.guardar(guardado);
+    await this.auditar('Modificar', 'Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`,
+      'validacion', actual.estadoValidacion, estado);
+  }
+
+  validarResultado(indicadorId: string, periodoId: string, claveDesagregacion: string, comentario: string | null = null): Promise<void> {
+    return this.establecerValidacion(indicadorId, periodoId, claveDesagregacion, 'Validado', comentario);
+  }
+
+  rechazarResultado(indicadorId: string, periodoId: string, claveDesagregacion: string, comentario: string | null = null): Promise<void> {
+    return this.establecerValidacion(indicadorId, periodoId, claveDesagregacion, 'Rechazado', comentario);
+  }
+
   /** Historial de versiones previas de una celda, más reciente primero. */
   async historialCelda(indicadorId: string, periodoId: string, claveDesagregacion: string): Promise<ResultadoHistorial[]> {
+    await this.indicadorConPermiso(indicadorId, 'ver');
     return this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
   }
 
@@ -414,6 +491,7 @@ export class ServicioRecoleccion extends ServicioBase {
     claveDesagregacion: string,
     version: number
   ): Promise<{ valor: number | null; advertencias: string[] }> {
+    await this.indicadorConPermiso(indicadorId, 'registrar');
     const historial = await this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
     const objetivo = historial.find((h) => h.version === version);
     if (!objetivo) throw new EntidadNoEncontradaError('ResultadoHistorial', `${indicadorId}:${periodoId}:${claveDesagregacion}:v${version}`);
@@ -425,6 +503,9 @@ export class ServicioRecoleccion extends ServicioBase {
     }
 
     const ahora = this.ctx.reloj.ahoraIso();
+    // Restaurar una versión es, a efectos de validación, otra edición del valor
+    // vigente — misma regla de "vuelve a Pendiente" que persistirValorCelda.
+    const reiniciaValidacion = anterior != null && anterior.estadoValidacion !== 'Pendiente';
     await this.resultados.guardar({
       id: anterior?.id ?? this.ctx.ids.nuevoId(),
       indicadorId,
@@ -433,6 +514,10 @@ export class ServicioRecoleccion extends ServicioBase {
       claveDesagregacion,
       valor: objetivo.valor,
       observacion: objetivo.observacion,
+      estadoValidacion: reiniciaValidacion ? 'Pendiente' : (anterior?.estadoValidacion ?? 'Pendiente'),
+      validadoPor: reiniciaValidacion ? null : (anterior?.validadoPor ?? null),
+      validadoEn: reiniciaValidacion ? null : (anterior?.validadoEn ?? null),
+      comentarioValidacion: reiniciaValidacion ? null : (anterior?.comentarioValidacion ?? null),
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });
@@ -468,6 +553,7 @@ export class ServicioRecoleccion extends ServicioBase {
 
   /** La fecha de corte es única por indicador+período y obligatoria para completar. */
   async establecerFechaCorte(indicadorId: string, periodoId: string, fechaCorte: string | null): Promise<void> {
+    await this.indicadorConPermiso(indicadorId, 'registrar');
     const anterior = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     await this.guardarLevantamiento(indicadorId, periodoId, {
       fechaCorte,
@@ -481,6 +567,7 @@ export class ServicioRecoleccion extends ServicioBase {
 
   /** Comentario opcional del levantamiento (a nivel indicador+período, no por celda). */
   async establecerComentario(indicadorId: string, periodoId: string, comentario: string | null): Promise<void> {
+    await this.indicadorConPermiso(indicadorId, 'registrar');
     const anterior = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     await this.guardarLevantamiento(indicadorId, periodoId, {
       fechaCorte: anterior?.fechaCorte ?? null,
@@ -493,6 +580,7 @@ export class ServicioRecoleccion extends ServicioBase {
 
   /** Exclusión temporal de una desagregación: nunca modifica el indicador. */
   async alternarExclusion(indicadorId: string, periodoId: string, listaId: string, excluir: boolean): Promise<void> {
+    await this.indicadorConPermiso(indicadorId, 'registrar');
     const anterior = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     const actuales = new Set(anterior?.desagregacionesExcluidas ?? []);
     if (excluir) actuales.add(listaId);

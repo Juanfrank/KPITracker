@@ -133,11 +133,12 @@ describe('Borrado lógico — sin referencias: eliminar oculta, restaurar revela
     await app.manejadores['responsables:restaurar']({ id: r.id });
     expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
 
+    // +1 en ambas aserciones: la categoría raíz "General" (Batch T) ya existe desde el arranque.
     const c = await app.manejadores['categorias:guardar'](categoria({ nombre: 'Sin uso' }));
     await app.manejadores['categorias:eliminar']({ id: c.id });
-    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(0);
-    await app.manejadores['categorias:restaurar']({ id: c.id });
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
+    await app.manejadores['categorias:restaurar']({ id: c.id });
+    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(2);
 
     const o = await app.manejadores['origenes:guardar'](origen({ nombre: 'Sin uso' }));
     await app.manejadores['origenes:eliminar']({ id: o.id });

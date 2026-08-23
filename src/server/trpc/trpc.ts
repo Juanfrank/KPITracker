@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { EntidadNoEncontradaError, NoImplementadoError, ValidacionError } from '@domain/index';
-import { conUsuario } from '@application/use-cases/contextoUsuario';
+import { EntidadNoEncontradaError, NoImplementadoError, ValidacionError, puedeAdministrarCatalogos } from '@domain/index';
+import { conPermisos, conUsuario, permisosActuales } from '@application/use-cases/contextoUsuario';
 import type { Context } from './context';
 
 /**
@@ -26,15 +26,36 @@ export const publicProcedure = t.procedure;
  * la auditoría que dispare el resolver — el mismo mecanismo que hoy usa la
  * app de escritorio con el valor implícito `'local'`.
  */
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.usuario) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Se requiere iniciar sesión.' });
   const usuario = ctx.usuario;
-  return conUsuario(usuario.id, () => next({ ctx: { ...ctx, usuario } }));
+  // Batch T: además de la identidad (conUsuario, para auditoría), resuelve y planta el
+  // ContextoPermisos ambiente que consumen los Servicio* para filtrar/gatear por permiso.
+  const permisos = await ctx.aplicacion.permisos.resolver(usuario.id);
+  return conPermisos(permisos, () => conUsuario(usuario.id, () => next({ ctx: { ...ctx, usuario } })));
 });
 
-/** Además de sesión válida, exige `rol === 'admin'` — gestión de usuarios y pantallas de administración. */
+/** Además de sesión válida, exige `esAdministrador` — gestión de usuarios/roles y pantallas de administración. */
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.usuario.rol !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'Requiere rol de administrador.' });
+  if (!ctx.usuario.esAdministrador) throw new TRPCError({ code: 'FORBIDDEN', message: 'Requiere rol de administrador.' });
+  return next({ ctx });
+});
+
+/**
+ * Exige el permiso `catalogos.administrar` (admin, o el permiso general u
+ * excepcional, ver `puedeAdministrarCatalogos`) — las mutaciones de las
+ * pantallas de Configuración (indicadores, categorías, listas, atributos,
+ * reglas, periodicidades, orígenes automáticos). Las lecturas (`listar`) se
+ * mantienen en `protectedProcedure`: las necesita toda la app para poblar
+ * selectores. `equipos`/`responsables` NO usan esta procedure para
+ * `guardar` — ahí el líder de equipo tiene un permiso más acotado
+ * (`equipo.miembros.gestionar`), gateado dentro del propio servicio
+ * (`ServicioResponsables.guardar`), no a nivel de router.
+ */
+export const catalogosAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!puedeAdministrarCatalogos(permisosActuales())) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Requiere permiso para administrar la configuración.' });
+  }
   return next({ ctx });
 });
 

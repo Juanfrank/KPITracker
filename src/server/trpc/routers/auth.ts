@@ -1,7 +1,30 @@
 import { z } from 'zod';
+import type { IdentidadSesion } from '@application/use-cases/ServicioAutenticacion';
 import { HORAS_EXPIRACION_SESION } from '@application/use-cases/ServicioAutenticacion';
+import type { AplicacionServidor } from '../../composicionServidor';
 import { router, publicProcedure, protectedProcedure, invocar } from '../trpc';
 import { COOKIE_SESION } from '../context';
+
+/**
+ * Identidad + permisos efectivos (Batch T) — misma forma para `login` y
+ * `yo`, así el `AuthContext` del renderer solo maneja un tipo. Los permisos
+ * son el mismo `ServicioPermisos` que resuelve `protectedProcedure` para el
+ * `ContextoPermisos` ambiente; el renderer los usa solo para gating de UI
+ * (ocultar botones/secciones), la aplicación real de cada permiso vive en
+ * el servidor.
+ */
+async function conPermisos(aplicacion: AplicacionServidor, identidad: IdentidadSesion) {
+  const permisos = await aplicacion.permisos.resolver(identidad.id);
+  return {
+    ...identidad,
+    permisos: {
+      generales: [...permisos.permisosGenerales],
+      equipoId: permisos.equipoId,
+      equipo: [...permisos.permisosEquipo],
+      excepcionales: [...permisos.permisosExcepcionales]
+    }
+  };
+}
 
 /**
  * Único router sin equivalente IPC previo (junto con `usuarios`): la app de
@@ -24,7 +47,7 @@ export const authRouter = router({
         secure: process.env.NODE_ENV === 'production',
         maxAge: HORAS_EXPIRACION_SESION * 60 * 60 * 1000
       });
-      return identidad;
+      return conPermisos(ctx.aplicacion, identidad);
     }),
 
   logout: protectedProcedure.mutation(async ({ ctx }) => {
@@ -33,6 +56,6 @@ export const authRouter = router({
     return { ok: true } as const;
   }),
 
-  /** Identidad de la sesión actual, o `null` si no hay ninguna vigente — nunca lanza `UNAUTHORIZED`. */
-  yo: publicProcedure.query(({ ctx }) => ctx.usuario)
+  /** Identidad + permisos de la sesión actual, o `null` si no hay ninguna vigente — nunca lanza `UNAUTHORIZED`. */
+  yo: publicProcedure.query(({ ctx }) => (ctx.usuario ? conPermisos(ctx.aplicacion, ctx.usuario) : null))
 });

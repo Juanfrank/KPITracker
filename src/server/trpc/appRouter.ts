@@ -20,6 +20,7 @@ import { adjuntosRouter } from './routers/adjuntos';
 import { sistemaRouter } from './routers/sistema';
 import { authRouter } from './routers/auth';
 import { usuariosRouter } from './routers/usuarios';
+import { rolesRouter } from './routers/roles';
 
 /**
  * Router raíz: un sub-router por prefijo de `CanalesIpc` (ver
@@ -48,7 +49,8 @@ export const appRouter = router({
   adjuntos: adjuntosRouter,
   sistema: sistemaRouter,
   auth: authRouter,
-  usuarios: usuariosRouter
+  usuarios: usuariosRouter,
+  roles: rolesRouter
 });
 
 export type AppRouter = typeof appRouter;

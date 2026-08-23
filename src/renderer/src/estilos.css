@@ -600,6 +600,17 @@ table.tabla tbody tr.fila-eliminada:hover {
   color: var(--texto-3);
 }
 
+/* Estado de validación de un resultado (Batch T) — mismo vocabulario visual que los chips de arriba. */
+.chip.validado {
+  background: var(--exito-suave);
+  color: var(--exito);
+}
+
+.chip.rechazado {
+  background: var(--peligro-suave);
+  color: var(--peligro);
+}
+
 .barra-progreso {
   height: 6px;
   background: var(--superficie-3);

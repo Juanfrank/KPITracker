@@ -1,4 +1,11 @@
-/** Catálogo simple de responsables asignables a un indicador. */
+/**
+ * Catálogo simple de responsables asignables a un indicador. Desde Batch T,
+ * `equipoId` es obligatorio en la práctica (`ServicioResponsables.guardar`
+ * lo exige, por defecto el equipo "General" — ver `asegurarEquipoGeneral`);
+ * sigue tipado `string | null` porque el esquema no fuerza NOT NULL (la
+ * integridad referencial de este catálogo vive, como el resto, en la capa
+ * de aplicación) y para no romper la deserialización de filas antiguas.
+ */
 export interface Responsable {
   readonly id: string;
   nombre: string;
@@ -6,7 +13,7 @@ export interface Responsable {
   activo: boolean;
   /** Marca de borrado lógico (bloqueado por estar en uso): distinta de `activo`, que el usuario alterna manualmente. */
   eliminado: boolean;
-  /** Equipo al que pertenece — determina el vínculo INDIRECTO equipo↔indicador (vía este responsable). */
+  /** Equipo al que pertenece — determina el vínculo INDIRECTO equipo↔indicador (vía este responsable). Obligatorio, ver docstring. */
   equipoId: string | null;
   readonly creadoEn: string;
   actualizadoEn: string;
@@ -34,6 +41,17 @@ export interface Categoria {
   readonly creadoEn: string;
   actualizadoEn: string;
 }
+
+/**
+ * Ids fijos (no generados) de la categoría/equipo "General" — el respaldo al
+ * que Batch T recurre cuando un indicador se guarda sin clasificar (ver
+ * `ServicioIndicadores.guardar`). Sembrados con este mismo id literal por la
+ * migración `20260901000000_roles_permisos.ts`, para que el código de
+ * aplicación pueda referenciarlos sin tener que buscarlos por nombre (frágil
+ * ante un renombrado) ni pasarlos como configuración.
+ */
+export const ID_CATEGORIA_GENERAL = 'categoria-general';
+export const ID_EQUIPO_GENERAL = 'equipo-general';
 
 /** Equipo organizacional — jerárquico (equipo → sub-equipo, cualquier profundidad) vía `padreId`. */
 export interface Equipo {

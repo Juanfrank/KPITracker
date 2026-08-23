@@ -1,7 +1,7 @@
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository,
   ICatalogoRepository, IConfiguracionRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
-  IReglaRepository
+  IReglaRepository, IRolRepository
 } from '@application/ports/index';
 import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Responsable } from '@domain/index';
 import { ValidacionError } from '@domain/index';
@@ -22,6 +22,7 @@ export interface ReposRespaldoPerfil {
   responsables: ICatalogoRepository<Responsable>;
   categorias: ICatalogoRepository<Categoria>;
   equipos: ICatalogoRepository<Equipo>;
+  roles: IRolRepository;
   origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>;
   automatizaciones: IAutomatizacionIndicadorRepository;
   aliasDesagregacionOrigen: IAliasDesagregacionOrigenRepository;
@@ -50,13 +51,14 @@ export class RespaldoPerfilService {
   ) {}
 
   async exportar(): Promise<string> {
-    const [config, periodicidades, responsables, categorias, equipos, listas, atributos, origenes, indicadores, reglas] =
+    const [config, periodicidades, responsables, categorias, equipos, roles, listas, atributos, origenes, indicadores, reglas] =
       await Promise.all([
         this.repos.configuracion.obtener(),
         this.repos.periodicidades.listar(true),
         this.repos.responsables.listar(true),
         this.repos.categorias.listar(true),
         this.repos.equipos.listar(true),
+        this.repos.roles.listar(),
         this.repos.listas.listar(true),
         this.repos.atributos.listar(undefined, true),
         this.repos.origenesAutomaticos.listar(true),
@@ -79,6 +81,7 @@ export class RespaldoPerfilService {
       responsables: responsables as unknown as Record<string, unknown>[],
       categorias: categorias as unknown as Record<string, unknown>[],
       equipos: equipos as unknown as Record<string, unknown>[],
+      roles: roles as unknown as Record<string, unknown>[],
       listas: listas as unknown as Record<string, unknown>[],
       elementos: elementos as unknown as Record<string, unknown>[],
       atributos: atributos as unknown as Record<string, unknown>[],
@@ -186,6 +189,12 @@ export class RespaldoPerfilService {
     for (const equipo of idsSeleccionados('equipos', archivo.equipos as FilaConId[])) {
       await this.repos.equipos.guardar(conEliminadoPorDefecto(equipo) as never);
       importados.equipos++;
+    }
+
+    // Rol no tiene borrado lógico (catálogo pequeño, sin `eliminado`) — se guarda tal cual.
+    for (const rol of idsSeleccionados('roles', archivo.roles as FilaConId[])) {
+      await this.repos.roles.guardar(rol as never);
+      importados.roles++;
     }
 
     const listasSeleccionadas = idsSeleccionados('listas', archivo.listas as FilaConId[]);

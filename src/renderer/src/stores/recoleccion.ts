@@ -59,6 +59,9 @@ interface EstadoRecoleccion {
   restaurarVersion(claveDesagregacion: string, version: number): Promise<void>;
   /** Solicita el resultado automático del período actual al origen configurado del indicador. */
   obtenerAutomatico(): Promise<void>;
+  /** Batch T: capa de aprobación post-registro — no bloquea la captura, solo marca el estado. */
+  validarCelda(claveDesagregacion: string, comentario?: string | null): Promise<void>;
+  rechazarCelda(claveDesagregacion: string, comentario?: string | null): Promise<void>;
 }
 
 /**
@@ -150,7 +153,10 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
           ...s.captura,
           advertencias,
           filas: s.captura.filas.map((f) =>
-            f.claveDesagregacion === claveDesagregacion ? { ...f, valor, actualizadoEn: new Date().toISOString() } : f
+            f.claveDesagregacion === claveDesagregacion
+              // Batch T: editar el valor reinicia la validación a Pendiente (mismo criterio que el servidor).
+              ? { ...f, valor, actualizadoEn: new Date().toISOString(), estadoValidacion: 'Pendiente', comentarioValidacion: null }
+              : f
           )
         },
         pilaDeshacer: opciones.desdeHistorial
@@ -256,5 +262,33 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     for (let i = 0; i < valores.length && i < clavesEnOrden.length; i++) {
       await get().guardarCelda(clavesEnOrden[i]!, valores[i] ?? '');
     }
+  },
+
+  async validarCelda(claveDesagregacion, comentario = null) {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return;
+    await invocar('recoleccion:validar', { indicadorId, periodoId, claveDesagregacion, comentario });
+    set((s) => ({
+      captura: s.captura && {
+        ...s.captura,
+        filas: s.captura.filas.map((f) =>
+          f.claveDesagregacion === claveDesagregacion ? { ...f, estadoValidacion: 'Validado', comentarioValidacion: comentario } : f
+        )
+      }
+    }));
+  },
+
+  async rechazarCelda(claveDesagregacion, comentario = null) {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return;
+    await invocar('recoleccion:rechazar', { indicadorId, periodoId, claveDesagregacion, comentario });
+    set((s) => ({
+      captura: s.captura && {
+        ...s.captura,
+        filas: s.captura.filas.map((f) =>
+          f.claveDesagregacion === claveDesagregacion ? { ...f, estadoValidacion: 'Rechazado', comentarioValidacion: comentario } : f
+        )
+      }
+    }));
   }
 }));

@@ -5,17 +5,19 @@ import type { IClock, IIdGenerator, IPasswordHasher } from '@application/ports/i
 import type { Usuario } from '@domain/index';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
 import { ServicioAutenticacion } from '@application/use-cases/ServicioAutenticacion';
+import { ServicioPermisos } from '@application/use-cases/ServicioPermisos';
 import { ServicioUsuarios } from '@application/use-cases/ServicioUsuarios';
 
 /**
- * `Aplicacion` (el mismo tipo que usa Electron) más los dos servicios de
- * autenticación/usuarios que solo tiene sentido cablear en un entorno
- * multi-usuario real — la app de escritorio, con un único `USUARIO_LOCAL`
- * implícito, nunca los necesitó.
+ * `Aplicacion` (el mismo tipo que usa Electron) más los servicios de
+ * autenticación/usuarios/permisos que solo tiene sentido cablear en un
+ * entorno multi-usuario real — la app de escritorio, con un único
+ * `USUARIO_LOCAL` implícito, nunca los necesitó.
  */
 export interface AplicacionServidor extends Aplicacion {
   autenticacion: ServicioAutenticacion;
   usuarios: ServicioUsuarios;
+  permisos: ServicioPermisos;
 }
 
 /**
@@ -25,6 +27,9 @@ export interface AplicacionServidor extends Aplicacion {
  * archivo nunca importa nada de Electron) y agrega el andamiaje de
  * autenticación. Si la tabla `usuarios` está vacía (primer arranque contra
  * una base nueva), crea un administrador inicial — ver `asegurarAdminInicial`.
+ * Las categorías/equipos "General" y los 4 roles semilla (Batch T) se
+ * siembran en la propia migración (`20260901000000_roles_permisos.ts`), no
+ * acá — a diferencia del admin inicial, no dependen de si hay usuarios.
  */
 export async function componerAplicacionServidor(dataDir: string, appVersion?: string): Promise<AplicacionServidor> {
   const infra = await crearInfraestructura(dataDir, { appVersion });
@@ -32,7 +37,10 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
 
   const hasher = new ProveedorPassword(infra.usuarios);
   const autenticacion = new ServicioAutenticacion(hasher, infra.usuarios, infra.sesiones, infra.ids, infra.reloj);
-  const usuarios = new ServicioUsuarios(infra.usuarios, infra.ids, infra.reloj, hasher);
+  const usuarios = new ServicioUsuarios(
+    infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales, infra.responsables
+  );
+  const permisos = new ServicioPermisos(infra.usuarios, infra.roles, infra.permisosExcepcionales);
 
   await asegurarAdminInicial(infra.usuarios, hasher, infra.ids, infra.reloj);
 
@@ -42,6 +50,7 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
     servicios,
     autenticacion,
     usuarios,
+    permisos,
     cerrar: () => infra.cerrar()
   };
 }
@@ -73,7 +82,11 @@ async function asegurarAdminInicial(
     nombreUsuario,
     nombreCompleto: 'Administrador',
     passwordHash: await hasher.hashear(password),
-    rol: 'admin',
+    esAdministrador: true,
+    rolGeneralId: null,
+    equipoId: null,
+    rolEquipoId: null,
+    responsableId: null,
     activo: true,
     creadoEn: ahora,
     actualizadoEn: ahora

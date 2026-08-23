@@ -1,22 +1,22 @@
 import { z } from 'zod';
 import type { Atributo } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
-import { invocar, protectedProcedure, router } from '../trpc';
+import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
 
 export const atributosRouter = router({
   listar: protectedProcedure
     .input(z.object({ entidad: z.string().optional(), incluirEliminados: z.boolean().optional() }).optional())
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:listar'](input))),
 
-  guardar: protectedProcedure
+  guardar: catalogosAdminProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:guardar'](input as Atributo))),
 
-  eliminar: protectedProcedure
+  eliminar: catalogosAdminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:eliminar'](input))),
 
-  restaurar: protectedProcedure
+  restaurar: catalogosAdminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:restaurar'](input))),
 
@@ -24,7 +24,7 @@ export const atributosRouter = router({
     .input(z.object({ entidadTipo: z.string(), entidadId: z.string() }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:valores'](input))),
 
-  guardarValor: protectedProcedure
+  guardarValor: catalogosAdminProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:guardarValor'](input as ValorAtributoEntidad)))
 });

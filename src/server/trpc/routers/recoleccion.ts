@@ -45,5 +45,14 @@ export const recoleccionRouter = router({
   /** Ejecuta el script del origen configurado (I/O externa) y escribe celdas — deliberadamente mutation, no query. */
   obtenerAutomatico: protectedProcedure
     .input(z.object({ indicadorId: z.string(), periodoId: z.string() }))
-    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:obtenerAutomatico'](input)))
+    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:obtenerAutomatico'](input))),
+
+  /** Batch T: capa de aprobación post-registro — el gating (`resultados.validar.*`) vive en `ServicioRecoleccion`. */
+  validar: protectedProcedure
+    .input(z.object({ indicadorId: z.string(), periodoId: z.string(), claveDesagregacion: z.string(), comentario: z.string().nullish() }))
+    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:validar'](input))),
+
+  rechazar: protectedProcedure
+    .input(z.object({ indicadorId: z.string(), periodoId: z.string(), claveDesagregacion: z.string(), comentario: z.string().nullish() }))
+    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:rechazar'](input)))
 });

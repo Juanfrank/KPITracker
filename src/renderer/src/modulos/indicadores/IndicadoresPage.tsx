@@ -26,6 +26,14 @@ function rutaEquipo(equipo: Equipo, porId: Map<string, Equipo>): string {
   return partes.join(' > ');
 }
 
+/** Id de la categoría/equipo raíz "General" (Batch T) dentro de una lista ya cargada — respaldo obligatorio de un indicador sin clasificar. */
+function categoriaGeneralId(categorias: Categoria[]): string | null {
+  return categorias.find((c) => c.nombre === 'General' && c.padreId === null)?.id ?? null;
+}
+function equipoGeneralId(equipos: Equipo[]): string | null {
+  return equipos.find((e) => e.nombre === 'General' && e.padreId === null)?.id ?? null;
+}
+
 function indicadorVacio(): Indicador {
   return {
     id: '',
@@ -269,7 +277,15 @@ export function IndicadoresPage(): React.JSX.Element {
             <button className="boton" onClick={() => setMostrarImportar(true)} data-testid="importar-excel">
               <Icono nombre="subir" tamano={14} /> Importar desde Excel
             </button>
-            <button className="boton primario" onClick={() => void abrirEditor(indicadorVacio())} data-testid="nuevo-indicador">
+            <button
+              className="boton primario"
+              onClick={() => void abrirEditor({
+                ...indicadorVacio(),
+                categoria: categoriaGeneralId(categorias),
+                equipo: equipoGeneralId(equipos)
+              })}
+              data-testid="nuevo-indicador"
+            >
               <Icono nombre="mas" /> Nuevo indicador
             </button>
           </>
@@ -465,7 +481,7 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
           <div className="fila-form c2">
-            <Campo etiqueta="Responsable / Equipo">
+            <Campo etiqueta="Responsable / Equipo" obligatorio>
               <select
                 value={editando.equipo ? `equipo:${editando.equipo}` : editando.responsable ? `responsable:${editando.responsable}` : ''}
                 onChange={(e) => {
@@ -475,12 +491,11 @@ export function IndicadoresPage(): React.JSX.Element {
                   } else if (valor.startsWith('responsable:')) {
                     setEditando({ ...editando, responsable: valor.slice('responsable:'.length), equipo: null });
                   } else {
-                    setEditando({ ...editando, equipo: null, responsable: null });
+                    setEditando({ ...editando, equipo: equipoGeneralId(equipos), responsable: null });
                   }
                 }}
                 data-testid="indicador-responsable"
               >
-                <option value="">— sin asignar —</option>
                 {equipos.map((eq) => (
                   <optgroup key={eq.id} label={rutaEquipo(eq, equiposPorId)}>
                     <option value={`equipo:${eq.id}`}>— Todo el equipo —</option>
@@ -501,13 +516,12 @@ export function IndicadoresPage(): React.JSX.Element {
                 Elija un equipo completo (vínculo directo) o un responsable puntual (vínculo indirecto vía su equipo).
               </span>
             </Campo>
-            <Campo etiqueta="Categoría">
+            <Campo etiqueta="Categoría" obligatorio>
               <select
-                value={editando.categoria ?? ''}
+                value={editando.categoria ?? categoriaGeneralId(categorias) ?? ''}
                 onChange={(e) => setEditando({ ...editando, categoria: e.target.value || null })}
                 data-testid="indicador-categoria"
               >
-                <option value="">— sin asignar —</option>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </Campo>

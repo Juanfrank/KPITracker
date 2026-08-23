@@ -49,6 +49,17 @@ export function RecoleccionPage(): React.JSX.Element {
   const [parametros] = useSearchParams();
   const cuerpoTabla = useRef<HTMLTableSectionElement>(null);
   const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+  const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
+
+  const manejarValidacion = async (accion: 'validar' | 'rechazar', clave: string): Promise<void> => {
+    setErrorValidacion(null);
+    try {
+      if (accion === 'validar') await vm.validarCelda(clave);
+      else await vm.rechazarCelda(clave);
+    } catch (error) {
+      setErrorValidacion((error as Error).message);
+    }
+  };
 
   // Se reinicia solo al cambiar de indicador/período (no en cada autoguardado:
   // `captura` cambia de referencia con cada celda guardada, pero eso no debe
@@ -215,6 +226,10 @@ export function RecoleccionPage(): React.JSX.Element {
         </div>
       )}
 
+      {errorValidacion && (
+        <div className="aviso error" data-testid="error-validacion">{errorValidacion}</div>
+      )}
+
       {captura && captura.advertencias.length > 0 && (
         <div className="aviso info" data-testid="advertencias-captura">
           {captura.advertencias.map((a) => (
@@ -235,6 +250,7 @@ export function RecoleccionPage(): React.JSX.Element {
                 {desagregacionesActivas.length === 0 && <th>Desagregación</th>}
                 <th style={{ textAlign: 'right', width: 160 }}>Resultado — {captura.periodoEtiqueta}</th>
                 <th style={{ width: 170 }}>Última modificación</th>
+                <th style={{ width: 150 }}>Validación</th>
               </tr>
             </thead>
             <tbody ref={cuerpoTabla}>
@@ -303,6 +319,41 @@ export function RecoleccionPage(): React.JSX.Element {
                           claveDesagregacion={fila.claveDesagregacion}
                           alRestaurar={(version) => vm.restaurarVersion(fila.claveDesagregacion, version)}
                         />
+                      )}
+                    </td>
+                    <td>
+                      {fila.valor != null && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            className={`chip ${fila.estadoValidacion.toLowerCase()}`}
+                            title={fila.comentarioValidacion ?? undefined}
+                            data-testid={`validacion-${fila.claveDesagregacion}`}
+                          >
+                            {fila.estadoValidacion}
+                          </span>
+                          {fila.estadoValidacion !== 'Validado' && (
+                            <button
+                              type="button"
+                              className="boton sutil"
+                              title="Validar"
+                              onClick={() => void manejarValidacion('validar', fila.claveDesagregacion)}
+                              data-testid={`validar-${fila.claveDesagregacion}`}
+                            >
+                              ✓
+                            </button>
+                          )}
+                          {fila.estadoValidacion !== 'Rechazado' && (
+                            <button
+                              type="button"
+                              className="boton sutil"
+                              title="Rechazar"
+                              onClick={() => void manejarValidacion('rechazar', fila.claveDesagregacion)}
+                              data-testid={`rechazar-${fila.claveDesagregacion}`}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

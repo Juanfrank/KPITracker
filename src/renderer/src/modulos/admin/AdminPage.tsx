@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
-  Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral, Responsable, RolUsuario,
-  TipoOrigenAutomatico
+  AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
+  Responsable, Rol, TipoOrigenAutomatico
 } from '@domain/index';
-import { ejemploParaFuente, sinCiclo } from '@domain/index';
+import { CATALOGO_PERMISOS, ejemploParaFuente, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { descargar, postTexto } from '../../rest';
@@ -17,6 +17,11 @@ function responsableVacio(): Responsable {
   return {
     id: '', nombre: '', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
   };
+}
+
+/** Id del equipo raíz "General" (Batch T) dentro de una lista ya cargada — el respaldo cuando no se elige equipo. */
+function equipoGeneralId(equipos: Equipo[]): string | null {
+  return equipos.find((e) => e.nombre === 'General' && e.padreId === null)?.id ?? null;
 }
 
 function categoriaVacia(): Categoria {
@@ -300,7 +305,7 @@ function SeccionResponsables(): React.JSX.Element {
         </label>
         <button
           className="boton primario"
-          onClick={() => { void cargarEquipos(); setEditando(responsableVacio()); }}
+          onClick={() => { void cargarEquipos(); setEditando({ ...responsableVacio(), equipoId: equipoGeneralId(equipos) }); }}
           data-testid="nuevo-responsable"
         >
           <Icono nombre="mas" /> Responsable
@@ -380,19 +385,18 @@ function SeccionResponsables(): React.JSX.Element {
           <Campo etiqueta="Correo">
             <input type="email" value={editando.correo ?? ''} onChange={(e) => setEditando({ ...editando, correo: e.target.value || null })} />
           </Campo>
-          <Campo etiqueta="Equipo">
+          <Campo etiqueta="Equipo" obligatorio>
             <select
-              value={editando.equipoId ?? ''}
+              value={editando.equipoId ?? equipoGeneralId(equipos) ?? ''}
               onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null })}
               data-testid="responsable-equipo"
             >
-              <option value="">— (sin equipo) —</option>
               {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
                 <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
               ))}
             </select>
             <span className="texto-suave">
-              Determina el vínculo indirecto de los indicadores de este responsable con un equipo.
+              Obligatorio — determina el vínculo indirecto de los indicadores de este responsable con un equipo. Por defecto, "General".
             </span>
           </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
@@ -1208,16 +1212,176 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
   );
 }
 
+function rolVacio(ambito: AmbitoPermiso): Rol {
+  return { id: '', nombre: '', ambito, permisos: [], esSistema: false, creadoEn: '', actualizadoEn: '' };
+}
+
+/**
+ * Catálogo de roles (Batch T) — general (independiente de equipo) o de
+ * equipo (Líder/Colaborador/Visor semilla + los que cree el administrador).
+ * `esSistema` (los 4 semilla) no se puede borrar ni renombrar, pero su lista
+ * de permisos sí — es lo que hace "configurable" a Líder/Colaborador/Visor,
+ * tal como se pidió. Ambito y catálogo de permisos vienen fijos de
+ * `CATALOGO_PERMISOS` (dominio); acá solo se arma el checklist filtrado por
+ * el ámbito del rol en edición.
+ */
+function SeccionRoles(): React.JSX.Element {
+  const [items, setItems] = useState<Rol[]>([]);
+  const [editando, setEditando] = useState<Rol | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setItems(await trpcClient.roles.listar.query());
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const guardar = async (): Promise<void> => {
+    if (!editando) return;
+    setError(null);
+    try {
+      await trpcClient.roles.guardar.mutate(editando);
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el rol.');
+    }
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    setError(null);
+    try {
+      await trpcClient.roles.eliminar.mutate({ id });
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar el rol.');
+    }
+  };
+
+  const alternarPermiso = (permiso: string): void => {
+    if (!editando) return;
+    setEditando({
+      ...editando,
+      permisos: editando.permisos.includes(permiso)
+        ? editando.permisos.filter((p) => p !== permiso)
+        : [...editando.permisos, permiso]
+    });
+  };
+
+  const generales = items.filter((r) => r.ambito === 'general');
+  const deEquipo = items.filter((r) => r.ambito === 'equipo');
+  const permisosDelAmbito = editando ? CATALOGO_PERMISOS.filter((p) => p.ambito === editando.ambito) : [];
+
+  const tabla = (titulo: string, filas: Rol[], testidBoton: string, ambito: AmbitoPermiso): React.JSX.Element => (
+    <div className="tarjeta">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>{titulo}</h3>
+        <div className="separador" />
+        <button className="boton primario" onClick={() => setEditando(rolVacio(ambito))} data-testid={testidBoton}>
+          <Icono nombre="mas" /> Rol
+        </button>
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Permisos</th>
+              <th style={{ width: 90 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((r) => (
+              <tr key={r.id} onClick={() => setEditando(r)} style={{ cursor: 'pointer' }} data-testid={`rol-${r.nombre}`}>
+                <td>{r.nombre} {r.esSistema && <span className="texto-suave">(sistema)</span>}</td>
+                <td className="texto-suave">{r.permisos.length} permiso{r.permisos.length === 1 ? '' : 's'}</td>
+                <td />
+              </tr>
+            ))}
+            {filas.length === 0 && (
+              <tr>
+                <td colSpan={3}>
+                  <Vacio mensaje={`Sin roles de ${ambito === 'general' ? 'ámbito general' : 'ámbito equipo'}`} />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {tabla('Roles generales', generales, 'nuevo-rol-general', 'general')}
+      {tabla('Roles de equipo', deEquipo, 'nuevo-rol-equipo', 'equipo')}
+      {editando && (
+        <PanelLateral
+          titulo={editando.id ? `Editar rol — ${editando.nombre}` : `Nuevo rol de ámbito ${editando.ambito}`}
+          alCerrar={() => { setEditando(null); setError(null); }}
+          pie={
+            <>
+              {editando.id && !editando.esSistema && (
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>
+              )}
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-rol">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Nombre" obligatorio>
+            <input
+              type="text"
+              value={editando.nombre}
+              onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
+              autoFocus
+              disabled={editando.esSistema}
+              data-testid="rol-nombre"
+            />
+            {editando.esSistema && <span className="texto-suave">Los roles del sistema no se pueden renombrar.</span>}
+          </Campo>
+          <Campo etiqueta="Permisos">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {permisosDelAmbito.map((p) => (
+                <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={editando.permisos.includes(p.id)}
+                    onChange={() => alternarPermiso(p.id)}
+                    data-testid={`rol-permiso-${p.id}`}
+                  />
+                  {p.etiqueta}
+                </label>
+              ))}
+            </div>
+          </Campo>
+        </PanelLateral>
+      )}
+    </>
+  );
+}
+
 interface UsuarioFila {
   id: string;
   nombreUsuario: string;
   nombreCompleto: string;
-  rol: RolUsuario;
+  esAdministrador: boolean;
+  rolGeneralId: string | null;
+  equipoId: string | null;
+  rolEquipoId: string | null;
+  responsableId: string | null;
   activo: boolean;
+  permisosExcepcionales: string[];
 }
 
-function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; password: string; rol: RolUsuario } {
-  return { nombreUsuario: '', nombreCompleto: '', password: '', rol: 'usuario' };
+function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; password: string; esAdministrador: boolean } {
+  return { nombreUsuario: '', nombreCompleto: '', password: '', esAdministrador: false };
 }
 
 /**
@@ -1225,24 +1389,46 @@ function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; p
  * escritorio, que operaba con un único `USUARIO_LOCAL` implícito). Habla
  * directo con el cliente tRPC (no pasa por el shim `invocar()`, ya que
  * `usuarios:*` nunca tuvo canal IPC — ver plan §9.7). El componente padre
- * (`AdminPage`) solo la monta si `usuario.rol === 'admin'`; los
+ * (`AdminPage`) solo la monta si `usuario.esAdministrador`; los
  * procedimientos además son `adminProcedure` del lado del servidor, así que
  * ocultarla aquí es una conveniencia de UX, no la única barrera.
+ *
+ * Batch T: además del alta/contraseña/activo ya existentes, cada usuario
+ * gana rol general, equipo + rol de equipo, responsable vinculado (1 a 1) y
+ * permisos excepcionales — demasiados campos nuevos para editar inline en
+ * la tabla, así que pasa al mismo patrón "click en la fila → panel lateral"
+ * que ya usan Responsables/Categorías/Equipos.
  */
 function SeccionUsuarios(): React.JSX.Element {
   const [items, setItems] = useState<UsuarioFila[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [responsables, setResponsables] = useState<Responsable[]>([]);
   const [creando, setCreando] = useState<ReturnType<typeof usuarioNuevoVacio> | null>(null);
+  const [editando, setEditando] = useState<UsuarioFila | null>(null);
   const [editandoPassword, setEditandoPassword] = useState<UsuarioFila | null>(null);
   const [passwordNueva, setPasswordNueva] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setItems(await trpcClient.usuarios.listar.query());
+    const [usuarios, listaRoles, listaEquipos, listaResponsables] = await Promise.all([
+      trpcClient.usuarios.listar.query(),
+      trpcClient.roles.listar.query(),
+      invocar('equipos:listar', undefined),
+      invocar('responsables:listar', undefined)
+    ]);
+    setItems(usuarios);
+    setRoles(listaRoles);
+    setEquipos(listaEquipos);
+    setResponsables(listaResponsables);
   }, []);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  const rolesGenerales = roles.filter((r) => r.ambito === 'general');
+  const rolesEquipo = roles.filter((r) => r.ambito === 'equipo');
 
   const crear = async (): Promise<void> => {
     if (!creando) return;
@@ -1261,9 +1447,34 @@ function SeccionUsuarios(): React.JSX.Element {
     await cargar();
   };
 
-  const cambiarRol = async (u: UsuarioFila, rol: RolUsuario): Promise<void> => {
-    await trpcClient.usuarios.establecerRol.mutate({ id: u.id, rol });
-    await cargar();
+  const guardarEdicion = async (): Promise<void> => {
+    if (!editando) return;
+    setError(null);
+    try {
+      await trpcClient.usuarios.establecerAdministrador.mutate({ id: editando.id, esAdministrador: editando.esAdministrador });
+      if (!editando.esAdministrador && editando.rolGeneralId) {
+        await trpcClient.usuarios.establecerRolGeneral.mutate({ id: editando.id, rolGeneralId: editando.rolGeneralId });
+      }
+      await trpcClient.usuarios.establecerEquipo.mutate({ id: editando.id, equipoId: editando.equipoId, rolEquipoId: editando.rolEquipoId });
+      await trpcClient.usuarios.establecerResponsable.mutate({ id: editando.id, responsableId: editando.responsableId });
+      await trpcClient.usuarios.establecerPermisosExcepcionales.mutate({ id: editando.id, permisos: editando.permisosExcepcionales });
+      await trpcClient.usuarios.establecerActivo.mutate({ id: editando.id, activo: editando.activo });
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el usuario.');
+    }
+  };
+
+  const alternarPermisoExcepcional = (permiso: string): void => {
+    if (!editando) return;
+    const activo = editando.permisosExcepcionales.includes(permiso);
+    setEditando({
+      ...editando,
+      permisosExcepcionales: activo
+        ? editando.permisosExcepcionales.filter((p) => p !== permiso)
+        : [...editando.permisosExcepcionales, permiso]
+    });
   };
 
   const guardarPassword = async (): Promise<void> => {
@@ -1277,6 +1488,9 @@ function SeccionUsuarios(): React.JSX.Element {
       setError(e instanceof Error ? e.message : 'No se pudo cambiar la contraseña.');
     }
   };
+
+  const nombreRol = (id: string | null): string => (id ? roles.find((r) => r.id === id)?.nombre ?? '—' : '—');
+  const nombreEquipo = (id: string | null): string => (id ? equipos.find((e) => e.id === id)?.nombre ?? '—' : '—');
 
   return (
     <div className="tarjeta">
@@ -1293,33 +1507,30 @@ function SeccionUsuarios(): React.JSX.Element {
             <tr>
               <th>Usuario</th>
               <th>Nombre completo</th>
-              <th>Rol</th>
+              <th>Rol general</th>
+              <th>Equipo</th>
               <th>Activo</th>
               <th style={{ width: 110 }} />
             </tr>
           </thead>
           <tbody>
             {items.map((u) => (
-              <tr key={u.id} data-testid={`usuario-${u.nombreUsuario}`}>
+              <tr key={u.id} onClick={() => setEditando(u)} style={{ cursor: 'pointer' }} data-testid={`usuario-${u.nombreUsuario}`}>
                 <td>{u.nombreUsuario}</td>
                 <td>{u.nombreCompleto}</td>
+                <td>{u.esAdministrador ? 'Administrador' : nombreRol(u.rolGeneralId)}</td>
+                <td>{nombreEquipo(u.equipoId)}{u.equipoId && u.rolEquipoId ? ` (${nombreRol(u.rolEquipoId)})` : ''}</td>
                 <td>
-                  <select
-                    value={u.rol}
-                    onChange={(e) => void cambiarRol(u, e.target.value as RolUsuario)}
-                    data-testid={`usuario-rol-${u.nombreUsuario}`}
+                  <button
+                    className="boton sutil"
+                    onClick={(e) => { e.stopPropagation(); void alternarActivo(u); }}
+                    data-testid={`usuario-activo-${u.nombreUsuario}`}
                   >
-                    <option value="usuario">Usuario</option>
-                    <option value="admin">Administrador</option>
-                  </select>
-                </td>
-                <td>
-                  <button className="boton sutil" onClick={() => void alternarActivo(u)} data-testid={`usuario-activo-${u.nombreUsuario}`}>
                     {u.activo ? 'Sí' : 'No'}
                   </button>
                 </td>
                 <td>
-                  <button className="boton sutil" onClick={() => setEditandoPassword(u)} title="Cambiar contraseña">
+                  <button className="boton sutil" onClick={(e) => { e.stopPropagation(); setEditandoPassword(u); }} title="Cambiar contraseña">
                     Contraseña
                   </button>
                 </td>
@@ -1327,7 +1538,7 @@ function SeccionUsuarios(): React.JSX.Element {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <Vacio mensaje="Sin usuarios" />
                 </td>
               </tr>
@@ -1368,11 +1579,118 @@ function SeccionUsuarios(): React.JSX.Element {
               data-testid="usuario-password"
             />
           </Campo>
-          <Campo etiqueta="Rol">
-            <select value={creando.rol} onChange={(e) => setCreando({ ...creando, rol: e.target.value as RolUsuario })}>
-              <option value="usuario">Usuario</option>
-              <option value="admin">Administrador</option>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              style={{ width: 'auto' }}
+              checked={creando.esAdministrador}
+              onChange={(e) => setCreando({ ...creando, esAdministrador: e.target.checked })}
+              data-testid="usuario-es-administrador"
+            />
+            Administrador (acceso total, incluida esta pantalla)
+          </label>
+          <span className="texto-suave">
+            El resto de los campos (rol general, equipo, responsable vinculado, permisos excepcionales) se configuran al editar el usuario ya creado.
+          </span>
+        </PanelLateral>
+      )}
+      {editando && (
+        <PanelLateral
+          titulo={`Editar usuario — ${editando.nombreUsuario}`}
+          alCerrar={() => { setEditando(null); setError(null); }}
+          pie={
+            <>
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardarEdicion()} data-testid="guardar-usuario-edicion">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              style={{ width: 'auto' }}
+              checked={editando.esAdministrador}
+              onChange={(e) => setEditando({ ...editando, esAdministrador: e.target.checked })}
+              data-testid="usuario-editar-es-administrador"
+            />
+            Administrador (acceso total)
+          </label>
+          {!editando.esAdministrador && (
+            <Campo etiqueta="Rol general">
+              <select
+                value={editando.rolGeneralId ?? ''}
+                onChange={(e) => setEditando({ ...editando, rolGeneralId: e.target.value || null })}
+                data-testid="usuario-rol-general"
+              >
+                <option value="">— (ninguno) —</option>
+                {rolesGenerales.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+              </select>
+            </Campo>
+          )}
+          <Campo etiqueta="Equipo">
+            <select
+              value={editando.equipoId ?? ''}
+              onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null, rolEquipoId: e.target.value ? editando.rolEquipoId : null })}
+              data-testid="usuario-equipo"
+            >
+              <option value="">— (sin equipo) —</option>
+              {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
+                <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
+              ))}
             </select>
+          </Campo>
+          {editando.equipoId && (
+            <Campo etiqueta="Rol de equipo">
+              <select
+                value={editando.rolEquipoId ?? ''}
+                onChange={(e) => setEditando({ ...editando, rolEquipoId: e.target.value || null })}
+                data-testid="usuario-rol-equipo"
+              >
+                <option value="">— (ninguno) —</option>
+                {rolesEquipo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+              </select>
+            </Campo>
+          )}
+          <Campo etiqueta="Responsable vinculado">
+            <select
+              value={editando.responsableId ?? ''}
+              onChange={(e) => setEditando({ ...editando, responsableId: e.target.value || null })}
+              data-testid="usuario-responsable"
+            >
+              <option value="">— (ninguno) —</option>
+              {responsables.filter((r) => !r.eliminado).map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
+            <span className="texto-suave">
+              Vínculo 1 a 1: el usuario siempre podrá ver/registrar los resultados de los indicadores de este responsable.
+            </span>
+          </Campo>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              style={{ width: 'auto' }}
+              checked={editando.activo}
+              onChange={(e) => setEditando({ ...editando, activo: e.target.checked })}
+            />
+            Activo
+          </label>
+          <Campo etiqueta="Permisos excepcionales">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {CATALOGO_PERMISOS.map((p) => (
+                <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={editando.permisosExcepcionales.includes(p.id)}
+                    onChange={() => alternarPermisoExcepcional(p.id)}
+                    data-testid={`usuario-permiso-excepcional-${p.id}`}
+                  />
+                  {p.etiqueta} <span className="texto-suave">({p.ambito})</span>
+                </label>
+              ))}
+            </div>
+            <span className="texto-suave">Concedidos fuera de su rol nativo, además de lo que ya le dé su rol general/de equipo.</span>
           </Campo>
         </PanelLateral>
       )}
@@ -1476,7 +1794,8 @@ export function AdminPage(): React.JSX.Element {
       <SeccionEquipos />
       <SeccionOrigenesAutomaticos />
 
-      {usuario?.rol === 'admin' && <SeccionUsuarios />}
+      {usuario?.esAdministrador && <SeccionRoles />}
+      {usuario?.esAdministrador && <SeccionUsuarios />}
     </>
   );
 }

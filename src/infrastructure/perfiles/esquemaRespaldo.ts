@@ -10,7 +10,7 @@ import { z } from 'zod';
  * real del perfil.
  */
 export const RESPALDO_FORMATO = 'kpitracker-respaldo-perfil';
-export const RESPALDO_SCHEMA_VERSION = 2;
+export const RESPALDO_SCHEMA_VERSION = 3;
 
 /**
  * Categorías seleccionables al importar. `elementos` (hijos de listas) NO
@@ -23,6 +23,7 @@ export type CategoriaRespaldo =
   | 'responsables'
   | 'categorias'
   | 'equipos'
+  | 'roles'
   | 'listas'
   | 'atributos'
   | 'origenes'
@@ -40,7 +41,7 @@ export type CategoriaRespaldo =
  * referencian `equipo` directo).
  */
 export const ORDEN_IMPORTACION: CategoriaRespaldo[] = [
-  'configuracionGeneral', 'periodicidades', 'equipos', 'responsables', 'categorias',
+  'configuracionGeneral', 'periodicidades', 'roles', 'equipos', 'responsables', 'categorias',
   'listas', 'atributos', 'origenes', 'indicadores', 'metas', 'reglas', 'automatizaciones', 'aliasDesagregacion'
 ];
 
@@ -50,6 +51,7 @@ export const ETIQUETAS_CATEGORIA: Record<CategoriaRespaldo, string> = {
   responsables: 'Responsables',
   categorias: 'Categorías',
   equipos: 'Equipos',
+  roles: 'Roles',
   listas: 'Listas de selección',
   atributos: 'Atributos',
   origenes: 'Orígenes automáticos',
@@ -70,6 +72,7 @@ export const esquemaRespaldo = z.object({
   responsables: z.array(z.record(z.unknown())).default([]),
   categorias: z.array(z.record(z.unknown())).default([]),
   equipos: z.array(z.record(z.unknown())).default([]),
+  roles: z.array(z.record(z.unknown())).default([]),
   listas: z.array(z.record(z.unknown())).default([]),
   /** Hijos de listas — no es categoría de selección propia, ver `ORDEN_IMPORTACION`. */
   elementos: z.array(z.record(z.unknown())).default([]),
@@ -86,12 +89,15 @@ export type ArchivoRespaldo = z.infer<typeof esquemaRespaldo>;
 
 /**
  * Migraciones encadenables de versión de esquema (v -> v+1); vacío en v1.
- * v1 -> v2 (Batch S): se agrega la categoría `equipos` — el `.default([])`
- * de Zod ya la completa al parsear un respaldo v1 (no trae la clave), así
- * que el único paso real es avanzar el número de versión.
+ * v1 -> v2 (Batch S): se agrega la categoría `equipos`.
+ * v2 -> v3 (Batch T): se agrega la categoría `roles`. En ambos casos el
+ * `.default([])` de Zod ya completa el arreglo al parsear un respaldo más
+ * viejo (no trae la clave), así que el único paso real es avanzar el
+ * número de versión.
  */
 export const migracionesRespaldo: Record<number, (archivo: ArchivoRespaldo) => ArchivoRespaldo> = {
-  1: (archivo) => ({ ...archivo, schemaVersion: 2 })
+  1: (archivo) => ({ ...archivo, schemaVersion: 2 }),
+  2: (archivo) => ({ ...archivo, schemaVersion: 3 })
 };
 
 /**

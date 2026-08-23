@@ -4,7 +4,8 @@ import type {
   IAutomatizacionIndicadorRepository,
   IIndicadorRepository,
   IReglaRepository,
-  IResponsableRepository
+  IResponsableRepository,
+  IUsuarioRepository
 } from '@application/ports/index';
 
 /**
@@ -133,6 +134,18 @@ export async function referenciasDeEquipo(deps: DepsReferenciasEquipo, equipoId:
   }
 
   return detalles;
+}
+
+export interface DepsReferenciasRol {
+  usuarios: IUsuarioRepository;
+}
+
+/** Bloquea el borrado de un rol referenciado por algún usuario (`rolGeneralId` o `rolEquipoId`). */
+export async function referenciasDeRol(deps: DepsReferenciasRol, rolId: string): Promise<string[]> {
+  const usuarios = await deps.usuarios.listar();
+  return usuarios
+    .filter((u) => u.rolGeneralId === rolId || u.rolEquipoId === rolId)
+    .map((u) => `Usuario: ${u.nombreCompleto || u.nombreUsuario}`);
 }
 
 export interface DepsReferenciasOrigen {

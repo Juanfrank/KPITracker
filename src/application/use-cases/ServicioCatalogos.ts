@@ -1,21 +1,26 @@
 import type {
   AliasDesagregacionOrigen, Atributo, Categoria, ElementoLista, Equipo, Indicador, Lista, Meta, ReglaNegocio,
-  TypeRegistry
+  Responsable, TypeRegistry
 } from '@domain/index';
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
-  construirContextoIndicador, signosAgrupacionBalanceados, sinCiclo
+  construirContextoIndicador, equipoEfectivo, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
+  puedeGestionarMiembrosEquipo, puedeVerIndicador, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
-  IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository, IMetaRepository, IReglaRepository,
-  IResponsableRepository, ValorAtributoEntidad
+  IDefinicionPeriodicidadRepository, IEquipoRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
+  IReglaRepository, IResponsableRepository, ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
+import { permisosActuales } from './contextoUsuario';
 import { mapaValoresDesdeEntidad } from './valoresEav';
 import { ServicioCatalogoGenerico } from './ServicioCatalogoGenerico';
-import { referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, referenciasDeLista, referenciasDeRegla } from './referencias';
+import {
+  referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, referenciasDeLista, referenciasDeRegla,
+  referenciasDeResponsable
+} from './referencias';
 
 /** Mapeo de campos de Indicador -> nombre de columna del archivo importado (undefined = no mapeado). */
 export interface MapeoImportacionIndicadores {
@@ -45,6 +50,22 @@ export interface GuardarIndicadorInput {
 }
 
 /**
+ * Ids de los catálogos "General" (categoría/equipo) creados al arrancar el
+ * servidor (ver `asegurarCategoriaGeneral`/`asegurarEquipoGeneral` en
+ * `composicionServidor.ts`) — Batch T vuelve obligatoria la clasificación de
+ * un indicador; en vez de rechazar un payload sin categoría/equipo, se le
+ * aplica este valor por defecto de forma transparente ("habrá una categoría
+ * General... para todos los elementos no definidos", pedido explícito del
+ * usuario). El renderer además preselecciona estos mismos ids al abrir el
+ * formulario de un indicador nuevo, así que en el flujo normal esto nunca
+ * hace falta — pero cubre también altas programáticas (importación Excel).
+ */
+export interface DefaultsClasificacion {
+  categoriaGeneralId: string;
+  equipoGeneralId: string;
+}
+
+/**
  * CRUD de indicadores con validación de mínimos obligatorios, atributos
  * dinámicos (visibilidad/obligatoriedad declarativas) y reglas de negocio
  * `ValidacionCruzada`. La persistencia del indicador y de sus valores EAV
@@ -60,13 +81,21 @@ export class ServicioIndicadores extends ServicioBase {
     private readonly atributosRepo: IAtributoRepository,
     private readonly reglasRepo: IReglaRepository,
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
-    private readonly tipos: TypeRegistry
+    private readonly tipos: TypeRegistry,
+    private readonly defaults: DefaultsClasificacion,
+    private readonly responsablesRepo: IResponsableRepository
   ) {
     super(ctx);
   }
 
-  listar(): Promise<Indicador[]> {
-    return this.repo.listar();
+  /** Filtra a los indicadores que el usuario en curso puede ver (Batch T) — ver `puedeVerIndicador`. */
+  async listar(): Promise<Indicador[]> {
+    const [indicadores, responsables] = await Promise.all([this.repo.listar(), this.responsablesRepo.listar()]);
+    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const permisos = permisosActuales();
+    return indicadores.filter((i) =>
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+    );
   }
 
   obtener(id: string): Promise<Indicador | null> {
@@ -74,7 +103,13 @@ export class ServicioIndicadores extends ServicioBase {
   }
 
   async guardar(input: GuardarIndicadorInput): Promise<Indicador> {
-    const { indicador, valores } = input;
+    const { valores } = input;
+    // Batch T: clasificación obligatoria con respaldo "General" — ver docstring de DefaultsClasificacion.
+    const indicador: Indicador = {
+      ...input.indicador,
+      categoria: input.indicador.categoria ?? this.defaults.categoriaGeneralId,
+      equipo: input.indicador.equipo || input.indicador.responsable ? input.indicador.equipo : this.defaults.equipoGeneralId
+    };
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
     if (!indicador.definicion.trim()) errores.push('La definición es obligatoria.');
@@ -111,6 +146,12 @@ export class ServicioIndicadores extends ServicioBase {
     if (indicador.formaCalculo?.trim() && !signosAgrupacionBalanceados(indicador.formaCalculo)) {
       errores.push('La forma de cálculo tiene signos de agrupación (paréntesis, corchetes o llaves) sin cerrar o desbalanceados.');
     }
+    // Batch T: categoría y equipo/responsable pasan de opcionales a obligatorios — el renderer
+    // preselecciona "General" en ambos para un indicador nuevo (ver asegurarCategoriaGeneral/
+    // asegurarEquipoGeneral en composicionServidor.ts), así que en la práctica esto solo se
+    // dispara si alguien manda un payload manual sin clasificar.
+    if (!indicador.categoria) errores.push('La categoría es obligatoria.');
+    if (!indicador.equipo && !indicador.responsable) errores.push('Debe asignar un equipo o un responsable.');
     if (errores.length > 0) throw new ValidacionError('Indicador inválido.', errores);
 
     const anterior = await this.repo.obtener(indicador.id);
@@ -172,10 +213,35 @@ export class ServicioIndicadores extends ServicioBase {
     cambios: { responsable?: string | null; categoria?: string | null; equipo?: string | null }
   ): Promise<void> {
     if (indicadorIds.length === 0) return;
+    const ctxPermisos = permisosActuales();
+    const esAdmin = puedeAdministrarCatalogos(ctxPermisos);
+    // Sin catalogos.administrar, solo el líder del equipo del propio usuario puede reasignar —
+    // y únicamente indicadores YA de su equipo, hacia responsables/equipo de ese mismo equipo
+    // (equipo.indicadores.asignar). Evita que la acción masiva se use para tocar otros equipos.
+    if (!esAdmin) {
+      if (!puedeAsignarIndicadoresEquipo(ctxPermisos, ctxPermisos.equipoId)) {
+        throw new ValidacionError('No tiene permiso para asignar indicadores.');
+      }
+      if (cambios.equipo !== undefined && cambios.equipo !== ctxPermisos.equipoId) {
+        throw new ValidacionError('Solo puede asignar indicadores al equipo del que es líder.');
+      }
+      if (cambios.responsable) {
+        const responsableDestino = await this.responsablesRepo.obtener(cambios.responsable);
+        if (responsableDestino?.equipoId !== ctxPermisos.equipoId) {
+          throw new ValidacionError('Solo puede asignar responsables de su propio equipo.');
+        }
+      }
+    }
+    const responsables = esAdmin ? [] : await this.responsablesRepo.listar();
+    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+
     const ahora = this.ctx.reloj.ahoraIso();
     for (const id of indicadorIds) {
       const actual = await this.repo.obtener(id);
       if (!actual) continue;
+      if (!esAdmin && equipoEfectivo(actual, responsablesPorId) !== ctxPermisos.equipoId) {
+        throw new ValidacionError(`No tiene permiso para reasignar el indicador "${actual.nombre}": no pertenece a su equipo.`);
+      }
       const actualizado: Indicador = {
         ...actual,
         responsable: cambios.responsable === undefined ? actual.responsable : cambios.responsable,
@@ -646,5 +712,60 @@ export class ServicioEquipos extends ServicioBase {
     const hijos = todos.filter((e) => e.padreId === id);
     if (hijos.length > 0) detalles.push(`Sub-equipos (${hijos.length})`);
     return detalles;
+  }
+}
+
+/**
+ * Responsables (Batch T): envuelve `ServicioCatalogoGenerico<Responsable>`
+ * agregando lo único que ese genérico no puede conocer — `equipoId` pasa a
+ * ser obligatorio ("cada responsable pertenecerá por defecto al equipo
+ * General... solo podrá pertenecer a un equipo a la vez", pedido explícito
+ * del usuario; el campo sigue siendo `string | null` en el dominio por las
+ * razones ya documentadas en `Responsable`, pero este servicio nunca deja
+ * pasar `null`: si viene vacío, se completa con `equipoGeneralId`, igual
+ * criterio que `ServicioIndicadores` para categoría/equipo).
+ */
+export class ServicioResponsables extends ServicioBase {
+  private readonly generico: ServicioCatalogoGenerico<Responsable>;
+
+  constructor(
+    ctx: ContextoAplicacion,
+    private readonly repo: ICatalogoRepository<Responsable>,
+    private readonly indicadoresRepo: IIndicadorRepository,
+    private readonly equiposRepo: IEquipoRepository,
+    private readonly equipoGeneralId: string
+  ) {
+    super(ctx);
+    this.generico = new ServicioCatalogoGenerico(
+      ctx, repo, 'Responsable', (id) => referenciasDeResponsable({ indicadores: this.indicadoresRepo }, id)
+    );
+  }
+
+  listar(incluirEliminados = false): Promise<Responsable[]> {
+    return this.generico.listar(incluirEliminados);
+  }
+
+  async guardar(responsable: Responsable): Promise<Responsable> {
+    const equipoId = responsable.equipoId || this.equipoGeneralId;
+    if (!(await this.equiposRepo.obtener(equipoId))) {
+      throw new ValidacionError('El equipo seleccionado no existe.');
+    }
+    const ctx = permisosActuales();
+    if (!puedeAdministrarCatalogos(ctx)) {
+      const anterior = responsable.id ? await this.repo.obtener(responsable.id) : null;
+      // El líder de equipo puede: añadir alguien a su equipo (equipoId nuevo == su equipo) o
+      // sacar a alguien de su equipo (equipoId anterior == su equipo) — cualquiera de los dos alcanza.
+      const puede = puedeGestionarMiembrosEquipo(ctx, equipoId) || (anterior != null && puedeGestionarMiembrosEquipo(ctx, anterior.equipoId));
+      if (!puede) throw new ValidacionError('No tiene permiso para gestionar miembros de este equipo.');
+    }
+    return this.generico.guardar({ ...responsable, equipoId });
+  }
+
+  eliminar(id: string): Promise<void> {
+    return this.generico.eliminar(id);
+  }
+
+  restaurar(id: string): Promise<void> {
+    return this.generico.restaurar(id);
   }
 }

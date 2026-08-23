@@ -65,6 +65,10 @@ function resultado(id: string, indicadorId: string, periodoId: string, clave: st
     claveDesagregacion: clave,
     valor,
     observacion: null,
+    estadoValidacion: 'Pendiente',
+    validadoPor: null,
+    validadoEn: null,
+    comentarioValidacion: null,
     creadoEn: '2025-04-05T00:00:00Z',
     actualizadoEn: '2025-04-05T00:00:00Z'
   };
@@ -211,7 +215,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     const json = await infra.configPortable.exportar();
     const archivo = JSON.parse(json);
     expect(archivo.formato).toBe('kpitracker-config');
-    expect(archivo.schemaVersion).toBe(3);
+    expect(archivo.schemaVersion).toBe(4);
     expect(archivo.indicadores).toHaveLength(1);
 
     // Importa en una instancia limpia.

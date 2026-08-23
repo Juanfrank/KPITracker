@@ -76,7 +76,7 @@ describe('Servidor tRPC — autenticación', () => {
   it('crea un administrador inicial en el primer arranque, con el que se puede iniciar sesión', async () => {
     const cliente = crearCliente(fetchConCookies());
     const identidad = await cliente.auth.login.mutate({ nombreUsuario: 'admin', password: 'admin12345' });
-    expect(identidad).toMatchObject({ nombreUsuario: 'admin', rol: 'admin' });
+    expect(identidad).toMatchObject({ nombreUsuario: 'admin', esAdministrador: true });
   });
 
   it('rechaza credenciales incorrectas con el mismo mensaje genérico que ServicioAutenticacion, como BAD_REQUEST', async () => {
@@ -130,7 +130,7 @@ describe('Servidor tRPC — autenticación', () => {
 
   it('un usuario sin rol admin recibe FORBIDDEN en un procedimiento de administración', async () => {
     const admin = await clienteAdmin();
-    await admin.usuarios.crear.mutate({ nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', password: 'correcta123', rol: 'usuario' });
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', password: 'correcta123' });
 
     const cliente = crearCliente(fetchConCookies());
     await cliente.auth.login.mutate({ nombreUsuario: 'jperez', password: 'correcta123' });
@@ -145,7 +145,7 @@ describe('Servidor tRPC — autenticación', () => {
   it('el error de negocio conserva `detalles` sobre el cable (mismo sobre que RespuestaIpc)', async () => {
     const admin = await clienteAdmin();
     const error = await admin.usuarios.crear
-      .mutate({ nombreUsuario: 'admin', nombreCompleto: 'Duplicado', password: 'correcta123', rol: 'usuario' })
+      .mutate({ nombreUsuario: 'admin', nombreCompleto: 'Duplicado', password: 'correcta123' })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TRPCClientError);
     expect((error as TRPCClientError<AppRouter>).data?.code).toBe('BAD_REQUEST');

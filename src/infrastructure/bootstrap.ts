@@ -6,8 +6,8 @@ import { RutasDataLake } from './parquet/RutasDataLake';
 import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex,
-  IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex, ReglaRepositoryKnex,
-  ResultadoRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
+  IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex,
+  ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
 import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
@@ -43,6 +43,8 @@ export interface Infraestructura {
   auditoria: AuditoriaRepositoryKnex;
   usuarios: UsuarioRepositoryKnex;
   sesiones: SesionRepositoryKnex;
+  roles: RolRepositoryKnex;
+  permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
   respaldoPerfil: RespaldoPerfilService;
@@ -99,13 +101,15 @@ export async function crearInfraestructura(
   const auditoria = new AuditoriaRepositoryKnex(knex);
   const usuarios = new UsuarioRepositoryKnex(knex);
   const sesiones = new SesionRepositoryKnex(knex);
+  const roles = new RolRepositoryKnex(knex);
+  const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
   const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, responsables, categorias);
   const configPortable = new ConfigPortableService(
-    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias, equipos
+    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias, equipos, roles
   );
   const respaldoPerfil = new RespaldoPerfilService(
     {
-      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias, equipos,
+      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias, equipos, roles,
       origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen
     },
     opciones.appVersion ?? null
@@ -136,6 +140,8 @@ export async function crearInfraestructura(
     auditoria,
     usuarios,
     sesiones,
+    roles,
+    permisosExcepcionales,
     exportacion,
     configPortable,
     respaldoPerfil,

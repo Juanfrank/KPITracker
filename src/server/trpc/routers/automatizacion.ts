@@ -1,21 +1,21 @@
 import { z } from 'zod';
 import type { AutomatizacionIndicador, ParametroDinamico } from '@domain/index';
-import { invocar, protectedProcedure, router } from '../trpc';
+import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
 
 export const automatizacionRouter = router({
   obtener: protectedProcedure
     .input(z.object({ indicadorId: z.string() }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:obtener'](input))),
 
-  guardar: protectedProcedure
+  guardar: catalogosAdminProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:guardar'](input as AutomatizacionIndicador))),
 
-  eliminar: protectedProcedure
+  eliminar: catalogosAdminProcedure
     .input(z.object({ indicadorId: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:eliminar'](input))),
 
-  ejecutarPrueba: protectedProcedure
+  ejecutarPrueba: catalogosAdminProcedure
     .input(
       z.object({
         indicadorId: z.string(),
@@ -33,7 +33,7 @@ export const automatizacionRouter = router({
     .input(z.object({ listaId: z.string(), valoresUnicos: z.array(z.string()) }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:validarColumna'](input))),
 
-  agregarElementosFaltantes: protectedProcedure
+  agregarElementosFaltantes: catalogosAdminProcedure
     .input(z.object({ listaId: z.string(), nombres: z.array(z.string()) }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:agregarElementosFaltantes'](input)))
 });

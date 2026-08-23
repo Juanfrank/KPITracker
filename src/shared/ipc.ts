@@ -1,7 +1,7 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, DefinicionPeriodicidad,
   ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
-  Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial
+  Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial, Rol
 } from '@domain/index';
 import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura, ResultadoObtencionAutomatica } from '@application/use-cases/ServicioRecoleccion';
@@ -157,6 +157,9 @@ export interface CanalesIpc {
   };
   /** Ejecuta el script del origen configurado y escribe las celdas que su mapeo permite determinar sin ambigüedad. */
   'recoleccion:obtenerAutomatico': { req: { indicadorId: string; periodoId: string }; res: ResultadoObtencionAutomatica };
+  /** Marca un resultado ya registrado como Validado/Rechazado (Batch T) — capa de aprobación post-registro, no bloquea la captura. */
+  'recoleccion:validar': { req: { indicadorId: string; periodoId: string; claveDesagregacion: string; comentario?: string | null }; res: void };
+  'recoleccion:rechazar': { req: { indicadorId: string; periodoId: string; claveDesagregacion: string; comentario?: string | null }; res: void };
 
   'seguimiento:tablero': { req: void; res: FilaTablero[] };
   'seguimiento:detalle': { req: { indicadorId: string }; res: DetalleSeguimiento | null };
@@ -166,6 +169,11 @@ export interface CanalesIpc {
   'exportacion:ruta': { req: void; res: { ruta: string } };
 
   'auditoria:consultar': { req: FiltroAuditoria; res: RegistroAuditoria[] };
+
+  'roles:listar': { req: void; res: Rol[] };
+  'roles:guardar': { req: Rol; res: Rol };
+  /** Rechaza (bloqueado) si el rol es del sistema o algún usuario lo referencia. */
+  'roles:eliminar': { req: { id: string }; res: void };
 
   'portable:exportar': { req: void; res: { json: string } };
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };

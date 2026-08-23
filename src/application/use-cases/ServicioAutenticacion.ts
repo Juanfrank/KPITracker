@@ -9,7 +9,7 @@ export interface IdentidadSesion {
   id: string;
   nombreUsuario: string;
   nombreCompleto: string;
-  rol: Usuario['rol'];
+  esAdministrador: boolean;
 }
 
 /**
@@ -64,5 +64,10 @@ export class ServicioAutenticacion {
 }
 
 function aIdentidad(usuario: Usuario): IdentidadSesion {
-  return { id: usuario.id, nombreUsuario: usuario.nombreUsuario, nombreCompleto: usuario.nombreCompleto, rol: usuario.rol };
+  return {
+    id: usuario.id,
+    nombreUsuario: usuario.nombreUsuario,
+    nombreCompleto: usuario.nombreCompleto,
+    esAdministrador: usuario.esAdministrador
+  };
 }

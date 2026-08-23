@@ -1,5 +1,6 @@
 import {
-  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo
+  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo,
+  puedeVerIndicador
 } from '@domain/index';
 import type {
   Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
@@ -11,6 +12,7 @@ import type {
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
+import { permisosActuales } from './contextoUsuario';
 
 /** Valor de un atributo dinámico marcado como filtrable, resuelto a texto legible. */
 export interface AtributoFiltro {
@@ -157,7 +159,14 @@ export class ServicioSeguimiento extends ServicioBase {
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaTablero[] = [];
 
-    for (const indicador of indicadores) {
+    // Batch T: un indicador que el usuario no puede ver ni siquiera aparece en el
+    // tablero (en vez de un error) — ver `puedeVerIndicador`.
+    const permisos = permisosActuales();
+    const visibles = indicadores.filter((i) =>
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+    );
+
+    for (const indicador of visibles) {
       const totalCombinaciones = await this.totalCombinaciones(indicador.desagregaciones);
       const definicion = await this.definicionPara(indicador, definiciones);
       const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
@@ -218,6 +227,11 @@ export class ServicioSeguimiento extends ServicioBase {
   async detalle(indicadorId: string): Promise<DetalleSeguimiento | null> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) return null;
+    const responsable = indicador.responsable ? await this.responsablesRepo.obtener(indicador.responsable) : null;
+    const responsablesPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
+    if (!puedeVerIndicador(permisosActuales(), { equipoEfectivoId: equipoEfectivo(indicador, responsablesPorId), responsable: indicador.responsable })) {
+      return null;
+    }
     const config = await this.configuracion.obtener();
     const hoy = this.ctx.reloj.hoyIso();
     const [resumen, levantamientos, definicionesLista] = await Promise.all([
@@ -259,13 +273,21 @@ export class ServicioSeguimiento extends ServicioBase {
    * `resultados` (no tienen filas propias, ver ExportAnaliticoService).
    */
   async historico(): Promise<FilaHistorico[]> {
-    const [config, indicadores] = await Promise.all([this.configuracion.obtener(), this.indicadores.listar()]);
+    const [config, indicadores, responsables] = await Promise.all([
+      this.configuracion.obtener(), this.indicadores.listar(), this.responsablesRepo.listar()
+    ]);
     const definicionesLista = await this.periodicidadesRepo.listar();
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaHistorico[] = [];
 
-    for (const indicador of indicadores) {
+    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const permisos = permisosActuales();
+    const visibles = indicadores.filter((i) =>
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+    );
+
+    for (const indicador of visibles) {
       const definicion = await this.definicionPara(indicador, definiciones);
       const periodos = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
       const valoresPorPeriodo = new Map<string, number | null>();

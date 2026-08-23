@@ -1,23 +1,24 @@
 import type { Knex } from 'knex';
+import { randomUUID } from 'node:crypto';
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, DefinicionPeriodicidad, ElementoLista,
   EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio,
-  Resultado, ResultadoHistorial, Sesion, Usuario
+  Resultado, ResultadoHistorial, Rol, Sesion, Usuario
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
   IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IIndicadorRepository,
-  IListaRepository, IMetaRepository, IReglaRepository, IResultadoRepository, ISesionRepository, IUsuarioRepository,
-  ResumenPeriodo, ValorAtributoEntidad
+  IListaRepository, IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository,
+  IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
   aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aDefinicionPeriodicidad,
   aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMeta, aOrigenAutomatico, aRegla, aResultado,
-  aResultadoHistorial, aSesion, aUsuario,
+  aResultadoHistorial, aRol, aSesion, aUsuario,
   deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deDefinicionPeriodicidad,
   deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMeta, deOrigenAutomatico, deRegla, deResultado,
-  deResultadoHistorial, deSesion, deUsuario
+  deResultadoHistorial, deRol, deSesion, deUsuario
 } from './mapeos';
 
 /**
@@ -428,6 +429,44 @@ export class UsuarioRepositoryKnex extends RepositorioBase implements IUsuarioRe
 
   async guardar(usuario: Usuario): Promise<void> {
     await upsert(this.knex, 'usuarios', { id: usuario.id }, deUsuario(usuario));
+  }
+}
+
+export class RolRepositoryKnex extends RepositorioBase implements IRolRepository {
+  async listar(): Promise<Rol[]> {
+    return (await this.knex('roles').select('*').orderBy(['ambito', 'nombre'])).map(aRol);
+  }
+
+  async obtener(id: string): Promise<Rol | null> {
+    const fila = await this.knex('roles').where({ id }).first();
+    return fila ? aRol(fila) : null;
+  }
+
+  async guardar(rol: Rol): Promise<void> {
+    await upsert(this.knex, 'roles', { id: rol.id }, deRol(rol));
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.knex('roles').where({ id }).delete();
+  }
+}
+
+export class PermisoExcepcionalRepositoryKnex extends RepositorioBase implements IPermisoExcepcionalRepository {
+  async listarPorUsuario(usuarioId: string): Promise<string[]> {
+    const filas = await this.knex('usuarios_permisos_excepcionales').where({ usuario_id: usuarioId }).select('permiso');
+    return filas.map((f) => String(f.permiso));
+  }
+
+  async establecer(usuarioId: string, permisos: string[]): Promise<void> {
+    // Reemplazo completo transaccional: borra lo que ya no venga en `permisos` e inserta lo nuevo.
+    await this.knex.transaction(async (trx) => {
+      await trx('usuarios_permisos_excepcionales').where({ usuario_id: usuarioId }).delete();
+      if (permisos.length === 0) return;
+      const ahora = new Date().toISOString();
+      await trx('usuarios_permisos_excepcionales').insert(
+        permisos.map((permiso) => ({ id: randomUUID(), usuario_id: usuarioId, permiso, creado_en: ahora }))
+      );
+    });
   }
 }
 

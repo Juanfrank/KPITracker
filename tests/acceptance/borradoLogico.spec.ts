@@ -51,7 +51,10 @@ test('un responsable asignado a un indicador no puede eliminarse; el aviso indic
 test('desasignado, eliminar oculta al responsable; "Mostrar eliminados" lo revela y "Restaurar" lo devuelve', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('indicador-Indicador con responsable').click();
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: '— sin asignar —' });
+  // Batch T: Responsable/Equipo ahora es obligatorio (ya no hay "— sin asignar —") — se
+  // "desasigna" reasignando al vínculo directo con el equipo "General" (el único equipo
+  // que existe en este spec), en vez de una persona puntual.
+  await pagina.getByTestId('indicador-responsable').selectOption({ label: '— Todo el equipo —' });
   await pagina.getByTestId('guardar-indicador').click();
 
   await pagina.getByTestId('nav-admin').click();

@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import * as esquemaInicial from './20260101000000_esquema_inicial';
 import * as categoriasEquipos from './20260825000000_categorias_equipos';
+import * as rolesPermisos from './20260901000000_roles_permisos';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -9,7 +10,8 @@ interface ModuloMigracion {
 
 const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20260101000000_esquema_inicial', modulo: esquemaInicial },
-  { nombre: '20260825000000_categorias_equipos', modulo: categoriasEquipos }
+  { nombre: '20260825000000_categorias_equipos', modulo: categoriasEquipos },
+  { nombre: '20260901000000_roles_permisos', modulo: rolesPermisos }
 ];
 
 /**
