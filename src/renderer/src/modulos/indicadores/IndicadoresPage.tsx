@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Meta, Periodo,
   ReglaNegocio, ValorAtributo
@@ -123,6 +123,11 @@ export function IndicadoresPage(): React.JSX.Element {
   // persistirlas todavía, así que viven solo en el renderer hasta que `guardar()` resuelve el id real,
   // mismo patrón que `valoresAttr` para los atributos dinámicos.
   const [metasPendientes, setMetasPendientes] = useState<Meta[]>([]);
+  // Debounce por meta (~500ms, Batch U8): agrupa el tecleo rápido sobre el
+  // mismo campo (valor, año, clave de desagregación...) en una sola
+  // escritura de red — sin esto, cada onChange generaba su propia fila de
+  // auditoría.
+  const temporizadoresGuardadoMeta = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [errores, setErrores] = useState<string[]>([]);
   const [filtro, setFiltro] = useState('');
   const [anioInicial, setAnioInicial] = useState<number>(new Date().getFullYear());
@@ -236,19 +241,37 @@ export function IndicadoresPage(): React.JSX.Element {
     setMetas([...metas, nueva]);
   };
 
-  const actualizarMeta = async (meta: Meta): Promise<void> => {
+  const actualizarMeta = (meta: Meta): void => {
     if (!editando?.id) {
       setMetasPendientes((previas) => previas.map((m) => (m.id === meta.id ? meta : m)));
       return;
     }
-    await invocar('metas:guardar', meta);
+    // Actualización optimista instantánea; la escritura de red se debounce
+    // para no generar una fila de auditoría por tecla.
     setMetas((previas) => previas.map((m) => (m.id === meta.id ? meta : m)));
+    const temporizadores = temporizadoresGuardadoMeta.current;
+    const anterior = temporizadores.get(meta.id);
+    if (anterior) clearTimeout(anterior);
+    temporizadores.set(
+      meta.id,
+      setTimeout(() => {
+        temporizadores.delete(meta.id);
+        void invocar('metas:guardar', meta);
+      }, 500)
+    );
   };
 
   const eliminarMeta = (meta: Meta): void => {
     if (!editando?.id) {
       setMetasPendientes((previas) => previas.filter((m) => m.id !== meta.id));
       return;
+    }
+    // Cancela cualquier guardado debounced pendiente de esta meta: no tiene
+    // sentido escribirla de vuelta tras eliminarla.
+    const temporizador = temporizadoresGuardadoMeta.current.get(meta.id);
+    if (temporizador) {
+      clearTimeout(temporizador);
+      temporizadoresGuardadoMeta.current.delete(meta.id);
     }
     void invocar('metas:eliminar', { id: meta.id }).then(() => setMetas((prev) => prev.filter((x) => x.id !== meta.id)));
   };

@@ -91,6 +91,10 @@ export function ListasPage(): React.JSX.Element {
   // mismo elemento (p. ej. código y luego nombre) se pisen entre sí si sus
   // respuestas de red llegan en un orden distinto al que se dispararon.
   const colasGuardadoElemento = useRef(new Map<string, Promise<unknown>>());
+  // Debounce por fila (~500ms): agrupa el tecleo rápido sobre el mismo
+  // elemento (p. ej. cada letra del nombre) en una sola escritura de red —
+  // sin esto, cada onChange generaba su propia fila de auditoría.
+  const temporizadoresGuardadoElemento = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const cargar = useCallback(async (): Promise<void> => {
     const datos = await invocar('listas:listar', { incluirEliminados: mostrarEliminados });
@@ -180,19 +184,30 @@ export function ListasPage(): React.JSX.Element {
     if (nuevo) enfocarCampoElemento(nuevo.orden, 'nombre');
   };
 
-  const actualizarElemento = async (elemento: ElementoLista): Promise<void> => {
+  const actualizarElemento = (elemento: ElementoLista): void => {
     // Actualización optimista primero: así, si el usuario edita otro campo de
     // esta misma fila antes de que termine este guardado, ese cambio parte
     // del estado ya fusionado (no de una copia vieja capturada al renderizar).
     setElementos((previos) => previos.map((e) => (e.id === elemento.id ? elemento : e)));
-    // Encadenado por fila: las escrituras al mismo elemento se envían en el
-    // orden en que el usuario las disparó, nunca en paralelo, para que una
-    // respuesta más lenta no sobrescriba con datos obsoletos un cambio más
-    // reciente que ya se guardó.
-    const cola = colasGuardadoElemento.current.get(elemento.id) ?? Promise.resolve();
-    const siguiente = cola.then(() => invocar('listas:guardarElemento', elemento));
-    colasGuardadoElemento.current.set(elemento.id, siguiente);
-    await siguiente;
+
+    // Debounce: reinicia el temporizador de esta fila con cada tecla; solo se
+    // dispara la escritura de red cuando el usuario hace una pausa de 500ms.
+    const temporizadores = temporizadoresGuardadoElemento.current;
+    const anterior = temporizadores.get(elemento.id);
+    if (anterior) clearTimeout(anterior);
+    temporizadores.set(
+      elemento.id,
+      setTimeout(() => {
+        temporizadores.delete(elemento.id);
+        // Encadenado por fila: las escrituras al mismo elemento se envían en
+        // el orden en que el usuario las disparó, nunca en paralelo, para que
+        // una respuesta más lenta no sobrescriba con datos obsoletos un
+        // cambio más reciente que ya se guardó.
+        const cola = colasGuardadoElemento.current.get(elemento.id) ?? Promise.resolve();
+        const siguiente = cola.then(() => invocar('listas:guardarElemento', elemento));
+        colasGuardadoElemento.current.set(elemento.id, siguiente);
+      }, 500)
+    );
   };
 
   /**
@@ -424,6 +439,13 @@ export function ListasPage(): React.JSX.Element {
                           className="boton sutil"
                           title="Eliminar elemento"
                           onClick={() => {
+                            // Cancela cualquier guardado debounced pendiente de esta fila:
+                            // no tiene sentido escribirla de vuelta tras eliminarla.
+                            const temporizador = temporizadoresGuardadoElemento.current.get(el.id);
+                            if (temporizador) {
+                              clearTimeout(temporizador);
+                              temporizadoresGuardadoElemento.current.delete(el.id);
+                            }
                             void invocar('listas:eliminarElemento', { id: el.id }).then(() =>
                               setElementos((previos) => previos.filter((x) => x.id !== el.id))
                             );
