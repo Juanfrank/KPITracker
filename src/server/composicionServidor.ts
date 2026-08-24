@@ -3,6 +3,7 @@ import { componerManejadores } from '@composicion/manejadores';
 import type { Aplicacion } from '@composicion/manejadores';
 import type { IClock, IIdGenerator, IPasswordHasher } from '@application/ports/index';
 import type { Usuario } from '@domain/index';
+import { ID_EQUIPO_GENERAL } from '@domain/index';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
 import { ServicioAutenticacion } from '@application/use-cases/ServicioAutenticacion';
 import { ServicioPermisos } from '@application/use-cases/ServicioPermisos';
@@ -38,7 +39,8 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
   const hasher = new ProveedorPassword(infra.usuarios);
   const autenticacion = new ServicioAutenticacion(hasher, infra.usuarios, infra.sesiones, infra.ids, infra.reloj);
   const usuarios = new ServicioUsuarios(
-    infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales, infra.responsables
+    infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales,
+    infra.equipos, infra.indicadores, infra.credencialesGeneradas, ID_EQUIPO_GENERAL
   );
   const permisos = new ServicioPermisos(infra.usuarios, infra.roles, infra.permisosExcepcionales);
 
@@ -81,13 +83,14 @@ async function asegurarAdminInicial(
     id: ids.nuevoId(),
     nombreUsuario,
     nombreCompleto: 'Administrador',
+    correo: null,
     passwordHash: await hasher.hashear(password),
     esAdministrador: true,
     rolGeneralId: null,
     equipoId: null,
     rolEquipoId: null,
-    responsableId: null,
     activo: true,
+    eliminado: false,
     creadoEn: ahora,
     actualizadoEn: ahora
   });

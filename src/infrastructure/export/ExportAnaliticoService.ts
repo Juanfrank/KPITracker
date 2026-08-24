@@ -1,12 +1,12 @@
 import { join } from 'node:path';
 import type { Knex } from 'knex';
 import type { RutasDataLake } from '../parquet/RutasDataLake';
-import type { ICatalogoRepository, IConfiguracionRepository, IExportService } from '@application/ports/index';
+import type { ICatalogoRepository, IConfiguracionRepository, IExportService, IUsuarioRepository } from '@application/ports/index';
 import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
 import { EvaluadorFormulas } from '@domain/services/EvaluadorFormulas';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
 import { textoAClave } from '@domain/value-objects/ClaveDesagregacion';
-import type { Categoria, DefinicionPeriodicidad, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad } from '@domain/index';
 import { DuckDbAnalitico, escribirCsv, escribirParquet } from './DuckDbAnalitico';
 
 // Listas explícitas de columnas (en vez de inferirlas de la primera fila)
@@ -58,7 +58,7 @@ export class ExportAnaliticoService implements IExportService {
     private readonly rutas: RutasDataLake,
     private readonly configuracion: IConfiguracionRepository,
     private readonly periodicidades: ICatalogoRepository<DefinicionPeriodicidad>,
-    private readonly responsables: ICatalogoRepository<Responsable>,
+    private readonly usuarios: IUsuarioRepository,
     private readonly categorias: ICatalogoRepository<Categoria>,
     private readonly debounceMs = 1000
   ) {}
@@ -212,7 +212,7 @@ export class ExportAnaliticoService implements IExportService {
     );
     const descripcionElemento = new Map(elementos.map((e) => [`${e.lista_id}|${e.codigo}`, e.nombre]));
     const definicionesPorId = new Map((await this.periodicidades.listar()).map((d) => [d.id, d]));
-    const nombreResponsable = new Map((await this.responsables.listar()).map((r) => [r.id, r.nombre]));
+    const nombreResponsable = new Map((await this.usuarios.listar()).map((u) => [u.id, u.nombreCompleto]));
     const nombreCategoria = new Map((await this.categorias.listar()).map((c) => [c.id, c.nombre]));
 
     const filas = await this.knex('resultados as r')

@@ -1,26 +1,23 @@
 import type {
   AliasDesagregacionOrigen, Atributo, Categoria, ElementoLista, Equipo, Indicador, Lista, Meta, ReglaNegocio,
-  Responsable, TypeRegistry
+  TypeRegistry
 } from '@domain/index';
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
   construirContextoIndicador, equipoEfectivo, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
-  puedeGestionarMiembrosEquipo, puedeVerIndicador, signosAgrupacionBalanceados, sinCiclo
+  puedeVerIndicador, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
-  IDefinicionPeriodicidadRepository, IEquipoRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
-  IReglaRepository, IResponsableRepository, ValorAtributoEntidad
+  IDefinicionPeriodicidadRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
+  IReglaRepository, IUsuarioRepository, ValorAtributoEntidad
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { permisosActuales } from './contextoUsuario';
 import { mapaValoresDesdeEntidad } from './valoresEav';
 import { ServicioCatalogoGenerico } from './ServicioCatalogoGenerico';
-import {
-  referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, referenciasDeLista, referenciasDeRegla,
-  referenciasDeResponsable
-} from './referencias';
+import { referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, referenciasDeLista, referenciasDeRegla } from './referencias';
 
 /** Mapeo de campos de Indicador -> nombre de columna del archivo importado (undefined = no mapeado). */
 export interface MapeoImportacionIndicadores {
@@ -83,18 +80,18 @@ export class ServicioIndicadores extends ServicioBase {
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly tipos: TypeRegistry,
     private readonly defaults: DefaultsClasificacion,
-    private readonly responsablesRepo: IResponsableRepository
+    private readonly usuariosRepo: IUsuarioRepository
   ) {
     super(ctx);
   }
 
   /** Filtra a los indicadores que el usuario en curso puede ver (Batch T) — ver `puedeVerIndicador`. */
   async listar(): Promise<Indicador[]> {
-    const [indicadores, responsables] = await Promise.all([this.repo.listar(), this.responsablesRepo.listar()]);
-    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const [indicadores, usuarios] = await Promise.all([this.repo.listar(), this.usuariosRepo.listar()]);
+    const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     return indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
   }
 
@@ -226,20 +223,20 @@ export class ServicioIndicadores extends ServicioBase {
         throw new ValidacionError('Solo puede asignar indicadores al equipo del que es líder.');
       }
       if (cambios.responsable) {
-        const responsableDestino = await this.responsablesRepo.obtener(cambios.responsable);
+        const responsableDestino = await this.usuariosRepo.obtener(cambios.responsable);
         if (responsableDestino?.equipoId !== ctxPermisos.equipoId) {
           throw new ValidacionError('Solo puede asignar responsables de su propio equipo.');
         }
       }
     }
-    const responsables = esAdmin ? [] : await this.responsablesRepo.listar();
-    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const usuarios = esAdmin ? [] : await this.usuariosRepo.listar();
+    const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
 
     const ahora = this.ctx.reloj.ahoraIso();
     for (const id of indicadorIds) {
       const actual = await this.repo.obtener(id);
       if (!actual) continue;
-      if (!esAdmin && equipoEfectivo(actual, responsablesPorId) !== ctxPermisos.equipoId) {
+      if (!esAdmin && equipoEfectivo(actual, usuariosPorId) !== ctxPermisos.equipoId) {
         throw new ValidacionError(`No tiene permiso para reasignar el indicador "${actual.nombre}": no pertenece a su equipo.`);
       }
       const actualizado: Indicador = {
@@ -662,8 +659,8 @@ export class ServicioCategorias extends ServicioBase {
  * Equipos jerárquicos (Batch R): mismo patrón que `ServicioCategorias` —
  * envuelve `ServicioCatalogoGenerico<Equipo>` y valida jerarquía (`padreId`
  * existente + `sinCiclo`). `eliminar()` bloquea si tiene sub-equipos, o si
- * algún responsable/indicador lo referencia (`referenciasDeEquipo`: directo
- * vía `Indicador.equipo`, indirecto vía `Responsable.equipoId`).
+ * algún usuario/indicador lo referencia (`referenciasDeEquipo`: directo
+ * vía `Indicador.equipo`, indirecto vía `Usuario.equipoId`).
  */
 export class ServicioEquipos extends ServicioBase {
   private readonly generico: ServicioCatalogoGenerico<Equipo>;
@@ -671,7 +668,7 @@ export class ServicioEquipos extends ServicioBase {
   constructor(
     ctx: ContextoAplicacion,
     private readonly repo: ICatalogoRepository<Equipo>,
-    private readonly responsablesRepo: IResponsableRepository,
+    private readonly usuariosRepo: IUsuarioRepository,
     private readonly indicadoresRepo: IIndicadorRepository
   ) {
     super(ctx);
@@ -706,66 +703,11 @@ export class ServicioEquipos extends ServicioBase {
 
   private async verificarReferencias(id: string): Promise<string[]> {
     const detalles = await referenciasDeEquipo(
-      { responsables: this.responsablesRepo, indicadores: this.indicadoresRepo }, id
+      { usuarios: this.usuariosRepo, indicadores: this.indicadoresRepo }, id
     );
     const todos = await this.repo.listar();
     const hijos = todos.filter((e) => e.padreId === id);
     if (hijos.length > 0) detalles.push(`Sub-equipos (${hijos.length})`);
     return detalles;
-  }
-}
-
-/**
- * Responsables (Batch T): envuelve `ServicioCatalogoGenerico<Responsable>`
- * agregando lo único que ese genérico no puede conocer — `equipoId` pasa a
- * ser obligatorio ("cada responsable pertenecerá por defecto al equipo
- * General... solo podrá pertenecer a un equipo a la vez", pedido explícito
- * del usuario; el campo sigue siendo `string | null` en el dominio por las
- * razones ya documentadas en `Responsable`, pero este servicio nunca deja
- * pasar `null`: si viene vacío, se completa con `equipoGeneralId`, igual
- * criterio que `ServicioIndicadores` para categoría/equipo).
- */
-export class ServicioResponsables extends ServicioBase {
-  private readonly generico: ServicioCatalogoGenerico<Responsable>;
-
-  constructor(
-    ctx: ContextoAplicacion,
-    private readonly repo: ICatalogoRepository<Responsable>,
-    private readonly indicadoresRepo: IIndicadorRepository,
-    private readonly equiposRepo: IEquipoRepository,
-    private readonly equipoGeneralId: string
-  ) {
-    super(ctx);
-    this.generico = new ServicioCatalogoGenerico(
-      ctx, repo, 'Responsable', (id) => referenciasDeResponsable({ indicadores: this.indicadoresRepo }, id)
-    );
-  }
-
-  listar(incluirEliminados = false): Promise<Responsable[]> {
-    return this.generico.listar(incluirEliminados);
-  }
-
-  async guardar(responsable: Responsable): Promise<Responsable> {
-    const equipoId = responsable.equipoId || this.equipoGeneralId;
-    if (!(await this.equiposRepo.obtener(equipoId))) {
-      throw new ValidacionError('El equipo seleccionado no existe.');
-    }
-    const ctx = permisosActuales();
-    if (!puedeAdministrarCatalogos(ctx)) {
-      const anterior = responsable.id ? await this.repo.obtener(responsable.id) : null;
-      // El líder de equipo puede: añadir alguien a su equipo (equipoId nuevo == su equipo) o
-      // sacar a alguien de su equipo (equipoId anterior == su equipo) — cualquiera de los dos alcanza.
-      const puede = puedeGestionarMiembrosEquipo(ctx, equipoId) || (anterior != null && puedeGestionarMiembrosEquipo(ctx, anterior.equipoId));
-      if (!puede) throw new ValidacionError('No tiene permiso para gestionar miembros de este equipo.');
-    }
-    return this.generico.guardar({ ...responsable, equipoId });
-  }
-
-  eliminar(id: string): Promise<void> {
-    return this.generico.eliminar(id);
-  }
-
-  restaurar(id: string): Promise<void> {
-    return this.generico.restaurar(id);
   }
 }

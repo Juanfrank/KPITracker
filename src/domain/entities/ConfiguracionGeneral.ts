@@ -16,7 +16,7 @@ export interface ConfiguracionGeneral {
   schemaVersion: number;
 }
 
-export const CONFIG_SCHEMA_VERSION = 4;
+export const CONFIG_SCHEMA_VERSION = 5;
 
 export function configuracionPorDefecto(): ConfiguracionGeneral {
   return {

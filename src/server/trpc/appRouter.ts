@@ -6,7 +6,6 @@ import { listasRouter } from './routers/listas';
 import { metasRouter } from './routers/metas';
 import { reglasRouter } from './routers/reglas';
 import { periodicidadesRouter } from './routers/periodicidades';
-import { responsablesRouter } from './routers/responsables';
 import { categoriasRouter } from './routers/categorias';
 import { equiposRouter } from './routers/equipos';
 import { origenesRouter } from './routers/origenes';
@@ -36,7 +35,6 @@ export const appRouter = router({
   metas: metasRouter,
   reglas: reglasRouter,
   periodicidades: periodicidadesRouter,
-  responsables: responsablesRouter,
   categorias: categoriasRouter,
   equipos: equiposRouter,
   origenes: origenesRouter,

@@ -7,7 +7,9 @@ import { iniciarAppWeb } from './fixtures';
  * jerárquicos, vínculo INDIRECTO indicador↔equipo vía el responsable (el
  * selector jerárquico "Equipo > Responsables" de Indicadores) y vínculo
  * DIRECTO gestionado desde el panel de Equipos (checklist "Indicadores de
- * este equipo").
+ * este equipo"). Batch U unificó Usuario/Responsable: el responsable ahora
+ * es un Usuario (creado en la sección "Usuarios" de Administración; su
+ * equipo se asigna al editarlo, no al crearlo).
  */
 
 let pagina: Page;
@@ -39,12 +41,17 @@ test('crea un equipo y un sub-equipo (jerarquía)', async () => {
   await expect(pagina.getByTestId('equipo-Unidad de Estadísticas')).toBeVisible();
 });
 
-test('crea un responsable y lo asigna a un equipo', async () => {
-  await pagina.getByTestId('nuevo-responsable').click();
-  await pagina.getByTestId('responsable-nombre').fill('Responsable de Estadísticas');
-  await pagina.getByTestId('responsable-equipo').selectOption({ label: '— Unidad de Estadísticas' });
-  await pagina.getByTestId('guardar-responsable').click();
-  await expect(pagina.getByTestId('responsable-Responsable de Estadísticas')).toBeVisible();
+test('crea un usuario (responsable) y lo asigna a un equipo', async () => {
+  await pagina.getByTestId('nuevo-usuario').click();
+  await pagina.getByTestId('usuario-nombreUsuario').fill('resp-estadisticas');
+  await pagina.getByTestId('usuario-nombreCompleto').fill('Responsable de Estadísticas');
+  await pagina.getByTestId('usuario-password').fill('contrasenaSegura1');
+  await pagina.getByTestId('guardar-usuario').click();
+  await expect(pagina.getByTestId('usuario-resp-estadisticas')).toBeVisible();
+
+  await pagina.getByTestId('usuario-resp-estadisticas').click();
+  await pagina.getByTestId('usuario-equipo').selectOption({ label: '— Unidad de Estadísticas' });
+  await pagina.getByTestId('guardar-usuario-edicion').click();
 });
 
 test('un indicador con ese responsable queda vinculado indirectamente al equipo', async () => {

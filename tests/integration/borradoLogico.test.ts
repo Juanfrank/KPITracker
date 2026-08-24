@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { componerAplicacionServidor } from '../../src/server/composicionServidor';
 import type { AplicacionServidor } from '../../src/server/composicionServidor';
 import { Periodicidad, TipoDato } from '@domain/index';
-import type { Atributo, Categoria, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable } from '@domain/index';
+import type { Atributo, Categoria, Indicador, Lista, OrigenAutomatico, ReglaNegocio } from '@domain/index';
 
 /**
  * Borrado lógico bloqueado por uso (Batch M): atributos, listas, reglas,
- * responsables, categorías y orígenes automáticos no se borran físicamente
+ * usuarios (responsables, unificados en Batch U), categorías y orígenes
+ * automáticos no se borran físicamente
  * — `eliminar()` verifica referencias (bloquea con el detalle de qué los
  * usa) y marca `eliminado = true`, reversible vía `restaurar()`. Los hijos
  * (elementos de lista, valores de atributo) se conservan intactos.
@@ -51,13 +52,6 @@ function regla(parcial: Partial<ReglaNegocio> = {}): ReglaNegocio {
     id: '', nombre: 'Regla', descripcion: '', tipo: 'Visibilidad', entidad: 'Indicador', atributoObjetivoId: null,
     condicion: { op: 'eq', args: [{ attr: 'Nombre' }, { literal: 'x' }] }, mensajeError: null, activa: true,
     eliminado: false, creadoEn: '', actualizadoEn: '',
-    ...parcial
-  };
-}
-
-function responsable(parcial: Partial<Responsable> = {}): Responsable {
-  return {
-    id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: '',
     ...parcial
   };
 }
@@ -126,12 +120,15 @@ describe('Borrado lógico — sin referencias: eliminar oculta, restaurar revela
     expect(await app.manejadores['reglas:listar'](undefined)).toHaveLength(1);
   });
 
-  it('Responsable/Categoria/OrigenAutomatico: eliminar + restaurar sin referencias', async () => {
-    const r = await app.manejadores['responsables:guardar'](responsable({ nombre: 'Sin uso' }));
-    await app.manejadores['responsables:eliminar']({ id: r.id });
-    expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(0);
-    await app.manejadores['responsables:restaurar']({ id: r.id });
-    expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
+  // Batch U: Responsable se unificó dentro de Usuario — el CRUD/borrado lógico
+  // equivalente vive en `ServicioUsuarios` (sin canal IPC).
+  it('Usuario/Categoria/OrigenAutomatico: eliminar + restaurar sin referencias', async () => {
+    const antes = await app.usuarios.listar();
+    const u = await app.usuarios.crear({ nombreUsuario: 'sin-uso', nombreCompleto: 'Sin uso', password: 'contrasenaSegura1' });
+    await app.usuarios.eliminar(u.id);
+    expect(await app.usuarios.listar()).toHaveLength(antes.length);
+    await app.usuarios.restaurar(u.id);
+    expect(await app.usuarios.listar()).toHaveLength(antes.length + 1);
 
     // +1 en ambas aserciones: la categoría raíz "General" (Batch T) ya existe desde el arranque.
     const c = await app.manejadores['categorias:guardar'](categoria({ nombre: 'Sin uso' }));
@@ -204,15 +201,15 @@ describe('Borrado lógico — bloqueo por referencia (con el nombre de quién lo
     }
   });
 
-  it('Responsable referenciado por Indicador.responsable bloquea la eliminación', async () => {
-    const r = await app.manejadores['responsables:guardar'](responsable({ nombre: 'Carla' }));
-    await app.manejadores['indicadores:guardar']({ indicador: indicador({ nombre: 'A cargo de Carla', responsable: r.id }), valores: [] });
+  it('Usuario referenciado por Indicador.responsable bloquea la eliminación (Batch U unificó Usuario/Responsable)', async () => {
+    const u = await app.usuarios.crear({ nombreUsuario: 'carla', nombreCompleto: 'Carla', password: 'contrasenaSegura1' });
+    await app.manejadores['indicadores:guardar']({ indicador: indicador({ nombre: 'A cargo de Carla', responsable: u.id }), valores: [] });
     try {
-      await app.manejadores['responsables:eliminar']({ id: r.id });
+      await app.usuarios.eliminar(u.id);
       throw new Error('no debió llegar aquí');
     } catch (error) {
-      const detalles = (error as Error & { detalles?: string[] }).detalles;
-      expect(detalles?.some((d) => d.includes('A cargo de Carla'))).toBe(true);
+      const detalles = (error as Error & { message?: string }).message;
+      expect(detalles?.includes('A cargo de Carla')).toBe(true);
     }
   });
 
@@ -257,15 +254,16 @@ describe('Borrado lógico — hijos preservados y persistencia', () => {
     expect(await app.manejadores['listas:elementos']({ listaId: l.id })).toHaveLength(1);
   });
 
-  it('el estado eliminado persiste tras cerrar y reabrir la aplicación (round-trip Parquet)', async () => {
-    const r = await app.manejadores['responsables:guardar'](responsable({ nombre: 'Persistente' }));
-    await app.manejadores['responsables:eliminar']({ id: r.id });
+  it('el estado eliminado persiste tras cerrar y reabrir la aplicación (round-trip)', async () => {
+    const antes = await app.usuarios.listar();
+    const u = await app.usuarios.crear({ nombreUsuario: 'persistente', nombreCompleto: 'Persistente', password: 'contrasenaSegura1' });
+    await app.usuarios.eliminar(u.id);
     await app.cerrar();
 
     app = await componerAplicacionServidor(dataDir);
-    const conEliminados = await app.manejadores['responsables:listar']({ incluirEliminados: true });
-    const restaurado = conEliminados.find((x) => x.id === r.id);
+    const conEliminados = await app.usuarios.listar(true);
+    const restaurado = conEliminados.find((x) => x.id === u.id);
     expect(restaurado?.eliminado).toBe(true);
-    expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(0);
+    expect(await app.usuarios.listar()).toHaveLength(antes.length);
   });
 });

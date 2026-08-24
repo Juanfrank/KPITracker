@@ -14,12 +14,18 @@ import { GeneradorUuid, RelojSistema } from '@infrastructure/soporte/servicios';
  */
 class UsuarioRepositoryMemoria implements IUsuarioRepository {
   private readonly filas = new Map<string, Usuario>();
-  async listar(): Promise<Usuario[]> { return [...this.filas.values()]; }
+  async listar(incluirEliminados = false): Promise<Usuario[]> {
+    return [...this.filas.values()].filter((u) => incluirEliminados || !u.eliminado);
+  }
   async obtener(id: string): Promise<Usuario | null> { return this.filas.get(id) ?? null; }
   async obtenerPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null> {
     return [...this.filas.values()].find((u) => u.nombreUsuario === nombreUsuario) ?? null;
   }
   async guardar(usuario: Usuario): Promise<void> { this.filas.set(usuario.id, usuario); }
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    const item = this.filas.get(id);
+    if (item) this.filas.set(id, { ...item, eliminado });
+  }
 }
 
 class SesionRepositoryMemoria implements ISesionRepository {
@@ -40,9 +46,9 @@ async function construir() {
   const passwordHash = await authProvider.hashear('correcta123');
   const ahora = reloj.ahoraIso();
   await usuarios.guardar({
-    id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', passwordHash,
-    esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
-    activo: true, creadoEn: ahora, actualizadoEn: ahora
+    id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', correo: null, passwordHash,
+    esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+    activo: true, eliminado: false, creadoEn: ahora, actualizadoEn: ahora
   });
 
   return { servicio, usuarios, sesiones, ids, reloj };

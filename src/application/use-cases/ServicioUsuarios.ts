@@ -1,13 +1,23 @@
-import { ValidacionError } from '@domain/index';
+import { puedeAdministrarCatalogos, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
 import type { Usuario } from '@domain/index';
 import { NOMBRE_ROL_USUARIO_ESTANDAR, permisoValido } from '@domain/index';
 import type {
-  IClock, IIdGenerator, IPasswordHasher, IPermisoExcepcionalRepository, IResponsableRepository, IRolRepository,
-  IUsuarioRepository
+  ICredencialGeneradaRepository, IEquipoRepository, IIndicadorRepository, IPasswordHasher,
+  IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository
 } from '@application/ports/index';
+import { permisosActuales } from './contextoUsuario';
+import { referenciasDeUsuario } from './referencias';
+import type { IClock, IIdGenerator } from '@application/ports/index';
 
 /** Datos públicos de un usuario: nunca se expone `passwordHash` fuera de esta capa. */
 export type UsuarioPublico = Omit<Usuario, 'passwordHash'> & { permisosExcepcionales: string[] };
+
+/** Credencial temporal recién generada, para mostrar al administrador una única vez. */
+export interface CredencialPendiente {
+  usuarioId: string;
+  nombreUsuario: string;
+  passwordTexto: string;
+}
 
 /**
  * Alta/gestión de usuarios (pantalla de administración). Complementa a
@@ -15,12 +25,12 @@ export type UsuarioPublico = Omit<Usuario, 'passwordHash'> & { permisosExcepcion
  * gestionar la lista de usuarios es un caso de uso de administración, no
  * parte del flujo de login.
  *
- * Batch T: reemplaza el único `establecerRol('admin'|'usuario')` por setters
- * granulares para cada campo nuevo de `Usuario` (rol general, equipo + rol
- * de equipo, responsable vinculado, permisos excepcionales), y agrega la
- * invariante "siempre debe quedar al menos un administrador activo" —
- * verificada tanto al quitarle `esAdministrador` a alguien como al
- * desactivarlo.
+ * Batch U unifica Usuario con el antiguo catálogo Responsable: absorbe su
+ * CRUD completo (`correo`, borrado lógico bloqueado por referencias,
+ * `equipoId` obligatorio con respaldo "General", gating de líder de equipo
+ * al mover gente de/hacia su propio equipo) — todo lo que antes vivía en
+ * `ServicioResponsables` (retirado). Mantiene además la invariante "siempre
+ * debe quedar al menos un administrador activo".
  */
 export class ServicioUsuarios {
   constructor(
@@ -30,7 +40,10 @@ export class ServicioUsuarios {
     private readonly hasher: IPasswordHasher,
     private readonly rolesRepo: IRolRepository,
     private readonly permisosExcepcionalesRepo: IPermisoExcepcionalRepository,
-    private readonly responsablesRepo: IResponsableRepository
+    private readonly equiposRepo: IEquipoRepository,
+    private readonly indicadoresRepo: IIndicadorRepository,
+    private readonly credencialesRepo: ICredencialGeneradaRepository,
+    private readonly equipoGeneralId: string
   ) {}
 
   private async aPublico(usuario: Usuario): Promise<UsuarioPublico> {
@@ -39,20 +52,21 @@ export class ServicioUsuarios {
       id: usuario.id,
       nombreUsuario: usuario.nombreUsuario,
       nombreCompleto: usuario.nombreCompleto,
+      correo: usuario.correo,
       esAdministrador: usuario.esAdministrador,
       rolGeneralId: usuario.rolGeneralId,
       equipoId: usuario.equipoId,
       rolEquipoId: usuario.rolEquipoId,
-      responsableId: usuario.responsableId,
       activo: usuario.activo,
+      eliminado: usuario.eliminado,
       creadoEn: usuario.creadoEn,
       actualizadoEn: usuario.actualizadoEn,
       permisosExcepcionales
     };
   }
 
-  async listar(): Promise<UsuarioPublico[]> {
-    const usuarios = await this.repo.listar();
+  async listar(incluirEliminados = false): Promise<UsuarioPublico[]> {
+    const usuarios = await this.repo.listar(incluirEliminados);
     return Promise.all(usuarios.map((u) => this.aPublico(u)));
   }
 
@@ -64,6 +78,7 @@ export class ServicioUsuarios {
   async crear(datos: {
     nombreUsuario: string;
     nombreCompleto: string;
+    correo?: string | null;
     password: string;
     esAdministrador?: boolean;
     rolGeneralId?: string | null;
@@ -81,13 +96,14 @@ export class ServicioUsuarios {
       id: this.ids.nuevoId(),
       nombreUsuario: limpio,
       nombreCompleto: datos.nombreCompleto.trim(),
+      correo: datos.correo?.trim() || null,
       passwordHash: await this.hasher.hashear(datos.password),
       esAdministrador,
       rolGeneralId,
       equipoId: null,
       rolEquipoId: null,
-      responsableId: null,
       activo: true,
+      eliminado: false,
       creadoEn: ahora,
       actualizadoEn: ahora
     };
@@ -138,33 +154,41 @@ export class ServicioUsuarios {
     await this.repo.guardar({ ...usuario, rolGeneralId, actualizadoEn: this.reloj.ahoraIso() });
   }
 
-  async establecerEquipo(id: string, equipoId: string | null, rolEquipoId: string | null): Promise<void> {
+  /**
+   * Batch U: `equipoId` es el mismo campo que antes vivía en `Responsable`
+   * (indirectamente "responsable" de sus indicadores asignados) — por eso,
+   * a diferencia de antes, `equipoId` NO puede quedar en null: sin equipo
+   * explícito, cae al equipo "General" (mismo respaldo que ya usa T1 para
+   * indicadores/responsables sin clasificar). El gating de líder de equipo
+   * que antes vivía en `ServicioResponsables.guardar` se mueve aquí tal
+   * cual.
+   */
+  async establecerEquipo(id: string, equipoIdSolicitado: string | null, rolEquipoId: string | null): Promise<void> {
     const usuario = await this.obtenerOFallar(id);
+    const equipoId = equipoIdSolicitado || this.equipoGeneralId;
+    if (!(await this.equiposRepo.obtener(equipoId))) {
+      throw new ValidacionError('El equipo seleccionado no existe.');
+    }
     if (rolEquipoId) {
-      if (!equipoId) throw new ValidacionError('Debe seleccionar un equipo para asignar un rol de equipo.');
       const rol = await this.rolesRepo.obtener(rolEquipoId);
       if (!rol) throw new ValidacionError('El rol de equipo seleccionado no existe.');
       if (rol.ambito !== 'equipo') throw new ValidacionError('El rol seleccionado no es de ámbito equipo.');
     }
+
+    const ctx = permisosActuales();
+    if (!usuario.esAdministrador && !puedeAdministrarCatalogos(ctx)) {
+      // El líder de equipo puede: añadir alguien a su equipo (equipoId nuevo == su equipo) o
+      // sacar a alguien de su equipo (equipoId anterior == su equipo) — cualquiera de los dos alcanza.
+      const puede = puedeGestionarMiembrosEquipo(ctx, equipoId) || puedeGestionarMiembrosEquipo(ctx, usuario.equipoId);
+      if (!puede) throw new ValidacionError('No tiene permiso para gestionar miembros de este equipo.');
+    }
+
     await this.repo.guardar({
       ...usuario,
       equipoId,
-      rolEquipoId: equipoId ? rolEquipoId : null,
+      rolEquipoId,
       actualizadoEn: this.reloj.ahoraIso()
     });
-  }
-
-  async establecerResponsable(id: string, responsableId: string | null): Promise<void> {
-    const usuario = await this.obtenerOFallar(id);
-    if (responsableId) {
-      const responsable = await this.responsablesRepo.obtener(responsableId);
-      if (!responsable) throw new ValidacionError('El responsable seleccionado no existe.');
-      const todos = await this.repo.listar();
-      if (todos.some((u) => u.id !== id && u.responsableId === responsableId)) {
-        throw new ValidacionError(`El responsable "${responsable.nombre}" ya está vinculado a otro usuario.`);
-      }
-    }
-    await this.repo.guardar({ ...usuario, responsableId, actualizadoEn: this.reloj.ahoraIso() });
   }
 
   async establecerPermisosExcepcionales(id: string, permisos: string[]): Promise<void> {
@@ -172,5 +196,38 @@ export class ServicioUsuarios {
     const invalidos = permisos.filter((p) => !permisoValido(p));
     if (invalidos.length > 0) throw new ValidacionError(`Permiso(s) inválido(s): ${invalidos.join(', ')}`);
     await this.permisosExcepcionalesRepo.establecer(id, [...new Set(permisos)]);
+  }
+
+  async guardarDatos(id: string, datos: { nombreCompleto: string; correo?: string | null }): Promise<void> {
+    const usuario = await this.obtenerOFallar(id);
+    if (!datos.nombreCompleto.trim()) throw new ValidacionError('El nombre completo es obligatorio.');
+    await this.repo.guardar({
+      ...usuario,
+      nombreCompleto: datos.nombreCompleto.trim(),
+      correo: datos.correo?.trim() || null,
+      actualizadoEn: this.reloj.ahoraIso()
+    });
+  }
+
+  /** Borrado lógico (mismo criterio que Categoría/Equipo): bloqueado si algún indicador lo referencia como responsable directo. */
+  async eliminar(id: string): Promise<void> {
+    const usuario = await this.obtenerOFallar(id);
+    if (usuario.esAdministrador) throw new ValidacionError('No se puede eliminar a un administrador.');
+    const referencias = await referenciasDeUsuario({ indicadores: this.indicadoresRepo }, id);
+    if (referencias.length > 0) {
+      throw new ValidacionError(`No se puede eliminar: en uso por ${referencias.join(', ')}.`);
+    }
+    await this.repo.marcarEliminado(id, true);
+  }
+
+  async restaurar(id: string): Promise<void> {
+    await this.obtenerOFallar(id);
+    await this.repo.marcarEliminado(id, false);
+  }
+
+  /** Lee y borra en la misma operación las credenciales temporales pendientes de mostrar — "una sola vez". */
+  async credencialesPendientes(): Promise<CredencialPendiente[]> {
+    const pendientes = await this.credencialesRepo.consumirTodas();
+    return pendientes.map((p) => ({ usuarioId: p.usuarioId, nombreUsuario: p.nombreUsuario, passwordTexto: p.passwordTexto }));
   }
 }

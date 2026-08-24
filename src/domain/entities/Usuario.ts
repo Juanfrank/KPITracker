@@ -14,31 +14,35 @@
  * - `rolGeneralId` es el rol de ámbito `'general'` del usuario (exactamente
  *   uno) — por defecto el rol semilla "Usuario estándar" (sin permisos).
  * - `equipoId`/`rolEquipoId` son la pertenencia + rol de ámbito `'equipo'`
- *   del usuario — independientes del `equipoId` del `Responsable` vinculado
- *   (ver `responsableId`): en la práctica un administrador normalmente los
- *   deja iguales, pero no están acoplados en el modelo.
- * - `responsableId` vincula 1 a 1 con un `Responsable` (ver
- *   `ServicioUsuarios`, valida unicidad) — quien lo tiene seteado
- *   siempre puede ver/registrar (nunca validar) los resultados de los
- *   indicadores cuyo responsable directo sea ese mismo `Responsable`,
- *   sin importar rol/permiso (ver `puedeSobreIndicador`).
+ *   del usuario.
+ *
+ * Batch U unifica `Usuario` y el antiguo catálogo `Responsable`: ya no
+ * existen como dos entidades vinculables 1 a 1 — un `Usuario` ES la persona
+ * asignable como responsable de un indicador (`Indicador.responsable` ahora
+ * apunta directo a `Usuario.id`). Por eso `Usuario` gana `correo` y
+ * `eliminado` (antes exclusivos de `Responsable`), y `equipoId` pasa a
+ * cumplir doble función: pertenencia para el rol de equipo (RBAC) Y equipo
+ * "responsable" del indicador (vínculo INDIRECTO equipo↔indicador, ver
+ * `equipoEfectivo`) — ya no hace falta mantenerlos sincronizados a mano
+ * porque son el mismo campo.
  */
 export interface Usuario {
   readonly id: string;
   nombreUsuario: string;
   nombreCompleto: string;
+  correo: string | null;
   /** Hash bcrypt; nunca se expone el texto plano ni se serializa hacia el cliente. */
   passwordHash: string;
   esAdministrador: boolean;
   /** Rol de ámbito general (`Rol.ambito === 'general'`); ignorado si `esAdministrador`. */
   rolGeneralId: string | null;
-  /** Equipo al que pertenece este usuario (independiente del equipo de su `Responsable` vinculado). */
+  /** Equipo al que pertenece (RBAC) y, a la vez, el equipo "responsable" indirecto de sus indicadores asignados. */
   equipoId: string | null;
   /** Rol de ámbito equipo (`Rol.ambito === 'equipo'`); solo aplica si `equipoId` no es null. */
   rolEquipoId: string | null;
-  /** Vínculo 1 a 1 con un `Responsable` — ver docstring de la interfaz. */
-  responsableId: string | null;
   activo: boolean;
+  /** Marca de borrado lógico (bloqueado si algún indicador lo referencia como responsable): distinta de `activo`, que se alterna manualmente para des/habilitar el login. */
+  eliminado: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

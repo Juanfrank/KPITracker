@@ -1,6 +1,6 @@
 import type { RegistroAuditoria } from '@domain/index';
 import { equipoEfectivo, puedeVerAuditoriaEquipo, puedeVerAuditoriaTodo } from '@domain/index';
-import type { FiltroAuditoria, IAuditoriaRepository, IIndicadorRepository, IResponsableRepository } from '@application/ports/index';
+import type { FiltroAuditoria, IAuditoriaRepository, IIndicadorRepository, IUsuarioRepository } from '@application/ports/index';
 import { permisosActuales } from './contextoUsuario';
 
 /**
@@ -18,7 +18,7 @@ export class ServicioAuditoria {
   constructor(
     private readonly repo: IAuditoriaRepository,
     private readonly indicadores: IIndicadorRepository,
-    private readonly responsables: IResponsableRepository
+    private readonly usuarios: IUsuarioRepository
   ) {}
 
   async consultar(filtro: FiltroAuditoria): Promise<RegistroAuditoria[]> {
@@ -27,13 +27,13 @@ export class ServicioAuditoria {
     if (!puedeVerAuditoriaEquipo(permisos, permisos.equipoId)) return [];
 
     const registros = await this.repo.consultar(filtro);
-    const [indicadores, responsables] = await Promise.all([this.indicadores.listar(), this.responsables.listar()]);
+    const [indicadores, usuarios] = await Promise.all([this.indicadores.listar(), this.usuarios.listar()]);
     const indicadoresPorId = new Map(indicadores.map((i) => [i.id, i]));
-    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
 
     const equipoDeIndicador = (indicadorId: string): string | null => {
       const indicador = indicadoresPorId.get(indicadorId);
-      return indicador ? equipoEfectivo(indicador, responsablesPorId) : null;
+      return indicador ? equipoEfectivo(indicador, usuariosPorId) : null;
     };
 
     return registros.filter((r) => {

@@ -10,17 +10,18 @@ import { z } from 'zod';
  * real del perfil.
  */
 export const RESPALDO_FORMATO = 'kpitracker-respaldo-perfil';
-export const RESPALDO_SCHEMA_VERSION = 3;
+export const RESPALDO_SCHEMA_VERSION = 4;
 
 /**
  * Categorías seleccionables al importar. `elementos` (hijos de listas) NO
  * es una categoría propia: sigue a su lista — un elemento solo se importa
- * si su lista está seleccionada — evitando huérfanos.
+ * si su lista está seleccionada — evitando huérfanos. Batch U retiró
+ * `responsables` (unificado con `Usuario`, que sigue sin viajar en el
+ * respaldo — ver docstring de `ConfigPortableService`).
  */
 export type CategoriaRespaldo =
   | 'configuracionGeneral'
   | 'periodicidades'
-  | 'responsables'
   | 'categorias'
   | 'equipos'
   | 'roles'
@@ -36,19 +37,16 @@ export type CategoriaRespaldo =
 /**
  * Orden de importación: primero lo que otras categorías referencian
  * (catálogos, listas, atributos, orígenes) y al final lo que depende de
- * varias de ellas (metas, automatizaciones, alias). `equipos` va antes de
- * `responsables` (que referencian `equipoId`) e `indicadores` (que
- * referencian `equipo` directo).
+ * varias de ellas (metas, automatizaciones, alias).
  */
 export const ORDEN_IMPORTACION: CategoriaRespaldo[] = [
-  'configuracionGeneral', 'periodicidades', 'roles', 'equipos', 'responsables', 'categorias',
+  'configuracionGeneral', 'periodicidades', 'roles', 'equipos', 'categorias',
   'listas', 'atributos', 'origenes', 'indicadores', 'metas', 'reglas', 'automatizaciones', 'aliasDesagregacion'
 ];
 
 export const ETIQUETAS_CATEGORIA: Record<CategoriaRespaldo, string> = {
   configuracionGeneral: 'Configuración general',
   periodicidades: 'Periodicidades personalizadas',
-  responsables: 'Responsables',
   categorias: 'Categorías',
   equipos: 'Equipos',
   roles: 'Roles',
@@ -69,7 +67,6 @@ export const esquemaRespaldo = z.object({
   appVersion: z.string().optional(),
   configuracionGeneral: z.record(z.unknown()),
   periodicidades: z.array(z.record(z.unknown())).default([]),
-  responsables: z.array(z.record(z.unknown())).default([]),
   categorias: z.array(z.record(z.unknown())).default([]),
   equipos: z.array(z.record(z.unknown())).default([]),
   roles: z.array(z.record(z.unknown())).default([]),
@@ -94,10 +91,14 @@ export type ArchivoRespaldo = z.infer<typeof esquemaRespaldo>;
  * `.default([])` de Zod ya completa el arreglo al parsear un respaldo más
  * viejo (no trae la clave), así que el único paso real es avanzar el
  * número de versión.
+ * v3 -> v4 (Batch U): se retira la categoría `responsables` (unificada con
+ * `Usuario`, ver docstring de `CategoriaRespaldo`); Zod ya la descarta sola
+ * al no estar declarada en el esquema, el paso solo avanza la versión.
  */
 export const migracionesRespaldo: Record<number, (archivo: ArchivoRespaldo) => ArchivoRespaldo> = {
   1: (archivo) => ({ ...archivo, schemaVersion: 2 }),
-  2: (archivo) => ({ ...archivo, schemaVersion: 3 })
+  2: (archivo) => ({ ...archivo, schemaVersion: 3 }),
+  3: (archivo) => ({ ...archivo, schemaVersion: 4 })
 };
 
 /**

@@ -1,16 +1,17 @@
 import type { Knex } from 'knex';
-import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico } from '@domain/index';
 import type { IArchivoService } from '@application/ports/index';
 import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex,
-  IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex,
-  ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
+  CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex,
+  PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex,
+  SesionRepositoryKnex, UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
-import { aCategoria, aResponsable, deCategoria, deResponsable } from './repositories/mapeos';
+import { aCategoria, deCategoria } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
@@ -31,7 +32,6 @@ export interface Infraestructura {
   metas: MetaRepositoryKnex;
   reglas: ReglaRepositoryKnex;
   periodicidades: CatalogoRepositoryKnex<DefinicionPeriodicidad>;
-  responsables: CatalogoRepositoryKnex<Responsable>;
   categorias: CatalogoRepositoryKnex<Categoria>;
   equipos: CatalogoRepositoryKnex<Equipo>;
   origenesAutomaticos: CatalogoRepositoryKnex<OrigenAutomatico>;
@@ -45,6 +45,7 @@ export interface Infraestructura {
   sesiones: SesionRepositoryKnex;
   roles: RolRepositoryKnex;
   permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
+  credencialesGeneradas: CredencialGeneradaRepositoryKnex;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
   respaldoPerfil: RespaldoPerfilService;
@@ -89,7 +90,6 @@ export async function crearInfraestructura(
   const metas = new MetaRepositoryKnex(knex);
   const reglas = new ReglaRepositoryKnex(knex);
   const periodicidades = crearRepositorioDefinicionesPeriodicidad(knex);
-  const responsables = new CatalogoRepositoryKnex(knex, 'responsables', aResponsable, deResponsable, true);
   const categorias = new CatalogoRepositoryKnex(knex, 'categorias', aCategoria, deCategoria, true);
   const equipos = crearRepositorioEquipos(knex);
   const origenesAutomaticos = crearRepositorioOrigenesAutomaticos(knex);
@@ -103,13 +103,14 @@ export async function crearInfraestructura(
   const sesiones = new SesionRepositoryKnex(knex);
   const roles = new RolRepositoryKnex(knex);
   const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
-  const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, responsables, categorias);
+  const credencialesGeneradas = new CredencialGeneradaRepositoryKnex(knex);
+  const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, usuarios, categorias);
   const configPortable = new ConfigPortableService(
-    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, responsables, categorias, equipos, roles
+    configuracion, indicadores, atributos, listas, reglas, metas, periodicidades, categorias, equipos, roles
   );
   const respaldoPerfil = new RespaldoPerfilService(
     {
-      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, responsables, categorias, equipos, roles,
+      configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, categorias, equipos, roles,
       origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen
     },
     opciones.appVersion ?? null
@@ -128,7 +129,6 @@ export async function crearInfraestructura(
     metas,
     reglas,
     periodicidades,
-    responsables,
     categorias,
     equipos,
     origenesAutomaticos,
@@ -142,6 +142,7 @@ export async function crearInfraestructura(
     sesiones,
     roles,
     permisosExcepcionales,
+    credencialesGeneradas,
     exportacion,
     configPortable,
     respaldoPerfil,

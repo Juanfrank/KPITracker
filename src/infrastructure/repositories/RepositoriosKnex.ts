@@ -7,9 +7,9 @@ import type {
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
-  IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IIndicadorRepository,
-  IListaRepository, IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository,
-  IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
+  IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICredencialGeneradaRepository,
+  IIndicadorRepository, IListaRepository, IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository,
+  IResultadoRepository, IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
@@ -297,7 +297,7 @@ export class AuditoriaRepositoryKnex extends RepositorioBase implements IAuditor
 
 /**
  * Repositorio genérico de catálogo (id, nombre, ...): usado tanto para
- * DefinicionPeriodicidad como para Responsable/Categoria/OrigenAutomatico.
+ * DefinicionPeriodicidad como para Categoria/Equipo/OrigenAutomatico.
  * `tabla` y los mapeadores se fijan en el composition root; nunca provienen
  * de entrada de usuario.
  */
@@ -413,8 +413,10 @@ export class AliasDesagregacionOrigenRepositoryKnex extends RepositorioBase impl
 }
 
 export class UsuarioRepositoryKnex extends RepositorioBase implements IUsuarioRepository {
-  async listar(): Promise<Usuario[]> {
-    return (await this.knex('usuarios').select('*').orderBy('nombre_usuario')).map(aUsuario);
+  async listar(incluirEliminados = false): Promise<Usuario[]> {
+    let consulta = this.knex('usuarios').select('*');
+    if (!incluirEliminados) consulta = consulta.where({ eliminado: false });
+    return (await consulta.orderBy('nombre_usuario')).map(aUsuario);
   }
 
   async obtener(id: string): Promise<Usuario | null> {
@@ -429,6 +431,25 @@ export class UsuarioRepositoryKnex extends RepositorioBase implements IUsuarioRe
 
   async guardar(usuario: Usuario): Promise<void> {
     await upsert(this.knex, 'usuarios', { id: usuario.id }, deUsuario(usuario));
+  }
+
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    await this.knex('usuarios').where({ id }).update({ eliminado });
+  }
+}
+
+/** Credenciales temporales generadas automáticamente (Batch U) — ver docstring de `ICredencialGeneradaRepository`. */
+export class CredencialGeneradaRepositoryKnex extends RepositorioBase implements ICredencialGeneradaRepository {
+  async registrar(usuarioId: string, passwordTexto: string): Promise<void> {
+    await upsert(this.knex, 'credenciales_generadas', { usuario_id: usuarioId }, { password_texto: passwordTexto, creado_en: new Date().toISOString() });
+  }
+
+  async consumirTodas(): Promise<Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>> {
+    const filas: Array<{ usuario_id: string; nombre_usuario: string; password_texto: string }> = await this.knex('credenciales_generadas')
+      .join('usuarios', 'usuarios.id', 'credenciales_generadas.usuario_id')
+      .select('credenciales_generadas.usuario_id', 'usuarios.nombre_usuario', 'credenciales_generadas.password_texto');
+    await this.knex('credenciales_generadas').del();
+    return filas.map((f) => ({ usuarioId: f.usuario_id, nombreUsuario: f.nombre_usuario, passwordTexto: f.password_texto }));
   }
 }
 

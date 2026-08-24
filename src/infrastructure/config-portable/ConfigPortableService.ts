@@ -3,17 +3,21 @@ import type {
   IAtributoRepository, ICatalogoRepository, IConfigPortableService, IConfiguracionRepository,
   IListaRepository, IMetaRepository, IIndicadorRepository, IReglaRepository, IRolRepository
 } from '@application/ports/index';
-import type { Categoria, DefinicionPeriodicidad, Equipo, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo } from '@domain/index';
 import { CONFIG_SCHEMA_VERSION } from '@domain/index';
 
 /**
  * Exportación/importación de TODA la configuración en un único JSON
  * versionado: indicadores, atributos, listas, reglas, desagregaciones
  * (dentro de cada indicador), metas, periodicidades personalizadas,
- * catálogos (responsables/categorías/equipos), roles (Batch T) y parámetros
- * generales. Deliberadamente NO incluye `usuarios` (ni antes de Batch T ni
- * ahora): contienen `passwordHash` y son datos de identidad de ESTE
- * despliegue, no configuración de negocio portable entre instalaciones.
+ * catálogos (categorías/equipos), roles (Batch T) y parámetros generales.
+ * Deliberadamente NO incluye `usuarios`: contienen `passwordHash` y son
+ * datos de identidad de ESTE despliegue, no configuración de negocio
+ * portable entre instalaciones — desde Batch U (que unificó Usuario con el
+ * antiguo catálogo Responsable) esto significa que los "responsables" ya
+ * no viajan en la configuración portable en absoluto, una limitación
+ * conocida y aceptada como costo de la unificación (antes sí viajaban como
+ * su propio catálogo, sin datos sensibles).
  *
  * Estrategia de migración: `migraciones` es una cadena v(n) -> v(n+1);
  * al importar un archivo antiguo se aplican en orden hasta la versión
@@ -56,6 +60,9 @@ type ArchivoConfig = z.infer<typeof esquemaArchivo>;
  * v3 -> v4 (Batch T): se agrega la sección de roles (nombre + permisos, sin
  * datos de usuarios/contraseñas — esos deliberadamente nunca viajan en la
  * configuración portable, ver docstring de la clase).
+ * v4 -> v5 (Batch U): se retira la sección `responsables` — Usuario y
+ * Responsable se unificaron; un archivo v4 la trae, pero se descarta sin
+ * más (ver docstring de la clase para el porqué).
  */
 const migraciones: Record<number, (archivo: ArchivoConfig) => ArchivoConfig> = {
   1: (archivo) => ({
@@ -74,7 +81,8 @@ const migraciones: Record<number, (archivo: ArchivoConfig) => ArchivoConfig> = {
     ...archivo,
     schemaVersion: 4,
     roles: archivo.roles ?? []
-  })
+  }),
+  4: (archivo) => ({ ...archivo, schemaVersion: 5, responsables: undefined })
 };
 
 export class ConfigPortableService implements IConfigPortableService {
@@ -86,21 +94,19 @@ export class ConfigPortableService implements IConfigPortableService {
     private readonly reglas: IReglaRepository,
     private readonly metas: IMetaRepository,
     private readonly periodicidades: ICatalogoRepository<DefinicionPeriodicidad>,
-    private readonly responsables: ICatalogoRepository<Responsable>,
     private readonly categorias: ICatalogoRepository<Categoria>,
     private readonly equipos: ICatalogoRepository<Equipo>,
     private readonly roles: IRolRepository
   ) {}
 
   async exportar(): Promise<string> {
-    const [config, indicadores, atributos, listas, reglas, periodicidades, responsables, categorias, equipos, roles] = await Promise.all([
+    const [config, indicadores, atributos, listas, reglas, periodicidades, categorias, equipos, roles] = await Promise.all([
       this.configuracion.obtener(),
       this.indicadores.listar(),
       this.atributos.listar(),
       this.listas.listar(),
       this.reglas.listar(),
       this.periodicidades.listar(),
-      this.responsables.listar(),
       this.categorias.listar(),
       this.equipos.listar(),
       this.roles.listar()
@@ -124,7 +130,6 @@ export class ConfigPortableService implements IConfigPortableService {
       reglas: reglas as unknown as Record<string, unknown>[],
       metas: metas as unknown as Record<string, unknown>[],
       periodicidades: periodicidades as unknown as Record<string, unknown>[],
-      responsables: responsables as unknown as Record<string, unknown>[],
       categorias: categorias as unknown as Record<string, unknown>[],
       equipos: equipos as unknown as Record<string, unknown>[],
       roles: roles as unknown as Record<string, unknown>[]
@@ -161,7 +166,6 @@ export class ConfigPortableService implements IConfigPortableService {
     for (const indicador of archivo.indicadores) await this.indicadores.guardar(indicador as never);
     for (const regla of archivo.reglas) await this.reglas.guardar(regla as never);
     for (const meta of archivo.metas) await this.metas.guardar(meta as never);
-    for (const responsable of archivo.responsables ?? []) await this.responsables.guardar(responsable as never);
     for (const categoria of archivo.categorias ?? []) await this.categorias.guardar(categoria as never);
 
     return { advertencias };

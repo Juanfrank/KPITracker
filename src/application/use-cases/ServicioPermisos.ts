@@ -22,7 +22,7 @@ export class ServicioPermisos {
     if (!usuario) {
       return {
         esAdministrador: false,
-        responsableId: null,
+        usuarioId: null,
         equipoId: null,
         permisosGenerales: new Set(),
         permisosEquipo: new Set(),
@@ -38,7 +38,7 @@ export class ServicioPermisos {
 
     return {
       esAdministrador: usuario.esAdministrador,
-      responsableId: usuario.responsableId,
+      usuarioId: usuario.id,
       equipoId: usuario.equipoId,
       permisosGenerales: new Set(rolGeneral?.ambito === 'general' ? rolGeneral.permisos : []),
       permisosEquipo: new Set(rolEquipo?.ambito === 'equipo' ? rolEquipo.permisos : []),

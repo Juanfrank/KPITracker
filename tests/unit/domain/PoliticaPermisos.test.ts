@@ -8,7 +8,7 @@ import {
 function ctx(parcial: Partial<ContextoPermisos> = {}): ContextoPermisos {
   return {
     esAdministrador: false,
-    responsableId: null,
+    usuarioId: null,
     equipoId: null,
     permisosGenerales: new Set(),
     permisosEquipo: new Set(),
@@ -50,7 +50,7 @@ describe('puedeSobreIndicador', () => {
   });
 
   it('la regla del responsable directo concede ver/registrar SIEMPRE, pero nunca validar', () => {
-    const contexto = ctx({ responsableId: 'resp-1' });
+    const contexto = ctx({ usuarioId: 'resp-1' });
     const indicador = { equipoEfectivoId: null, responsable: 'resp-1' };
     expect(puedeSobreIndicador(contexto, 'ver', indicador)).toBe(true);
     expect(puedeSobreIndicador(contexto, 'registrar', indicador)).toBe(true);

@@ -3,7 +3,7 @@ import type {
   ICatalogoRepository, IConfiguracionRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
   IReglaRepository, IRolRepository
 } from '@application/ports/index';
-import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Responsable } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico } from '@domain/index';
 import { ValidacionError } from '@domain/index';
 import type {
   ArchivoRespaldo, CategoriaRespaldo, CategoriaResumen, ItemRespaldo, ResultadoImportacionRespaldo, ResumenRespaldo,
@@ -19,7 +19,6 @@ export interface ReposRespaldoPerfil {
   metas: IMetaRepository;
   reglas: IReglaRepository;
   periodicidades: ICatalogoRepository<DefinicionPeriodicidad>;
-  responsables: ICatalogoRepository<Responsable>;
   categorias: ICatalogoRepository<Categoria>;
   equipos: ICatalogoRepository<Equipo>;
   roles: IRolRepository;
@@ -51,11 +50,10 @@ export class RespaldoPerfilService {
   ) {}
 
   async exportar(): Promise<string> {
-    const [config, periodicidades, responsables, categorias, equipos, roles, listas, atributos, origenes, indicadores, reglas] =
+    const [config, periodicidades, categorias, equipos, roles, listas, atributos, origenes, indicadores, reglas] =
       await Promise.all([
         this.repos.configuracion.obtener(),
         this.repos.periodicidades.listar(true),
-        this.repos.responsables.listar(true),
         this.repos.categorias.listar(true),
         this.repos.equipos.listar(true),
         this.repos.roles.listar(),
@@ -78,7 +76,6 @@ export class RespaldoPerfilService {
       appVersion: this.appVersion ?? undefined,
       configuracionGeneral: config as unknown as Record<string, unknown>,
       periodicidades: periodicidades as unknown as Record<string, unknown>[],
-      responsables: responsables as unknown as Record<string, unknown>[],
       categorias: categorias as unknown as Record<string, unknown>[],
       equipos: equipos as unknown as Record<string, unknown>[],
       roles: roles as unknown as Record<string, unknown>[],
@@ -176,11 +173,6 @@ export class RespaldoPerfilService {
       importados.periodicidades++;
     }
 
-    for (const responsable of idsSeleccionados('responsables', archivo.responsables as FilaConId[])) {
-      await this.repos.responsables.guardar(conEliminadoPorDefecto(responsable) as never);
-      importados.responsables++;
-    }
-
     for (const categoria of idsSeleccionados('categorias', archivo.categorias as FilaConId[])) {
       await this.repos.categorias.guardar(conEliminadoPorDefecto(categoria) as never);
       importados.categorias++;
@@ -224,17 +216,18 @@ export class RespaldoPerfilService {
     }
 
     for (const indicador of idsSeleccionados('indicadores', archivo.indicadores as FilaConId[])) {
-      const responsableId = indicador.responsable == null ? null : String(indicador.responsable);
+      // Batch U: `responsable` apunta a un Usuario, que deliberadamente no viaja en el
+      // respaldo (ver docstring de la clase) — no hay forma de validar su existencia
+      // en el destino desde acá, se importa tal cual.
       const categoriaId = indicador.categoria == null ? null : String(indicador.categoria);
       const equipoId = indicador.equipo == null ? null : String(indicador.equipo);
       const periodicidadId = indicador.periodicidadPersonalizadaId == null ? null : String(indicador.periodicidadPersonalizadaId);
       if (
-        (responsableId && !(await existe(this.repos.responsables, responsableId))) ||
         (categoriaId && !(await existe(this.repos.categorias, categoriaId))) ||
         (equipoId && !(await existe(this.repos.equipos, equipoId))) ||
         (periodicidadId && !(await existe(this.repos.periodicidades, periodicidadId)))
       ) {
-        advertencias.push(`Indicador "${String(indicador.nombre ?? idDe(indicador))}" omitido: referencia un responsable, categoría, equipo o periodicidad que no existe en el destino.`);
+        advertencias.push(`Indicador "${String(indicador.nombre ?? idDe(indicador))}" omitido: referencia una categoría, equipo o periodicidad que no existe en el destino.`);
         omitidos.indicadores++;
         continue;
       }

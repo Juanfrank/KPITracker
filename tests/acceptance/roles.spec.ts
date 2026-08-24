@@ -66,7 +66,7 @@ let visor: Page;
 let colaborador: Page;
 let lider: Page;
 
-test('admin crea un equipo, un responsable vinculado y dos indicadores (uno del equipo, otro "General")', async () => {
+test('admin crea un equipo, un responsable vinculado (usuario, Batch U) y dos indicadores (uno del equipo, otro "General")', async () => {
   await admin.getByTestId('nav-admin').click();
 
   await admin.getByTestId('nuevo-equipo').click();
@@ -74,11 +74,16 @@ test('admin crea un equipo, un responsable vinculado y dos indicadores (uno del 
   await admin.getByTestId('guardar-equipo').click();
   await expect(admin.getByTestId('equipo-Equipo Ventas')).toBeVisible();
 
-  await admin.getByTestId('nuevo-responsable').click();
-  await admin.getByTestId('responsable-nombre').fill('Responsable Ventas');
-  await seleccionarPorTexto(admin.getByTestId('responsable-equipo'), 'Equipo Ventas');
-  await admin.getByTestId('guardar-responsable').click();
-  await expect(admin.getByTestId('responsable-Responsable Ventas')).toBeVisible();
+  await admin.getByTestId('nuevo-usuario').click();
+  await admin.getByTestId('usuario-nombreUsuario').fill('resp.ventas');
+  await admin.getByTestId('usuario-nombreCompleto').fill('Responsable Ventas');
+  await admin.getByTestId('usuario-password').fill(PASSWORD);
+  await admin.getByTestId('guardar-usuario').click();
+  await expect(admin.getByTestId('usuario-resp.ventas')).toBeVisible();
+
+  await admin.getByTestId('usuario-resp.ventas').click();
+  await seleccionarPorTexto(admin.getByTestId('usuario-equipo'), 'Equipo Ventas');
+  await admin.getByTestId('guardar-usuario-edicion').click();
 
   await admin.getByTestId('nav-indicadores').click();
 
@@ -117,9 +122,7 @@ test('admin crea tres usuarios y los asigna a Equipo Ventas con su rol de equipo
   const crearUsuario = async (nombreUsuario: string, rolEquipo: string): Promise<void> => {
     await admin.getByTestId('nuevo-usuario').click();
     await admin.getByTestId('usuario-nombreUsuario').fill(nombreUsuario);
-    await admin.locator('div.campo', { has: admin.locator('label', { hasText: 'Nombre completo' }) })
-      .locator('input')
-      .fill(nombreUsuario);
+    await admin.getByTestId('usuario-nombreCompleto').fill(nombreUsuario);
     await admin.getByTestId('usuario-password').fill(PASSWORD);
     await admin.getByTestId('guardar-usuario').click();
     await expect(admin.getByTestId(`usuario-${nombreUsuario}`)).toBeVisible();

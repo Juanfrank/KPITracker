@@ -4,11 +4,11 @@ import {
 } from '@domain/index';
 import type {
   Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
-  EstadoSeguimiento, Indicador, Responsable
+  EstadoSeguimiento, Indicador
 } from '@domain/index';
 import type {
   IAtributoRepository, ICatalogoRepository, IConfiguracionRepository, IDefinicionPeriodicidadRepository,
-  IIndicadorRepository, IListaRepository, IResultadoRepository
+  IIndicadorRepository, IListaRepository, IResultadoRepository, IUsuarioRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -84,7 +84,7 @@ export class ServicioSeguimiento extends ServicioBase {
     private readonly resultados: IResultadoRepository,
     private readonly configuracion: IConfiguracionRepository,
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
-    private readonly responsablesRepo: ICatalogoRepository<Responsable>,
+    private readonly usuariosRepo: IUsuarioRepository,
     private readonly categoriasRepo: ICatalogoRepository<Categoria>,
     private readonly equiposRepo: ICatalogoRepository<Equipo>,
     private readonly atributosRepo: IAtributoRepository,
@@ -135,23 +135,23 @@ export class ServicioSeguimiento extends ServicioBase {
   }
 
   async tablero(): Promise<FilaTablero[]> {
-    const [config, indicadores, resumen, levantamientos, definicionesLista, responsables, categorias, equipos, atributosFiltrables] =
+    const [config, indicadores, resumen, levantamientos, definicionesLista, usuarios, categorias, equipos, atributosFiltrables] =
       await Promise.all([
         this.configuracion.obtener(),
         this.indicadores.listar(),
         this.resultados.resumenGlobal(),
         this.resultados.listarLevantamientos(),
         this.periodicidadesRepo.listar(),
-        this.responsablesRepo.listar(),
+        this.usuariosRepo.listar(),
         this.categoriasRepo.listar(),
         this.equiposRepo.listar(),
         this.atributosFiltrables()
       ]);
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
-    const nombreResponsable = new Map(responsables.map((r) => [r.id, r.nombre]));
+    const nombreResponsable = new Map(usuarios.map((u) => [u.id, u.nombreCompleto]));
     const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
     const nombreEquipo = new Map(equipos.map((e) => [e.id, e.nombre]));
-    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const elementosPorLista = new Map<string, ElementoLista[]>();
     for (const listaId of new Set(atributosFiltrables.map((a) => a.listaId).filter((id): id is string => id != null))) {
       elementosPorLista.set(listaId, await this.listas.listarElementos(listaId));
@@ -163,7 +163,7 @@ export class ServicioSeguimiento extends ServicioBase {
     // tablero (en vez de un error) — ver `puedeVerIndicador`.
     const permisos = permisosActuales();
     const visibles = indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 
     for (const indicador of visibles) {
@@ -197,7 +197,7 @@ export class ServicioSeguimiento extends ServicioBase {
         .map((x) => x.ultimaActualizacion)
         .filter((x): x is string => x != null)
         .sort();
-      const equipoIdEfectivo = equipoEfectivo(indicador, responsablesPorId);
+      const equipoIdEfectivo = equipoEfectivo(indicador, usuariosPorId);
 
       filas.push({
         indicadorId: indicador.id,
@@ -227,9 +227,9 @@ export class ServicioSeguimiento extends ServicioBase {
   async detalle(indicadorId: string): Promise<DetalleSeguimiento | null> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) return null;
-    const responsable = indicador.responsable ? await this.responsablesRepo.obtener(indicador.responsable) : null;
-    const responsablesPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
-    if (!puedeVerIndicador(permisosActuales(), { equipoEfectivoId: equipoEfectivo(indicador, responsablesPorId), responsable: indicador.responsable })) {
+    const responsable = indicador.responsable ? await this.usuariosRepo.obtener(indicador.responsable) : null;
+    const usuariosPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
+    if (!puedeVerIndicador(permisosActuales(), { equipoEfectivoId: equipoEfectivo(indicador, usuariosPorId), responsable: indicador.responsable })) {
       return null;
     }
     const config = await this.configuracion.obtener();
@@ -273,18 +273,18 @@ export class ServicioSeguimiento extends ServicioBase {
    * `resultados` (no tienen filas propias, ver ExportAnaliticoService).
    */
   async historico(): Promise<FilaHistorico[]> {
-    const [config, indicadores, responsables] = await Promise.all([
-      this.configuracion.obtener(), this.indicadores.listar(), this.responsablesRepo.listar()
+    const [config, indicadores, usuarios] = await Promise.all([
+      this.configuracion.obtener(), this.indicadores.listar(), this.usuariosRepo.listar()
     ]);
     const definicionesLista = await this.periodicidadesRepo.listar();
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaHistorico[] = [];
 
-    const responsablesPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
+    const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     const visibles = indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, responsablesPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 
     for (const indicador of visibles) {

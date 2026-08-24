@@ -4,7 +4,6 @@ import type {
   IAutomatizacionIndicadorRepository,
   IIndicadorRepository,
   IReglaRepository,
-  IResponsableRepository,
   IUsuarioRepository
 } from '@application/ports/index';
 
@@ -104,9 +103,10 @@ export interface DepsReferenciasIndicadorCatalogo {
   indicadores: IIndicadorRepository;
 }
 
-export async function referenciasDeResponsable(deps: DepsReferenciasIndicadorCatalogo, responsableId: string): Promise<string[]> {
+/** Bloquea el borrado (lógico) de un usuario referenciado como responsable DIRECTO de un indicador — Batch U unificó Usuario/Responsable. */
+export async function referenciasDeUsuario(deps: DepsReferenciasIndicadorCatalogo, usuarioId: string): Promise<string[]> {
   const indicadores = await deps.indicadores.listar();
-  return indicadores.filter((i) => i.responsable === responsableId).map((i) => `Indicador: ${i.nombre}`);
+  return indicadores.filter((i) => i.responsable === usuarioId).map((i) => `Indicador: ${i.nombre}`);
 }
 
 export async function referenciasDeCategoria(deps: DepsReferenciasIndicadorCatalogo, categoriaId: string): Promise<string[]> {
@@ -115,17 +115,17 @@ export async function referenciasDeCategoria(deps: DepsReferenciasIndicadorCatal
 }
 
 export interface DepsReferenciasEquipo {
-  responsables: IResponsableRepository;
+  usuarios: IUsuarioRepository;
   indicadores: IIndicadorRepository;
 }
 
-/** Bloquea el borrado de un equipo referenciado directo (`Indicador.equipo`) o indirecto (vía `Responsable.equipoId`). */
+/** Bloquea el borrado de un equipo referenciado directo (`Indicador.equipo`) o indirecto (vía `Usuario.equipoId` de su responsable). */
 export async function referenciasDeEquipo(deps: DepsReferenciasEquipo, equipoId: string): Promise<string[]> {
   const detalles: string[] = [];
 
-  const responsables = await deps.responsables.listar();
-  for (const responsable of responsables) {
-    if (responsable.equipoId === equipoId) detalles.push(`Responsable: ${responsable.nombre}`);
+  const usuarios = await deps.usuarios.listar();
+  for (const usuario of usuarios) {
+    if (usuario.equipoId === equipoId) detalles.push(`Usuario: ${usuario.nombreCompleto || usuario.nombreUsuario}`);
   }
 
   const indicadores = await deps.indicadores.listar();

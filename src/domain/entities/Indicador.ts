@@ -26,7 +26,7 @@ export interface Indicador {
   /** Ids de las listas de selección usadas como desagregaciones. */
   desagregaciones: string[];
   estado: EstadoIndicador;
-  /** Id de Responsable (catálogo). Determina el vínculo INDIRECTO a un equipo (vía `Responsable.equipoId`), salvo que `equipo` esté seteado, que prevalece — ver `equipoEfectivo`. */
+  /** Id de Usuario (responsable directo, Batch U unificó Usuario/Responsable). Determina el vínculo INDIRECTO a un equipo (vía `Usuario.equipoId`), salvo que `equipo` esté seteado, que prevalece — ver `equipoEfectivo`. */
   responsable: string | null;
   /** Id de Categoria (catálogo). */
   categoria: string | null;

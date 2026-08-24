@@ -130,16 +130,22 @@ describe('Servidor tRPC — autenticación', () => {
 
   it('un usuario sin rol admin recibe FORBIDDEN en un procedimiento de administración', async () => {
     const admin = await clienteAdmin();
-    await admin.usuarios.crear.mutate({ nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', password: 'correcta123' });
+    const creado = await admin.usuarios.crear.mutate({ nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', password: 'correcta123' });
 
     const cliente = crearCliente(fetchConCookies());
     await cliente.auth.login.mutate({ nombreUsuario: 'jperez', password: 'correcta123' });
 
-    const error = await cliente.usuarios.listar.query().catch((e: unknown) => e);
+    // Batch U: `usuarios.listar` pasó a `protectedProcedure` (necesario para poblar el
+    // selector de responsables) — el procedimiento admin-only que sigue gateado es
+    // `establecerAdministrador` (y el resto de la gestión de cuentas).
+    const error = await cliente.usuarios.establecerAdministrador
+      .mutate({ id: creado.id, esAdministrador: true })
+      .catch((e: unknown) => e);
     expect((error as TRPCClientError<AppRouter>).data?.code).toBe('FORBIDDEN');
 
-    // Pero sí puede usar un procedimiento protegido normal.
+    // Pero sí puede usar un procedimiento protegido normal, incluido `usuarios.listar`.
     await expect(cliente.indicadores.listar.query()).resolves.toEqual([]);
+    await expect(cliente.usuarios.listar.query()).resolves.not.toHaveLength(0);
   });
 
   it('el error de negocio conserva `detalles` sobre el cable (mismo sobre que RespuestaIpc)', async () => {

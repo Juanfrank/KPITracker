@@ -16,7 +16,6 @@ import type {
   OrigenAutomatico,
   RegistroAuditoria,
   ReglaNegocio,
-  Responsable,
   Resultado,
   ResultadoHistorial,
   Rol,
@@ -124,7 +123,6 @@ export interface ICatalogoRepository<T extends { readonly id: string }> {
   marcarEliminado(id: string, eliminado: boolean): Promise<void>;
 }
 
-export type IResponsableRepository = ICatalogoRepository<Responsable>;
 export type ICategoriaRepository = ICatalogoRepository<Categoria>;
 export type IOrigenAutomaticoRepository = ICatalogoRepository<OrigenAutomatico>;
 export type IEquipoRepository = ICatalogoRepository<Equipo>;
@@ -207,11 +205,26 @@ export interface IAliasDesagregacionOrigenRepository {
   eliminar(id: string): Promise<void>;
 }
 
+/**
+ * Batch U: unifica Usuario y el antiguo catálogo Responsable — `listar`
+ * gana `incluirEliminados` y el repositorio gana `marcarEliminado`, mismo
+ * contrato que `ICatalogoRepository`, para que `ServicioUsuarios` pueda
+ * ofrecer el mismo borrado lógico (bloqueado por referencias) que ya
+ * tenían Responsable/Categoría/Equipo.
+ */
 export interface IUsuarioRepository {
-  listar(): Promise<Usuario[]>;
+  listar(incluirEliminados?: boolean): Promise<Usuario[]>;
   obtener(id: string): Promise<Usuario | null>;
   obtenerPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null>;
   guardar(usuario: Usuario): Promise<void>;
+  marcarEliminado(id: string, eliminado: boolean): Promise<void>;
+}
+
+/** Credencial temporal generada automáticamente (usuarios autocreados por Batch U, o importados desde un respaldo) — se muestra al administrador UNA sola vez y luego se borra, ver `ServicioUsuarios.credencialesPendientes`. */
+export interface ICredencialGeneradaRepository {
+  registrar(usuarioId: string, passwordTexto: string): Promise<void>;
+  /** Lee TODAS las credenciales pendientes (con el nombre de usuario ya resuelto) y las borra en la misma operación — "se muestran una sola vez". */
+  consumirTodas(): Promise<Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>>;
 }
 
 /** Catálogo de roles (Batch T) — sin borrado lógico (catálogo pequeño, bloqueado por referencias en la capa de aplicación). */

@@ -40,12 +40,14 @@ test('crear una definición de periodicidad personalizada con dos semestres', as
   await expect(pagina.getByTestId('periodicidad-Semestres personalizados')).toBeVisible();
 });
 
-test('crear un responsable', async () => {
+test('crear un responsable (usuario, Batch U unificó Usuario/Responsable)', async () => {
   await pagina.getByTestId('nav-admin').click();
-  await pagina.getByTestId('nuevo-responsable').click();
-  await pagina.getByTestId('responsable-nombre').fill('Ana Martínez');
-  await pagina.getByTestId('guardar-responsable').click();
-  await expect(pagina.getByTestId('responsable-Ana Martínez')).toBeVisible();
+  await pagina.getByTestId('nuevo-usuario').click();
+  await pagina.getByTestId('usuario-nombreUsuario').fill('ana.martinez');
+  await pagina.getByTestId('usuario-nombreCompleto').fill('Ana Martínez');
+  await pagina.getByTestId('usuario-password').fill('contrasenaSegura1');
+  await pagina.getByTestId('guardar-usuario').click();
+  await expect(pagina.getByTestId('usuario-ana.martinez')).toBeVisible();
 });
 
 test('crear un indicador con periodicidad personalizada y responsable asignado', async () => {

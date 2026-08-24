@@ -8,9 +8,9 @@
  */
 export interface ContextoPermisos {
   esAdministrador: boolean;
-  /** Responsable vinculado al usuario (1 a 1), o null si no tiene ninguno vinculado. */
-  responsableId: string | null;
-  /** Equipo del usuario (independiente del equipo de su Responsable vinculado), o null si no pertenece a ninguno. */
+  /** Id del propio usuario — Batch U unificó Usuario/Responsable, así que esto ES lo que antes era `responsableId`. */
+  usuarioId: string | null;
+  /** Equipo del usuario, o null si no pertenece a ninguno. */
   equipoId: string | null;
   permisosGenerales: ReadonlySet<string>;
   /** Solo tiene sentido junto con `equipoId` — permisos del rol de equipo del usuario dentro de ESE equipo. */
@@ -32,8 +32,8 @@ function tienePermisoEfectivo(ctx: ContextoPermisos, permiso: string): boolean {
  * del indicador Y tiene `resultados.<accion>.equipo` (rol de equipo o
  * excepcional) → ese indicador; y la regla inherente del responsable (nunca
  * para `'validar'`): el indicador tiene como responsable DIRECTO al mismo
- * `Responsable` vinculado al usuario → siempre ver/registrar ESE indicador,
- * sin mirar roles.
+ * usuario en curso (`indicador.responsable === ctx.usuarioId`) → siempre
+ * ver/registrar ESE indicador, sin mirar roles.
  */
 export function puedeSobreIndicador(
   ctx: ContextoPermisos,
@@ -46,7 +46,7 @@ export function puedeSobreIndicador(
   if (ctx.equipoId != null && ctx.equipoId === indicador.equipoEfectivoId) {
     if (ctx.permisosEquipo.has(permisoEquipo) || ctx.permisosExcepcionales.has(permisoEquipo)) return true;
   }
-  if (accion !== 'validar' && indicador.responsable != null && indicador.responsable === ctx.responsableId) return true;
+  if (accion !== 'validar' && indicador.responsable != null && indicador.responsable === ctx.usuarioId) return true;
   return false;
 }
 

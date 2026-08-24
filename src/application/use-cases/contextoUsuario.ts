@@ -47,7 +47,7 @@ const almacenPermisos = new AsyncLocalStorage<ContextoPermisos>();
 
 const PERMISOS_SIN_RESTRICCION: ContextoPermisos = {
   esAdministrador: true,
-  responsableId: null,
+  usuarioId: null,
   equipoId: null,
   permisosGenerales: new Set(),
   permisosEquipo: new Set(),

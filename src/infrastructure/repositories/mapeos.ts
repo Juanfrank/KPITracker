@@ -1,7 +1,7 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
   DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
-  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Responsable,
+  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial,
   Rol, Sesion, Usuario
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
@@ -251,22 +251,6 @@ export const deDefinicionPeriodicidad = (d: DefinicionPeriodicidad): Fila => ({
   creado_en: d.creadoEn, actualizado_en: d.actualizadoEn
 });
 
-export const aResponsable = (f: Fila): Responsable => ({
-  id: s(f.id),
-  nombre: s(f.nombre),
-  correo: sn(f.correo),
-  activo: b(f.activo),
-  eliminado: b(f.eliminado ?? false),
-  equipoId: sn(f.equipo_id),
-  creadoEn: s(f.creado_en),
-  actualizadoEn: s(f.actualizado_en)
-});
-
-export const deResponsable = (r: Responsable): Fila => ({
-  id: r.id, nombre: r.nombre, correo: r.correo, activo: r.activo, eliminado: r.eliminado ?? false,
-  equipo_id: r.equipoId, creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
-});
-
 export const aCategoria = (f: Fila): Categoria => ({
   id: s(f.id),
   nombre: s(f.nombre),
@@ -391,22 +375,24 @@ export const aUsuario = (f: Fila): Usuario => ({
   id: s(f.id),
   nombreUsuario: s(f.nombre_usuario),
   nombreCompleto: s(f.nombre_completo),
+  correo: sn(f.correo),
   passwordHash: s(f.password_hash),
   esAdministrador: b(f.es_administrador),
   rolGeneralId: sn(f.rol_general_id),
   equipoId: sn(f.equipo_id),
   rolEquipoId: sn(f.rol_equipo_id),
-  responsableId: sn(f.responsable_id),
   activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deUsuario = (u: Usuario): Fila => ({
-  id: u.id, nombre_usuario: u.nombreUsuario, nombre_completo: u.nombreCompleto, password_hash: u.passwordHash,
+  id: u.id, nombre_usuario: u.nombreUsuario, nombre_completo: u.nombreCompleto, correo: u.correo,
+  password_hash: u.passwordHash,
   es_administrador: u.esAdministrador, rol_general_id: u.rolGeneralId, equipo_id: u.equipoId,
-  rol_equipo_id: u.rolEquipoId, responsable_id: u.responsableId,
-  activo: u.activo, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
+  rol_equipo_id: u.rolEquipoId,
+  activo: u.activo, eliminado: u.eliminado ?? false, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
 });
 
 export const aRol = (f: Fila): Rol => ({

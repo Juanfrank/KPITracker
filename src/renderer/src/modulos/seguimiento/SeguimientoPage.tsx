@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Categoria, Equipo, Responsable } from '@domain/index';
+import type { Categoria, Equipo } from '@domain/index';
 import { etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
+import { trpcClient } from '../../trpc';
 import { BarraProgreso, ChipEstado, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+
+/** Usuario asignable como responsable de un indicador (Batch U: unificado con el antiguo catálogo Responsable). */
+type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.query>>[number];
 
 const PESTANAS = [
   { id: 'estado', etiqueta: 'Estado' },
@@ -228,7 +232,7 @@ export function SeguimientoPage(): React.JSX.Element {
   const [filtroTexto, setFiltroTexto] = useState('');
   const [detalle, setDetalle] = useState<DetalleSeguimiento | null>(null);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
-  const [responsablesCatalogo, setResponsablesCatalogo] = useState<Responsable[]>([]);
+  const [responsablesCatalogo, setResponsablesCatalogo] = useState<UsuarioAsignable[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<Categoria[]>([]);
   const [equiposCatalogo, setEquiposCatalogo] = useState<Equipo[]>([]);
   const [reasignando, setReasignando] = useState(false);
@@ -257,7 +261,7 @@ export function SeguimientoPage(): React.JSX.Element {
 
   useEffect(() => {
     cargarTablero();
-    void invocar('responsables:listar', undefined).then(setResponsablesCatalogo);
+    void trpcClient.usuarios.listar.query().then(setResponsablesCatalogo);
     void invocar('categorias:listar', undefined).then(setCategoriasCatalogo);
     void invocar('equipos:listar', undefined).then(setEquiposCatalogo);
   }, []);
@@ -448,7 +452,7 @@ export function SeguimientoPage(): React.JSX.Element {
           >
             <option value="" disabled>Asignar responsable…</option>
             <option value="__quitar__">— quitar asignación —</option>
-            {responsablesCatalogo.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            {responsablesCatalogo.map((r) => <option key={r.id} value={r.id}>{r.nombreCompleto}</option>)}
           </select>
           <select
             defaultValue=""
@@ -538,7 +542,15 @@ export function SeguimientoPage(): React.JSX.Element {
                 </td>
                 <td><ChipEstado estado={f.estado} /></td>
                 <td>{f.periodicidad}</td>
-                <td className="texto-suave">{f.responsable ?? '—'}</td>
+                <td className="texto-suave">
+                  {f.responsable ?? '—'}
+                  {f.responsable && f.equipo && (
+                    <>
+                      <br />
+                      <span style={{ fontSize: '0.8em' }}>({f.equipo})</span>
+                    </>
+                  )}
+                </td>
                 <td className="texto-suave">{f.categoria ?? '—'}</td>
                 <td>{f.periodoPendiente ?? '—'}</td>
                 <td>{f.fechaLimite ?? '—'}</td>
@@ -628,7 +640,15 @@ export function SeguimientoPage(): React.JSX.Element {
                   </td>
                   <td><ChipEstado estado={f.estado} /></td>
                   <td>{f.periodicidad}</td>
-                  <td className="texto-suave">{f.responsable ?? '—'}</td>
+                  <td className="texto-suave">
+                  {f.responsable ?? '—'}
+                  {f.responsable && f.equipo && (
+                    <>
+                      <br />
+                      <span style={{ fontSize: '0.8em' }}>({f.equipo})</span>
+                    </>
+                  )}
+                </td>
                   <td>{f.periodoPendiente ?? '—'}</td>
                   <td>{f.fechaLimite ?? '—'}</td>
                   <td>{f.fechaCorte ?? '—'}</td>
@@ -694,7 +714,15 @@ export function SeguimientoPage(): React.JSX.Element {
                     </td>
                     <td><ChipEstado estado={f.estado} /></td>
                     <td>{f.periodicidad}</td>
-                    <td className="texto-suave">{f.responsable ?? '—'}</td>
+                    <td className="texto-suave">
+                  {f.responsable ?? '—'}
+                  {f.responsable && f.equipo && (
+                    <>
+                      <br />
+                      <span style={{ fontSize: '0.8em' }}>({f.equipo})</span>
+                    </>
+                  )}
+                </td>
                     <td>{f.periodoPendiente ?? '—'}</td>
                     <td>{f.fechaLimite ?? '—'}</td>
                     <td>{f.fechaCorte ?? '—'}</td>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
-  Responsable, Rol, TipoOrigenAutomatico
+  Rol, TipoOrigenAutomatico
 } from '@domain/index';
 import { CATALOGO_PERMISOS, ejemploParaFuente, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
@@ -13,11 +13,8 @@ import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basico
 import { Icono } from '../../componentes/Icono';
 import { TarjetaRespaldo } from './TarjetaRespaldo';
 
-function responsableVacio(): Responsable {
-  return {
-    id: '', nombre: '', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
-  };
-}
+/** Usuario asignable como responsable de un indicador (Batch U: unificado con el antiguo catálogo Responsable). */
+type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.query>>[number];
 
 /** Id del equipo raíz "General" (Batch T) dentro de una lista ya cargada — el respaldo cuando no se elige equipo. */
 function equipoGeneralId(equipos: Equipo[]): string | null {
@@ -239,176 +236,6 @@ function EditorParametrosGenerales({
   );
 }
 
-function SeccionResponsables(): React.JSX.Element {
-  const [items, setItems] = useState<Responsable[]>([]);
-  const [editando, setEditando] = useState<Responsable | null>(null);
-  const [mostrarEliminados, setMostrarEliminados] = useState(false);
-  const [errores, setErrores] = useState<string[]>([]);
-  const [equipos, setEquipos] = useState<Equipo[]>([]);
-
-  const cargar = useCallback(async (): Promise<void> => {
-    setItems(await invocar('responsables:listar', { incluirEliminados: mostrarEliminados }));
-  }, [mostrarEliminados]);
-
-  useEffect(() => {
-    void cargar();
-  }, [cargar]);
-
-  // Recargado también al abrir el editor (no solo al montar): un equipo creado en `SeccionEquipos`
-  // (componente hermano, montado a la vez que este) no dispararía este efecto de otro modo.
-  const cargarEquipos = useCallback(async (): Promise<void> => {
-    setEquipos(await invocar('equipos:listar', undefined));
-  }, []);
-
-  useEffect(() => {
-    void cargarEquipos();
-  }, [cargarEquipos]);
-
-  const guardar = async (): Promise<void> => {
-    if (!editando) return;
-    await invocar('responsables:guardar', editando);
-    setEditando(null);
-    await cargar();
-  };
-
-  const eliminar = async (id: string): Promise<void> => {
-    try {
-      await invocar('responsables:eliminar', { id });
-      setEditando(null);
-      setErrores([]);
-      await cargar();
-    } catch (error) {
-      const e = error as Error & { detalles?: string[] };
-      setErrores(e.detalles?.length ? e.detalles : [e.message]);
-    }
-  };
-
-  const restaurar = async (id: string): Promise<void> => {
-    await invocar('responsables:restaurar', { id });
-    await cargar();
-  };
-
-  return (
-    <div className="tarjeta">
-      <div className="toolbar">
-        <h3 style={{ margin: 0 }}>Responsables</h3>
-        <div className="separador" />
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-          <input
-            type="checkbox"
-            checked={mostrarEliminados}
-            onChange={(e) => setMostrarEliminados(e.target.checked)}
-            style={{ width: 'auto' }}
-            data-testid="responsables-mostrar-eliminados"
-          />
-          Mostrar eliminados
-        </label>
-        <button
-          className="boton primario"
-          onClick={() => { void cargarEquipos(); setEditando({ ...responsableVacio(), equipoId: equipoGeneralId(equipos) }); }}
-          data-testid="nuevo-responsable"
-        >
-          <Icono nombre="mas" /> Responsable
-        </button>
-      </div>
-      <div className="tabla-envoltura">
-        <table className="tabla">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Correo</th>
-              <th>Activo</th>
-              <th style={{ width: 90 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((r) => (
-              <tr
-                key={r.id}
-                className={r.eliminado ? 'fila-eliminada' : undefined}
-                onClick={() => { if (r.eliminado) return; void cargarEquipos(); setEditando(r); }}
-                style={{ cursor: r.eliminado ? 'default' : 'pointer' }}
-                data-testid={`responsable-${r.nombre}`}
-              >
-                <td>{r.nombre} {r.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
-                <td className="texto-suave">{r.correo ?? '—'}</td>
-                <td>{r.activo ? 'Sí' : 'No'}</td>
-                <td>
-                  {r.eliminado && (
-                    <button
-                      className="boton sutil"
-                      title="Restaurar"
-                      onClick={(e) => { e.stopPropagation(); void restaurar(r.id); }}
-                      data-testid={`restaurar-${r.id}`}
-                    >
-                      Restaurar
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={4}>
-                  <Vacio mensaje="Sin responsables" detalle="Créelos para asignarlos a indicadores." />
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {editando && (
-        <PanelLateral
-          titulo={editando.id ? 'Editar responsable' : 'Nuevo responsable'}
-          alCerrar={() => { setEditando(null); setErrores([]); }}
-          pie={
-            <>
-              {editando.id && (
-                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>
-                  Eliminar
-                </button>
-              )}
-              <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => { setEditando(null); setErrores([]); }}>Cancelar</button>
-              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-responsable">Guardar</button>
-            </>
-          }
-        >
-          {errores.length > 0 && (
-            <div className="aviso error" data-testid="responsable-error-eliminar">
-              {errores.map((e) => <div key={e}>{e}</div>)}
-            </div>
-          )}
-          <Campo etiqueta="Nombre" obligatorio>
-            <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} autoFocus data-testid="responsable-nombre" />
-          </Campo>
-          <Campo etiqueta="Correo">
-            <input type="email" value={editando.correo ?? ''} onChange={(e) => setEditando({ ...editando, correo: e.target.value || null })} />
-          </Campo>
-          <Campo etiqueta="Equipo" obligatorio>
-            <select
-              value={editando.equipoId ?? equipoGeneralId(equipos) ?? ''}
-              onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null })}
-              data-testid="responsable-equipo"
-            >
-              {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
-                <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
-              ))}
-            </select>
-            <span className="texto-suave">
-              Obligatorio — determina el vínculo indirecto de los indicadores de este responsable con un equipo. Por defecto, "General".
-            </span>
-          </Campo>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
-            Activo
-          </label>
-        </PanelLateral>
-      )}
-    </div>
-  );
-}
-
 function SeccionCategorias(): React.JSX.Element {
   const [items, setItems] = useState<Categoria[]>([]);
   const [editando, setEditando] = useState<Categoria | null>(null);
@@ -591,8 +418,8 @@ function SeccionCategorias(): React.JSX.Element {
  * más un sub-panel "Indicadores de este equipo": lista TODOS los
  * indicadores marcando su vínculo con el equipo en edición — directo
  * (`Indicador.equipo`, checkbox editable, togglea vía
- * `indicadores:reasignarMasivo`), indirecto (vía `Responsable.equipoId`,
- * informativo — ese vínculo se cambia asignando/quitando el responsable
+ * `indicadores:reasignarMasivo`), indirecto (vía `Usuario.equipoId` de su
+ * responsable, informativo — ese vínculo se cambia asignando/quitando el responsable
  * del indicador, no desde acá) o ninguno (checkbox editable para vincular
  * directo).
  */
@@ -601,7 +428,7 @@ function SeccionEquipos(): React.JSX.Element {
   const [editando, setEditando] = useState<Equipo | null>(null);
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [errores, setErrores] = useState<string[]>([]);
-  const [responsables, setResponsables] = useState<Responsable[]>([]);
+  const [responsables, setResponsables] = useState<UsuarioAsignable[]>([]);
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
@@ -615,7 +442,7 @@ function SeccionEquipos(): React.JSX.Element {
   // También recargado al abrir el editor (no solo al montar): un responsable o indicador
   // creado mientras este componente ya estaba montado no dispararía este efecto de otro modo.
   const cargarResponsablesEIndicadores = useCallback(async (): Promise<void> => {
-    setResponsables(await invocar('responsables:listar', undefined));
+    setResponsables(await trpcClient.usuarios.listar.query());
     setIndicadores(await invocar('indicadores:listar', undefined));
   }, []);
 
@@ -1371,61 +1198,73 @@ interface UsuarioFila {
   id: string;
   nombreUsuario: string;
   nombreCompleto: string;
+  correo: string | null;
   esAdministrador: boolean;
   rolGeneralId: string | null;
   equipoId: string | null;
   rolEquipoId: string | null;
-  responsableId: string | null;
   activo: boolean;
+  eliminado: boolean;
   permisosExcepcionales: string[];
 }
 
-function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; password: string; esAdministrador: boolean } {
-  return { nombreUsuario: '', nombreCompleto: '', password: '', esAdministrador: false };
+function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; correo: string; password: string; esAdministrador: boolean } {
+  return { nombreUsuario: '', nombreCompleto: '', correo: '', password: '', esAdministrador: false };
 }
 
 /**
  * Gestión de usuarios (nueva en la Fase 4 — sin equivalente en la app de
  * escritorio, que operaba con un único `USUARIO_LOCAL` implícito). Habla
- * directo con el cliente tRPC (no pasa por el shim `invocar()`, ya que
- * `usuarios:*` nunca tuvo canal IPC — ver plan §9.7). El componente padre
+ * directo con el cliente tRPC (no pasa por el shim `invocar()`, salvo
+ * `equipos:listar`, que sigue siendo un canal IPC). El componente padre
  * (`AdminPage`) solo la monta si `usuario.esAdministrador`; los
- * procedimientos además son `adminProcedure` del lado del servidor, así que
- * ocultarla aquí es una conveniencia de UX, no la única barrera.
+ * procedimientos administrativos además son `adminProcedure` del lado del
+ * servidor, así que ocultarla aquí es una conveniencia de UX, no la única
+ * barrera.
  *
- * Batch T: además del alta/contraseña/activo ya existentes, cada usuario
- * gana rol general, equipo + rol de equipo, responsable vinculado (1 a 1) y
- * permisos excepcionales — demasiados campos nuevos para editar inline en
- * la tabla, así que pasa al mismo patrón "click en la fila → panel lateral"
- * que ya usan Responsables/Categorías/Equipos.
+ * Batch U unifica Usuario con el antiguo catálogo Responsable: un usuario
+ * ES la persona asignable como responsable de un indicador — por eso esta
+ * sección absorbe lo que antes vivía en `SeccionResponsables` (correo,
+ * equipo obligatorio con respaldo "General", borrado lógico bloqueado por
+ * referencias) junto con lo que ya tenía desde Batch T (rol general, rol de
+ * equipo, permisos excepcionales). El vínculo `responsableId` desaparece
+ * por completo: ya no hace falta, la identidad es la misma.
  */
 function SeccionUsuarios(): React.JSX.Element {
   const [items, setItems] = useState<UsuarioFila[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
-  const [responsables, setResponsables] = useState<Responsable[]>([]);
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [creando, setCreando] = useState<ReturnType<typeof usuarioNuevoVacio> | null>(null);
   const [editando, setEditando] = useState<UsuarioFila | null>(null);
   const [editandoPassword, setEditandoPassword] = useState<UsuarioFila | null>(null);
   const [passwordNueva, setPasswordNueva] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [erroresEliminar, setErroresEliminar] = useState<string[]>([]);
+  const [credencialesPendientes, setCredencialesPendientes] = useState<
+    Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>
+  >([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    const [usuarios, listaRoles, listaEquipos, listaResponsables] = await Promise.all([
-      trpcClient.usuarios.listar.query(),
+    const [usuarios, listaRoles, listaEquipos] = await Promise.all([
+      trpcClient.usuarios.listar.query({ incluirEliminados: mostrarEliminados }),
       trpcClient.roles.listar.query(),
-      invocar('equipos:listar', undefined),
-      invocar('responsables:listar', undefined)
+      invocar('equipos:listar', undefined)
     ]);
     setItems(usuarios);
     setRoles(listaRoles);
     setEquipos(listaEquipos);
-    setResponsables(listaResponsables);
-  }, []);
+  }, [mostrarEliminados]);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  // Se consume (lee y borra) UNA sola vez al montar — no en `cargar()`, que se
+  // repite tras cada acción — para no perder el aviso antes de que se vea.
+  useEffect(() => {
+    void trpcClient.usuarios.credencialesPendientes.query().then(setCredencialesPendientes);
+  }, []);
 
   const rolesGenerales = roles.filter((r) => r.ambito === 'general');
   const rolesEquipo = roles.filter((r) => r.ambito === 'equipo');
@@ -1434,7 +1273,7 @@ function SeccionUsuarios(): React.JSX.Element {
     if (!creando) return;
     setError(null);
     try {
-      await trpcClient.usuarios.crear.mutate(creando);
+      await trpcClient.usuarios.crear.mutate({ ...creando, correo: creando.correo || null });
       setCreando(null);
       await cargar();
     } catch (e) {
@@ -1451,12 +1290,12 @@ function SeccionUsuarios(): React.JSX.Element {
     if (!editando) return;
     setError(null);
     try {
+      await trpcClient.usuarios.guardarDatos.mutate({ id: editando.id, nombreCompleto: editando.nombreCompleto, correo: editando.correo });
       await trpcClient.usuarios.establecerAdministrador.mutate({ id: editando.id, esAdministrador: editando.esAdministrador });
       if (!editando.esAdministrador && editando.rolGeneralId) {
         await trpcClient.usuarios.establecerRolGeneral.mutate({ id: editando.id, rolGeneralId: editando.rolGeneralId });
       }
       await trpcClient.usuarios.establecerEquipo.mutate({ id: editando.id, equipoId: editando.equipoId, rolEquipoId: editando.rolEquipoId });
-      await trpcClient.usuarios.establecerResponsable.mutate({ id: editando.id, responsableId: editando.responsableId });
       await trpcClient.usuarios.establecerPermisosExcepcionales.mutate({ id: editando.id, permisos: editando.permisosExcepcionales });
       await trpcClient.usuarios.establecerActivo.mutate({ id: editando.id, activo: editando.activo });
       setEditando(null);
@@ -1464,6 +1303,23 @@ function SeccionUsuarios(): React.JSX.Element {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el usuario.');
     }
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    try {
+      await trpcClient.usuarios.eliminar.mutate({ id });
+      setEditando(null);
+      setErroresEliminar([]);
+      await cargar();
+    } catch (e) {
+      const err = e as Error & { detalles?: string[] };
+      setErroresEliminar(err.detalles?.length ? err.detalles : [err.message]);
+    }
+  };
+
+  const restaurar = async (id: string): Promise<void> => {
+    await trpcClient.usuarios.restaurar.mutate({ id });
+    await cargar();
   };
 
   const alternarPermisoExcepcional = (permiso: string): void => {
@@ -1494,9 +1350,30 @@ function SeccionUsuarios(): React.JSX.Element {
 
   return (
     <div className="tarjeta">
+      {credencialesPendientes.length > 0 && (
+        <div className="aviso info" data-testid="usuarios-credenciales-generadas">
+          <strong>Se generaron {credencialesPendientes.length} cuenta{credencialesPendientes.length === 1 ? '' : 's'} automáticamente</strong>
+          {' '}(responsables sin usuario vinculado, unificados en Batch U). Guarde estas contraseñas — no se muestran de nuevo:
+          <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+            {credencialesPendientes.map((c) => (
+              <li key={c.usuarioId}><code>{c.nombreUsuario}</code> — <code>{c.passwordTexto}</code></li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Usuarios</h3>
         <div className="separador" />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={mostrarEliminados}
+            onChange={(e) => setMostrarEliminados(e.target.checked)}
+            style={{ width: 'auto' }}
+            data-testid="usuarios-mostrar-eliminados"
+          />
+          Mostrar eliminados
+        </label>
         <button className="boton primario" onClick={() => setCreando(usuarioNuevoVacio())} data-testid="nuevo-usuario">
           <Icono nombre="mas" /> Usuario
         </button>
@@ -1507,38 +1384,59 @@ function SeccionUsuarios(): React.JSX.Element {
             <tr>
               <th>Usuario</th>
               <th>Nombre completo</th>
+              <th>Correo</th>
               <th>Rol general</th>
               <th>Equipo</th>
               <th>Activo</th>
-              <th style={{ width: 110 }} />
+              <th style={{ width: 190 }} />
             </tr>
           </thead>
           <tbody>
             {items.map((u) => (
-              <tr key={u.id} onClick={() => setEditando(u)} style={{ cursor: 'pointer' }} data-testid={`usuario-${u.nombreUsuario}`}>
-                <td>{u.nombreUsuario}</td>
+              <tr
+                key={u.id}
+                className={u.eliminado ? 'fila-eliminada' : undefined}
+                onClick={() => { if (!u.eliminado) setEditando(u); }}
+                style={{ cursor: u.eliminado ? 'default' : 'pointer' }}
+                data-testid={`usuario-${u.nombreUsuario}`}
+              >
+                <td>{u.nombreUsuario} {u.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}</td>
                 <td>{u.nombreCompleto}</td>
+                <td className="texto-suave">{u.correo ?? '—'}</td>
                 <td>{u.esAdministrador ? 'Administrador' : nombreRol(u.rolGeneralId)}</td>
                 <td>{nombreEquipo(u.equipoId)}{u.equipoId && u.rolEquipoId ? ` (${nombreRol(u.rolEquipoId)})` : ''}</td>
                 <td>
-                  <button
-                    className="boton sutil"
-                    onClick={(e) => { e.stopPropagation(); void alternarActivo(u); }}
-                    data-testid={`usuario-activo-${u.nombreUsuario}`}
-                  >
-                    {u.activo ? 'Sí' : 'No'}
-                  </button>
+                  {!u.eliminado && (
+                    <button
+                      className="boton sutil"
+                      onClick={(e) => { e.stopPropagation(); void alternarActivo(u); }}
+                      data-testid={`usuario-activo-${u.nombreUsuario}`}
+                    >
+                      {u.activo ? 'Sí' : 'No'}
+                    </button>
+                  )}
                 </td>
                 <td>
-                  <button className="boton sutil" onClick={(e) => { e.stopPropagation(); setEditandoPassword(u); }} title="Cambiar contraseña">
-                    Contraseña
-                  </button>
+                  {u.eliminado ? (
+                    <button
+                      className="boton sutil"
+                      title="Restaurar"
+                      onClick={(e) => { e.stopPropagation(); void restaurar(u.id); }}
+                      data-testid={`restaurar-usuario-${u.id}`}
+                    >
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button className="boton sutil" onClick={(e) => { e.stopPropagation(); setEditandoPassword(u); }} title="Cambiar contraseña">
+                      Contraseña
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <Vacio mensaje="Sin usuarios" />
                 </td>
               </tr>
@@ -1569,7 +1467,20 @@ function SeccionUsuarios(): React.JSX.Element {
             />
           </Campo>
           <Campo etiqueta="Nombre completo" obligatorio>
-            <input type="text" value={creando.nombreCompleto} onChange={(e) => setCreando({ ...creando, nombreCompleto: e.target.value })} />
+            <input
+              type="text"
+              value={creando.nombreCompleto}
+              onChange={(e) => setCreando({ ...creando, nombreCompleto: e.target.value })}
+              data-testid="usuario-nombreCompleto"
+            />
+          </Campo>
+          <Campo etiqueta="Correo">
+            <input
+              type="email"
+              value={creando.correo}
+              onChange={(e) => setCreando({ ...creando, correo: e.target.value })}
+              data-testid="usuario-correo"
+            />
           </Campo>
           <Campo etiqueta="Contraseña" obligatorio>
             <input
@@ -1590,16 +1501,19 @@ function SeccionUsuarios(): React.JSX.Element {
             Administrador (acceso total, incluida esta pantalla)
           </label>
           <span className="texto-suave">
-            El resto de los campos (rol general, equipo, responsable vinculado, permisos excepcionales) se configuran al editar el usuario ya creado.
+            El resto de los campos (rol general, equipo, permisos excepcionales) se configuran al editar el usuario ya creado.
           </span>
         </PanelLateral>
       )}
       {editando && (
         <PanelLateral
           titulo={`Editar usuario — ${editando.nombreUsuario}`}
-          alCerrar={() => { setEditando(null); setError(null); }}
+          alCerrar={() => { setEditando(null); setError(null); setErroresEliminar([]); }}
           pie={
             <>
+              {!editando.esAdministrador && (
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>
+              )}
               <span style={{ flex: 1 }} />
               <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
               <button className="boton primario" onClick={() => void guardarEdicion()} data-testid="guardar-usuario-edicion">Guardar</button>
@@ -1607,6 +1521,27 @@ function SeccionUsuarios(): React.JSX.Element {
           }
         >
           {error && <div className="aviso error">{error}</div>}
+          {erroresEliminar.length > 0 && (
+            <div className="aviso error" data-testid="usuario-error-eliminar">
+              {erroresEliminar.map((e) => <div key={e}>{e}</div>)}
+            </div>
+          )}
+          <Campo etiqueta="Nombre completo" obligatorio>
+            <input
+              type="text"
+              value={editando.nombreCompleto}
+              onChange={(e) => setEditando({ ...editando, nombreCompleto: e.target.value })}
+              data-testid="usuario-editar-nombreCompleto"
+            />
+          </Campo>
+          <Campo etiqueta="Correo">
+            <input
+              type="email"
+              value={editando.correo ?? ''}
+              onChange={(e) => setEditando({ ...editando, correo: e.target.value || null })}
+              data-testid="usuario-editar-correo"
+            />
+          </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -1631,15 +1566,17 @@ function SeccionUsuarios(): React.JSX.Element {
           )}
           <Campo etiqueta="Equipo">
             <select
-              value={editando.equipoId ?? ''}
-              onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null, rolEquipoId: e.target.value ? editando.rolEquipoId : null })}
+              value={editando.equipoId ?? equipoGeneralId(equipos) ?? ''}
+              onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null })}
               data-testid="usuario-equipo"
             >
-              <option value="">— (sin equipo) —</option>
               {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
                 <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
               ))}
             </select>
+            <span className="texto-suave">
+              Determina el vínculo indirecto de los indicadores asignados a este usuario como responsable, además de su equipo de RBAC. Por defecto, "General".
+            </span>
           </Campo>
           {editando.equipoId && (
             <Campo etiqueta="Rol de equipo">
@@ -1653,19 +1590,6 @@ function SeccionUsuarios(): React.JSX.Element {
               </select>
             </Campo>
           )}
-          <Campo etiqueta="Responsable vinculado">
-            <select
-              value={editando.responsableId ?? ''}
-              onChange={(e) => setEditando({ ...editando, responsableId: e.target.value || null })}
-              data-testid="usuario-responsable"
-            >
-              <option value="">— (ninguno) —</option>
-              {responsables.filter((r) => !r.eliminado).map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-            </select>
-            <span className="texto-suave">
-              Vínculo 1 a 1: el usuario siempre podrá ver/registrar los resultados de los indicadores de este responsable.
-            </span>
-          </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -1789,7 +1713,6 @@ export function AdminPage(): React.JSX.Element {
 
       <TarjetaRespaldo />
 
-      <SeccionResponsables />
       <SeccionCategorias />
       <SeccionEquipos />
       <SeccionOrigenesAutomaticos />

@@ -1,21 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { ValidacionError } from '@domain/index';
-import type { Responsable, Rol, Usuario } from '@domain/index';
+import type { Equipo, Indicador, Rol, Usuario } from '@domain/index';
 import type {
-  ICatalogoRepository, IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository
+  ICatalogoRepository, ICredencialGeneradaRepository, IIndicadorRepository, IPermisoExcepcionalRepository,
+  IRolRepository, IUsuarioRepository
 } from '@application/ports/index';
 import { ServicioUsuarios } from '@application/use-cases/ServicioUsuarios';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
 import { GeneradorUuid, RelojSistema } from '@infrastructure/soporte/servicios';
 
+const EQUIPO_GENERAL_ID = 'equipo-general';
+
 class UsuarioRepositoryMemoria implements IUsuarioRepository {
   private readonly filas = new Map<string, Usuario>();
-  async listar(): Promise<Usuario[]> { return [...this.filas.values()]; }
+  async listar(incluirEliminados = false): Promise<Usuario[]> {
+    return [...this.filas.values()].filter((u) => incluirEliminados || !u.eliminado);
+  }
   async obtener(id: string): Promise<Usuario | null> { return this.filas.get(id) ?? null; }
   async obtenerPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null> {
     return [...this.filas.values()].find((u) => u.nombreUsuario === nombreUsuario) ?? null;
   }
   async guardar(usuario: Usuario): Promise<void> { this.filas.set(usuario.id, usuario); }
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    const item = this.filas.get(id);
+    if (item) this.filas.set(id, { ...item, eliminado });
+  }
 }
 
 class RolRepositoryMemoria implements IRolRepository {
@@ -32,14 +41,43 @@ class PermisoExcepcionalRepositoryMemoria implements IPermisoExcepcionalReposito
   async establecer(usuarioId: string, permisos: string[]): Promise<void> { this.porUsuario.set(usuarioId, permisos); }
 }
 
-class ResponsableRepositoryMemoria implements ICatalogoRepository<Responsable> {
-  private readonly filas = new Map<string, Responsable>();
-  async listar(): Promise<Responsable[]> { return [...this.filas.values()]; }
-  async obtener(id: string): Promise<Responsable | null> { return this.filas.get(id) ?? null; }
-  async guardar(item: Responsable): Promise<void> { this.filas.set(item.id, item); }
+class EquipoRepositoryMemoria implements ICatalogoRepository<Equipo> {
+  private readonly filas = new Map<string, Equipo>();
+  constructor() {
+    this.filas.set(EQUIPO_GENERAL_ID, {
+      id: EQUIPO_GENERAL_ID, nombre: 'General', descripcion: '', activo: true, eliminado: false,
+      padreId: null, creadoEn: '2026-01-01', actualizadoEn: '2026-01-01'
+    });
+  }
+  async listar(): Promise<Equipo[]> { return [...this.filas.values()]; }
+  async obtener(id: string): Promise<Equipo | null> { return this.filas.get(id) ?? null; }
+  async guardar(item: Equipo): Promise<void> { this.filas.set(item.id, item); }
   async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
     const item = this.filas.get(id);
     if (item) this.filas.set(id, { ...item, eliminado });
+  }
+}
+
+class IndicadorRepositoryMemoria implements IIndicadorRepository {
+  private readonly filas = new Map<string, Indicador>();
+  async listar(): Promise<Indicador[]> { return [...this.filas.values()]; }
+  async obtener(id: string): Promise<Indicador | null> { return this.filas.get(id) ?? null; }
+  async buscarPorCodigo(): Promise<Indicador | null> { return null; }
+  async guardar(indicador: Indicador): Promise<void> { this.filas.set(indicador.id, indicador); }
+  async eliminar(id: string): Promise<void> { this.filas.delete(id); }
+}
+
+class CredencialGeneradaRepositoryMemoria implements ICredencialGeneradaRepository {
+  private readonly pendientes = new Map<string, string>();
+  private readonly nombreUsuarioPorId = new Map<string, string>();
+  async registrar(usuarioId: string, passwordTexto: string): Promise<void> { this.pendientes.set(usuarioId, passwordTexto); }
+  fijarNombreUsuario(usuarioId: string, nombreUsuario: string): void { this.nombreUsuarioPorId.set(usuarioId, nombreUsuario); }
+  async consumirTodas(): Promise<Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>> {
+    const resultado = [...this.pendientes.entries()].map(([usuarioId, passwordTexto]) => ({
+      usuarioId, nombreUsuario: this.nombreUsuarioPorId.get(usuarioId) ?? usuarioId, passwordTexto
+    }));
+    this.pendientes.clear();
+    return resultado;
   }
 }
 
@@ -48,9 +86,14 @@ function construir() {
   const hasher = new ProveedorPassword(repo);
   const roles = new RolRepositoryMemoria();
   const permisosExcepcionales = new PermisoExcepcionalRepositoryMemoria();
-  const responsables = new ResponsableRepositoryMemoria();
-  const servicio = new ServicioUsuarios(repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales, responsables);
-  return { servicio, repo, roles, responsables };
+  const equipos = new EquipoRepositoryMemoria();
+  const indicadores = new IndicadorRepositoryMemoria();
+  const credenciales = new CredencialGeneradaRepositoryMemoria();
+  const servicio = new ServicioUsuarios(
+    repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales,
+    equipos, indicadores, credenciales, EQUIPO_GENERAL_ID
+  );
+  return { servicio, repo, roles, equipos, indicadores, credenciales };
 }
 
 describe('ServicioUsuarios', () => {
@@ -148,17 +191,18 @@ describe('ServicioUsuarios', () => {
     await expect(servicio.establecerAdministrador(segundo.id, false)).resolves.toBeUndefined();
   });
 
-  it('establecerResponsable() vincula 1 a 1 y rechaza un responsable ya vinculado a otro usuario', async () => {
-    const { servicio, responsables } = construir();
-    const resp: Responsable = {
-      id: 'resp-1', nombre: 'Juan Pérez', correo: null, activo: true, eliminado: false,
-      equipoId: null, creadoEn: '2026-01-01', actualizadoEn: '2026-01-01'
-    };
-    await responsables.guardar(resp);
-    const u1 = await servicio.crear({ nombreUsuario: 'u1', nombreCompleto: 'Uno', password: 'contrasenaSegura1' });
-    const u2 = await servicio.crear({ nombreUsuario: 'u2', nombreCompleto: 'Dos', password: 'contrasenaSegura1' });
-    await servicio.establecerResponsable(u1.id, 'resp-1');
-    await expect(servicio.establecerResponsable(u2.id, 'resp-1')).rejects.toThrow(/ya está vinculado/);
+  it('establecerEquipo() usa el equipo General por defecto si no se especifica ninguno', async () => {
+    const { servicio } = construir();
+    const creado = await servicio.crear({ nombreUsuario: 'mgomez', nombreCompleto: 'María', password: 'contrasenaSegura1' });
+    await servicio.establecerEquipo(creado.id, null, null);
+    const lista = await servicio.listar();
+    expect(lista.find((u) => u.id === creado.id)?.equipoId).toBe(EQUIPO_GENERAL_ID);
+  });
+
+  it('establecerEquipo() rechaza un equipo inexistente', async () => {
+    const { servicio } = construir();
+    const creado = await servicio.crear({ nombreUsuario: 'mgomez', nombreCompleto: 'María', password: 'contrasenaSegura1' });
+    await expect(servicio.establecerEquipo(creado.id, 'equipo-inventado', null)).rejects.toThrow(/no existe/);
   });
 
   it('establecerPermisosExcepcionales() rechaza un id de permiso inexistente', async () => {
@@ -168,5 +212,42 @@ describe('ServicioUsuarios', () => {
     await expect(servicio.establecerPermisosExcepcionales(creado.id, ['resultados.ver.todos'])).resolves.toBeUndefined();
     const lista = await servicio.listar();
     expect(lista.find((u) => u.id === creado.id)?.permisosExcepcionales).toEqual(['resultados.ver.todos']);
+  });
+
+  it('eliminar()/restaurar() aplican borrado lógico, bloqueado si un indicador referencia al usuario como responsable', async () => {
+    const { servicio, indicadores } = construir();
+    const admin = await servicio.crear({ nombreUsuario: 'admin1', nombreCompleto: 'Admin', password: 'contrasenaSegura1', esAdministrador: true });
+    const libre = await servicio.crear({ nombreUsuario: 'libre', nombreCompleto: 'Libre', password: 'contrasenaSegura1' });
+    const enUso = await servicio.crear({ nombreUsuario: 'enuso', nombreCompleto: 'En Uso', password: 'contrasenaSegura1' });
+    await indicadores.guardar({
+      id: 'ind-1', codigo: '', nombre: 'Indicador de prueba', definicion: '', formaCalculo: null,
+      periodicidad: 'Mensual' as never, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null,
+      desagregaciones: [], estado: 'Activo' as never, responsable: enUso.id, categoria: null,
+      equipo: null, unidadMedida: null, periodicidadPersonalizadaId: null, esCalculado: false, formula: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+
+    await expect(servicio.eliminar(admin.id)).rejects.toThrow(/administrador/);
+    await expect(servicio.eliminar(enUso.id)).rejects.toThrow(/Indicador de prueba/);
+
+    await servicio.eliminar(libre.id);
+    expect((await servicio.listar()).some((u) => u.id === libre.id)).toBe(false);
+    expect((await servicio.listar(true)).some((u) => u.id === libre.id)).toBe(true);
+
+    await servicio.restaurar(libre.id);
+    expect((await servicio.listar()).some((u) => u.id === libre.id)).toBe(true);
+  });
+
+  it('credencialesPendientes() lee y borra en la misma operación (se muestra una sola vez)', async () => {
+    const { servicio, credenciales } = construir();
+    const creado = await servicio.crear({ nombreUsuario: 'mgomez', nombreCompleto: 'María', password: 'contrasenaSegura1' });
+    credenciales.fijarNombreUsuario(creado.id, 'mgomez');
+    await credenciales.registrar(creado.id, 'temporal123');
+
+    const primera = await servicio.credencialesPendientes();
+    expect(primera).toEqual([{ usuarioId: creado.id, nombreUsuario: 'mgomez', passwordTexto: 'temporal123' }]);
+
+    const segunda = await servicio.credencialesPendientes();
+    expect(segunda).toEqual([]);
   });
 });

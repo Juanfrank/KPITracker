@@ -11,7 +11,7 @@ import type {
 import type {
   IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IConectorOrigen,
   IConfiguracionRepository, IDefinicionPeriodicidadRepository, IIndicadorRepository,
-  IListaRepository, IReglaRepository, IResponsableRepository, IResultadoRepository
+  IListaRepository, IReglaRepository, IResultadoRepository, IUsuarioRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -91,7 +91,7 @@ export class ServicioRecoleccion extends ServicioBase {
     private readonly origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>,
     private readonly atributosRepo: IAtributoRepository,
     private readonly conector: IConectorOrigen,
-    private readonly responsablesRepo: IResponsableRepository
+    private readonly usuariosRepo: IUsuarioRepository
   ) {
     super(ctx);
   }
@@ -107,9 +107,9 @@ export class ServicioRecoleccion extends ServicioBase {
   private async indicadorConPermiso(indicadorId: string, accion: AccionResultado): Promise<Indicador> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
-    const responsable = indicador.responsable ? await this.responsablesRepo.obtener(indicador.responsable) : null;
-    const responsablesPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
-    const equipoEfectivoId = equipoEfectivo(indicador, responsablesPorId);
+    const responsable = indicador.responsable ? await this.usuariosRepo.obtener(indicador.responsable) : null;
+    const usuariosPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
+    const equipoEfectivoId = equipoEfectivo(indicador, usuariosPorId);
     if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable })) {
       throw new ValidacionError('No tiene permiso para esta acción sobre este indicador.');
     }

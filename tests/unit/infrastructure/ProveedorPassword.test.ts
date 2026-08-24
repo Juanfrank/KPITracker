@@ -5,12 +5,18 @@ import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
 
 class UsuarioRepositoryMemoria implements IUsuarioRepository {
   private readonly filas = new Map<string, Usuario>();
-  async listar(): Promise<Usuario[]> { return [...this.filas.values()]; }
+  async listar(incluirEliminados = false): Promise<Usuario[]> {
+    return [...this.filas.values()].filter((u) => incluirEliminados || !u.eliminado);
+  }
   async obtener(id: string): Promise<Usuario | null> { return this.filas.get(id) ?? null; }
   async obtenerPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null> {
     return [...this.filas.values()].find((u) => u.nombreUsuario === nombreUsuario) ?? null;
   }
   async guardar(usuario: Usuario): Promise<void> { this.filas.set(usuario.id, usuario); }
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    const item = this.filas.get(id);
+    if (item) this.filas.set(id, { ...item, eliminado });
+  }
 }
 
 describe('ProveedorPassword', () => {
@@ -28,9 +34,9 @@ describe('ProveedorPassword', () => {
     const proveedor = new ProveedorPassword(usuarios);
     const passwordHash = await proveedor.hashear('correcta123');
     await usuarios.guardar({
-      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', passwordHash,
-      esAdministrador: true, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
-      activo: true, creadoEn: '', actualizadoEn: ''
+      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash,
+      esAdministrador: true, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const resultado = await proveedor.autenticar('ana', 'correcta123');
     expect(resultado).toEqual({ id: 'u1' });
@@ -40,9 +46,9 @@ describe('ProveedorPassword', () => {
     const usuarios = new UsuarioRepositoryMemoria();
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
-      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
-      activo: true, creadoEn: '', actualizadoEn: ''
+      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('ana', 'otra-cosa')).toBeNull();
   });
@@ -56,9 +62,9 @@ describe('ProveedorPassword', () => {
     const usuarios = new UsuarioRepositoryMemoria();
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
-      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
-      activo: false, creadoEn: '', actualizadoEn: ''
+      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      activo: false, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('ana', 'correcta123')).toBeNull();
   });
@@ -67,9 +73,9 @@ describe('ProveedorPassword', () => {
     const usuarios = new UsuarioRepositoryMemoria();
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
-      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, responsableId: null,
-      activo: true, creadoEn: '', actualizadoEn: ''
+      id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('  ana  ', 'correcta123')).toEqual({ id: 'u1' });
   });

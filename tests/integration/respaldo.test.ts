@@ -6,7 +6,7 @@ import { componerAplicacionServidor } from '../../src/server/composicionServidor
 import type { AplicacionServidor } from '../../src/server/composicionServidor';
 import { seleccionInicial, aSeleccionIpc, alternarCategoria } from '../../src/renderer/src/modulos/admin/modeloSeleccion';
 import { Periodicidad, TipoDato } from '@domain/index';
-import type { Atributo, Equipo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Responsable, Categoria } from '@domain/index';
+import type { Atributo, Equipo, Indicador, Lista, OrigenAutomatico, ReglaNegocio, Categoria } from '@domain/index';
 
 /**
  * Formato de respaldo de perfil + importación selectiva (Batch N): siempre
@@ -49,13 +49,6 @@ function regla(parcial: Partial<ReglaNegocio> = {}): ReglaNegocio {
     id: '', nombre: 'Regla', descripcion: '', tipo: 'Visibilidad', entidad: 'Indicador', atributoObjetivoId: null,
     condicion: { op: 'eq', args: [{ attr: 'Nombre' }, { literal: 'x' }] }, mensajeError: null, activa: true,
     eliminado: false, creadoEn: '', actualizadoEn: '',
-    ...parcial
-  };
-}
-
-function responsable(parcial: Partial<Responsable> = {}): Responsable {
-  return {
-    id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: '',
     ...parcial
   };
 }
@@ -115,7 +108,7 @@ async function poblarPerfilA(): Promise<void> {
     creadoEn: '', actualizadoEn: ''
   });
   const eq = await appA.manejadores['equipos:guardar'](equipo());
-  const resp = await appA.manejadores['responsables:guardar'](responsable());
+  const resp = await appA.usuarios.crear({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'contrasenaSegura1' });
   const cat = await appA.manejadores['categorias:guardar'](categoria());
   const l = await appA.manejadores['listas:guardar'](lista());
   await appA.manejadores['listas:guardarElemento']({
@@ -146,10 +139,10 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     const json = await appA.infra.respaldoPerfil.exportar();
 
     const resumen = appB.infra.respaldoPerfil.leer(json);
-    expect(resumen.schemaVersion).toBe(3);
+    expect(resumen.schemaVersion).toBe(4);
     expect(resumen.categorias.map((c) => c.categoria).sort()).toEqual(
       ['aliasDesagregacion', 'atributos', 'automatizaciones', 'categorias', 'configuracionGeneral', 'equipos', 'indicadores',
-        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'responsables', 'roles'].sort()
+        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'roles'].sort()
     );
     for (const c of resumen.categorias) {
       if (c.atomica) continue;
@@ -161,7 +154,6 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     expect(resultado.advertencias).toEqual([]);
 
     expect(await appB.manejadores['indicadores:listar'](undefined)).toHaveLength(1);
-    expect(await appB.manejadores['responsables:listar'](undefined)).toHaveLength(1);
     // +1 en categorías/equipos: la fila "General" (Batch T, id fijo) ya existía en B y se
     // actualiza in situ al importar la de A (mismo id) — no se duplica, pero sigue contando.
     expect(await appB.manejadores['categorias:listar'](undefined)).toHaveLength(2);
@@ -203,19 +195,24 @@ describe('RespaldoPerfilService — selección parcial', () => {
     expect(await appB.manejadores['indicadores:listar'](undefined)).toHaveLength(1);
   });
 
+  // Batch U: `responsables` ya no es una categoría de respaldo (unificada con `Usuario`,
+  // que deliberadamente no viaja en el respaldo) — se cubre el mismo caso ("solo un id
+  // puntual dentro de una categoría") con `categorias`, que sí sigue viajando.
   it('seleccionar solo un id puntual dentro de una categoría importa únicamente ese ítem', async () => {
-    await appA.manejadores['responsables:guardar'](responsable({ nombre: 'Solo este' }));
-    await appA.manejadores['responsables:guardar'](responsable({ nombre: 'No este' }));
+    await appA.manejadores['categorias:guardar'](categoria({ nombre: 'Solo esta' }));
+    await appA.manejadores['categorias:guardar'](categoria({ nombre: 'No esta' }));
     const json = await appA.infra.respaldoPerfil.exportar();
     const resumen = appB.infra.respaldoPerfil.leer(json);
-    const catResponsables = resumen.categorias.find((c) => c.categoria === 'responsables')!;
-    const item = catResponsables.items.find((i) => i.nombre === 'Solo este')!;
+    const catCategorias = resumen.categorias.find((c) => c.categoria === 'categorias')!;
+    const item = catCategorias.items.find((i) => i.nombre === 'Solo esta')!;
 
-    const resultado = await appB.infra.respaldoPerfil.importar(json, { responsables: [item.id] });
-    expect(resultado.importados.responsables).toBe(1);
-    const importados = await appB.manejadores['responsables:listar'](undefined);
-    expect(importados).toHaveLength(1);
-    expect(importados[0]?.nombre).toBe('Solo este');
+    const resultado = await appB.infra.respaldoPerfil.importar(json, { categorias: [item.id] });
+    expect(resultado.importados.categorias).toBe(1);
+    const importadas = await appB.manejadores['categorias:listar'](undefined);
+    // +1: la categoría raíz "General" (Batch T) ya existe en B desde el arranque.
+    expect(importadas).toHaveLength(2);
+    expect(importadas.some((c) => c.nombre === 'Solo esta')).toBe(true);
+    expect(importadas.some((c) => c.nombre === 'No esta')).toBe(false);
   });
 
   it('los elementos de una lista siguen a su lista seleccionada — no aparecen huérfanos si la lista no se selecciona', async () => {

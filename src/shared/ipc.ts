@@ -1,7 +1,7 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, DefinicionPeriodicidad,
   ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
-  Periodo, RegistroAuditoria, ReglaNegocio, Responsable, ResultadoHistorial, Rol
+  Periodo, RegistroAuditoria, ReglaNegocio, ResultadoHistorial, Rol
 } from '@domain/index';
 import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura, ResultadoObtencionAutomatica } from '@application/use-cases/ServicioRecoleccion';
@@ -86,12 +86,6 @@ export interface CanalesIpc {
   'periodicidades:guardar': { req: DefinicionPeriodicidad; res: DefinicionPeriodicidad };
   'periodicidades:eliminar': { req: { id: string }; res: void };
 
-  'responsables:listar': { req: { incluirEliminados?: boolean } | void; res: Responsable[] };
-  'responsables:guardar': { req: Responsable; res: Responsable };
-  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el responsable está en uso. */
-  'responsables:eliminar': { req: { id: string }; res: void };
-  'responsables:restaurar': { req: { id: string }; res: void };
-
   'categorias:listar': { req: { incluirEliminados?: boolean } | void; res: Categoria[] };
   'categorias:guardar': { req: Categoria; res: Categoria };
   /** Borrado lógico: rechaza (con el detalle de qué la usa) si la categoría está en uso. */
@@ -100,7 +94,7 @@ export interface CanalesIpc {
 
   'equipos:listar': { req: { incluirEliminados?: boolean } | void; res: Equipo[] };
   'equipos:guardar': { req: Equipo; res: Equipo };
-  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el equipo tiene sub-equipos, responsables o indicadores vinculados. */
+  /** Borrado lógico: rechaza (con el detalle de qué lo usa) si el equipo tiene sub-equipos, usuarios o indicadores vinculados. */
   'equipos:eliminar': { req: { id: string }; res: void };
   'equipos:restaurar': { req: { id: string }; res: void };
 

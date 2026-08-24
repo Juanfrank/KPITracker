@@ -105,21 +105,28 @@ describe('Composition root — catálogos', () => {
     await expect(app.manejadores['periodicidades:guardar'](definicion)).rejects.toThrow();
   });
 
-  it('CRUD de responsables y categorías vía IPC', async () => {
-    const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Juan Pérez', correo: 'juan@example.org', activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
-    });
+  it('CRUD de categorías vía IPC', async () => {
     const categoria = await app.manejadores['categorias:guardar']({
       id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
-    expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(1);
     // +1: la categoría raíz "General" (Batch T) ya existe desde el arranque — ver la migración
     // 20260901000000_roles_permisos.ts.
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(2);
-    await app.manejadores['responsables:eliminar']({ id: responsable.id });
     await app.manejadores['categorias:eliminar']({ id: categoria.id });
-    expect(await app.manejadores['responsables:listar'](undefined)).toHaveLength(0);
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
+  });
+
+  // Batch U: Responsable se unificó dentro de Usuario — ya no hay canal IPC 'responsables:*',
+  // el CRUD equivalente vive en `ServicioUsuarios` (expuesto vía tRPC, no IPC).
+  it('CRUD de usuarios vía ServicioUsuarios (Batch U unificó Usuario/Responsable)', async () => {
+    const antes = await app.usuarios.listar();
+    const usuario = await app.usuarios.crear({
+      nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', password: 'contrasenaSegura1'
+    });
+    expect(usuario.id).not.toBe('');
+    expect(await app.usuarios.listar()).toHaveLength(antes.length + 1);
+    await app.usuarios.eliminar(usuario.id);
+    expect(await app.usuarios.listar()).toHaveLength(antes.length);
   });
 });
 
@@ -226,15 +233,14 @@ describe('Composition root — equipos jerárquicos (Batch R)', () => {
     expect(detalles.some((d) => /Sub-equipos/.test(d))).toBe(true);
   });
 
-  it('bloquea borrar un equipo referenciado indirectamente por un responsable', async () => {
+  it('bloquea borrar un equipo referenciado indirectamente por un usuario (Batch U unificó Usuario/Responsable)', async () => {
     const equipo = await app.manejadores['equipos:guardar']({
       id: '', nombre: 'Equipo con responsable', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
     });
-    await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Con equipo', correo: null, activo: true, eliminado: false, equipoId: equipo.id, creadoEn: '', actualizadoEn: ''
-    });
+    const usuario = await app.usuarios.crear({ nombreUsuario: 'con-equipo', nombreCompleto: 'Con equipo', password: 'contrasenaSegura1' });
+    await app.usuarios.establecerEquipo(usuario.id, equipo.id, null);
     const detalles = await erroresDe(app.manejadores['equipos:eliminar']({ id: equipo.id }));
-    expect(detalles.some((d) => /Responsable/.test(d))).toBe(true);
+    expect(detalles.some((d) => /Usuario/.test(d))).toBe(true);
   });
 
   it('bloquea borrar un equipo referenciado directamente por un indicador', async () => {
@@ -693,7 +699,7 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
 
     const { json } = await app.manejadores['portable:exportar'](undefined);
     const archivo = JSON.parse(json) as { schemaVersion: number; equipos: Array<{ nombre: string }> };
-    expect(archivo.schemaVersion).toBe(4);
+    expect(archivo.schemaVersion).toBe(5);
     // "General" (Batch T) viaja junto con los dos equipos creados en este test.
     expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'General', 'Sub-dirección']);
 
@@ -705,8 +711,8 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
 
 describe('Composition root — exportación analítica resuelve nombres de catálogo', () => {
   it('ResultadosAnalitico.parquet muestra el nombre del responsable y la categoría, no sus ids', async () => {
-    const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'María Gómez', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
+    const responsable = await app.usuarios.crear({
+      nombreUsuario: 'maria-gomez', nombreCompleto: 'María Gómez', password: 'contrasenaSegura1'
     });
     const categoria = await app.manejadores['categorias:guardar']({
       id: '', nombre: 'Prioritario', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
@@ -756,8 +762,8 @@ describe('Composition root — código único de indicador', () => {
 
 describe('Composition root — reasignación masiva de responsable/categoría', () => {
   it('reasigna responsable y categoría a varios indicadores sin tocar los campos no especificados', async () => {
-    const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Ana', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
+    const responsable = await app.usuarios.crear({
+      nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'contrasenaSegura1'
     });
     const categoriaOriginal = await app.manejadores['categorias:guardar']({
       id: '', nombre: 'Original', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
@@ -778,8 +784,8 @@ describe('Composition root — reasignación masiva de responsable/categoría', 
   });
 
   it('permite quitar una asignación pasando null explícitamente', async () => {
-    const responsable = await app.manejadores['responsables:guardar']({
-      id: '', nombre: 'Beto', correo: null, activo: true, eliminado: false, equipoId: null, creadoEn: '', actualizadoEn: ''
+    const responsable = await app.usuarios.crear({
+      nombreUsuario: 'beto', nombreCompleto: 'Beto', password: 'contrasenaSegura1'
     });
     const i1 = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ responsable: responsable.id }), valores: []

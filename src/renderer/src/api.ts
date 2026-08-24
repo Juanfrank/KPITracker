@@ -62,11 +62,6 @@ const TABLA_PROCEDIMIENTOS: Partial<Record<NombreCanal, [string, string, TipoPro
   'periodicidades:guardar': ['periodicidades', 'guardar', 'mutation'],
   'periodicidades:eliminar': ['periodicidades', 'eliminar', 'mutation'],
 
-  'responsables:listar': ['responsables', 'listar', 'query'],
-  'responsables:guardar': ['responsables', 'guardar', 'mutation'],
-  'responsables:eliminar': ['responsables', 'eliminar', 'mutation'],
-  'responsables:restaurar': ['responsables', 'restaurar', 'mutation'],
-
   'categorias:listar': ['categorias', 'listar', 'query'],
   'categorias:guardar': ['categorias', 'guardar', 'mutation'],
   'categorias:eliminar': ['categorias', 'eliminar', 'mutation'],

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
   Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Meta, Periodo,
-  ReglaNegocio, Responsable, ValorAtributo
+  ReglaNegocio, ValorAtributo
 } from '@domain/index';
 import { GeneradorPeriodos, Periodicidad, construirContextoIndicador, etiquetaConPrefijo } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
+import { trpcClient } from '../../trpc';
 import { tipos, validadorAtributos } from '../../dominio';
+
+/** Usuario asignable como responsable de un indicador (Batch U: unificado con el antiguo catálogo Responsable). */
+type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.query>>[number];
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { CampoAtributo } from '../../componentes/CampoAtributo';
 import { Icono } from '../../componentes/Icono';
@@ -107,7 +111,7 @@ export function IndicadoresPage(): React.JSX.Element {
   const [reglas, setReglas] = useState<ReglaNegocio[]>([]);
   const [elementosPorLista, setElementosPorLista] = useState<Map<string, ElementoLista[]>>(new Map());
   const [periodicidades, setPeriodicidades] = useState<DefinicionPeriodicidad[]>([]);
-  const [responsables, setResponsables] = useState<Responsable[]>([]);
+  const [responsables, setResponsables] = useState<UsuarioAsignable[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [mostrarAutomatizacion, setMostrarAutomatizacion] = useState(false);
@@ -133,7 +137,7 @@ export function IndicadoresPage(): React.JSX.Element {
     void invocar('atributos:listar', { entidad: 'Indicador' }).then(setAtributos);
     void invocar('reglas:listar', { entidad: 'Indicador' }).then(setReglas);
     void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
-    void invocar('responsables:listar', undefined).then(setResponsables);
+    void trpcClient.usuarios.listar.query().then(setResponsables);
     void invocar('categorias:listar', undefined).then(setCategorias);
     void invocar('equipos:listar', undefined).then(setEquipos);
     void invocar('config:obtener', undefined).then((c) => setAnioInicial(c.anioInicial));
@@ -500,14 +504,14 @@ export function IndicadoresPage(): React.JSX.Element {
                   <optgroup key={eq.id} label={rutaEquipo(eq, equiposPorId)}>
                     <option value={`equipo:${eq.id}`}>— Todo el equipo —</option>
                     {responsables.filter((r) => r.equipoId === eq.id).map((r) => (
-                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombre}</option>
+                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombreCompleto}</option>
                     ))}
                   </optgroup>
                 ))}
                 {responsables.some((r) => !r.equipoId) && (
                   <optgroup label="Sin equipo">
                     {responsables.filter((r) => !r.equipoId).map((r) => (
-                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombre}</option>
+                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombreCompleto}</option>
                     ))}
                   </optgroup>
                 )}
