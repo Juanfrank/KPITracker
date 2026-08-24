@@ -338,10 +338,18 @@ export function SeguimientoPage(): React.JSX.Element {
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
 
-  /** Celdas de una fila de Histórico (nombre + línea base + meta + un valor por período) — compartidas entre Lista y ambos árboles (U5b). */
-  const celdaHistorico = (h: FilaHistorico): React.JSX.Element => (
+  /**
+   * Celdas de una fila de Histórico (nombre + línea base + meta + un valor
+   * por período) — compartidas entre Lista y ambos árboles (U5b). `nivel`
+   * indenta el nombre bajo su categoría/equipo (0 en la vista Lista, donde
+   * no aplica).
+   */
+  const celdaHistorico = (h: FilaHistorico, nivel = 0): React.JSX.Element => (
     <>
-      <td><strong>{h.nombre}</strong></td>
+      <td style={{ paddingLeft: nivel > 0 ? 6 + nivel * 18 : undefined }}>
+        {nivel > 0 && <span className="conector-jerarquia">└</span>}
+        <strong>{h.nombre}</strong>
+      </td>
       <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       {columnasHistorico.map((c) => {
@@ -650,7 +658,7 @@ export function SeguimientoPage(): React.JSX.Element {
                 const colapsada = colapsadasCategorias.has(nodo.id);
                 return (
                   <tr key={`c-${nodo.id}`} className="fila-categoria" data-testid={`seguimiento-arbol-categoria-${nodo.nombre}`}>
-                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    <td className="celda-arbol">
                       {nodo.tieneHijos && (
                         <button
                           type="button"
@@ -663,7 +671,8 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={9}>
+                    <td colSpan={9} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                     </td>
@@ -679,8 +688,9 @@ export function SeguimientoPage(): React.JSX.Element {
                   onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
                   data-testid={`seguimiento-${f.nombre}`}
                 >
-                  <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
-                  <td>
+                  <td className="celda-arbol" />
+                  <td style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                     <strong>{f.nombre}</strong>
                     {f.codigo && (
                       <div className="texto-suave" style={{ fontSize: '0.85em' }}>
@@ -753,8 +763,9 @@ export function SeguimientoPage(): React.JSX.Element {
                     onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
                     data-testid={`seguimiento-${f.nombre}`}
                   >
-                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
-                    <td>
+                    <td className="celda-arbol" />
+                    <td style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       <strong>{f.nombre}</strong>
                       {f.codigo && (
                         <div className="texto-suave" style={{ fontSize: '0.85em' }}>
@@ -792,7 +803,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   className="fila-categoria"
                   data-testid={`seguimiento-equipo-${nodo.tipo}-${nodo.nombre}`}
                 >
-                  <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                  <td className="celda-arbol">
                     {nodo.tieneHijos && (
                       <button
                         type="button"
@@ -805,7 +816,8 @@ export function SeguimientoPage(): React.JSX.Element {
                       </button>
                     )}
                   </td>
-                  <td colSpan={9}>
+                  <td colSpan={9} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                     {etiqueta}
                     <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                   </td>
@@ -900,7 +912,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   const colapsada = colapsadasCategorias.has(nodo.id);
                   return (
                     <tr key={`c-${nodo.id}`} className="fila-categoria" data-testid={`historico-arbol-categoria-${nodo.nombre}`}>
-                      <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      <td className="celda-arbol">
                         {nodo.tieneHijos && (
                           <button
                             type="button"
@@ -913,7 +925,8 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      <td colSpan={2 + columnasHistorico.length}>
+                      <td colSpan={2 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                        {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                       </td>
@@ -922,8 +935,8 @@ export function SeguimientoPage(): React.JSX.Element {
                 }
                 return (
                   <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
-                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
-                    {celdaHistorico(nodo.fila)}
+                    <td className="celda-arbol" />
+                    {celdaHistorico(nodo.fila, nodo.nivel)}
                   </tr>
                 );
               })}
@@ -962,8 +975,8 @@ export function SeguimientoPage(): React.JSX.Element {
                 if (nodo.tipo === 'indicador') {
                   return (
                     <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
-                      <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
-                      {celdaHistorico(nodo.fila)}
+                      <td className="celda-arbol" />
+                      {celdaHistorico(nodo.fila, nodo.nivel)}
                     </tr>
                   );
                 }
@@ -971,7 +984,7 @@ export function SeguimientoPage(): React.JSX.Element {
                 const etiqueta = nodo.tipo === 'categoria' ? etiquetaConPrefijo(nodo.prefijo, nodo.nombre) : nodo.nombre;
                 return (
                   <tr key={`g-${nodo.id}`} className="fila-categoria" data-testid={`historico-equipo-${nodo.tipo}-${nodo.nombre}`}>
-                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    <td className="celda-arbol">
                       {nodo.tieneHijos && (
                         <button
                           type="button"
@@ -984,7 +997,8 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={2 + columnasHistorico.length}>
+                    <td colSpan={2 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                     </td>
