@@ -57,6 +57,8 @@ interface EstadoRecoleccion {
   pegarDesde(clavesEnOrden: string[], textoPortapapeles: string): Promise<void>;
   /** Restaura una versión anterior de una celda (registra el estado actual en el historial). */
   restaurarVersion(claveDesagregacion: string, version: number): Promise<void>;
+  /** Batch U10: restaura TODAS las desagregaciones del período (no todo el histórico del indicador) al estado vigente en `timestamp`. Retorna cuántas celdas cambiaron. */
+  restaurarPeriodo(timestamp: string): Promise<number>;
   /** Solicita el resultado automático del período actual al origen configurado del indicador. */
   obtenerAutomatico(): Promise<void>;
   /** Batch T: capa de aprobación post-registro — no bloquea la captura, solo marca el estado. */
@@ -232,6 +234,16 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
         )
       }
     }));
+  },
+
+  async restaurarPeriodo(timestamp) {
+    const { indicadorId, periodoId } = get();
+    if (!indicadorId || !periodoId) return 0;
+    const { restauradas } = await invocar('recoleccion:restaurarPeriodo', { indicadorId, periodoId, timestamp });
+    // Puede haber cambiado cualquier celda del período: recarga la grilla completa
+    // en vez de intentar parchear cada fila a mano (mismo criterio que alternarExclusion).
+    await get().seleccionarPeriodo(periodoId);
+    return restauradas;
   },
 
   async obtenerAutomatico() {

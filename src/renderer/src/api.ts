@@ -94,6 +94,7 @@ const TABLA_PROCEDIMIENTOS: Partial<Record<NombreCanal, [string, string, TipoPro
   'recoleccion:exclusion': ['recoleccion', 'exclusion', 'mutation'],
   'recoleccion:historial': ['recoleccion', 'historial', 'query'],
   'recoleccion:restaurarVersion': ['recoleccion', 'restaurarVersion', 'mutation'],
+  'recoleccion:restaurarPeriodo': ['recoleccion', 'restaurarPeriodo', 'mutation'],
   'recoleccion:obtenerAutomatico': ['recoleccion', 'obtenerAutomatico', 'mutation'],
   'recoleccion:validar': ['recoleccion', 'validar', 'mutation'],
   'recoleccion:rechazar': ['recoleccion', 'rechazar', 'mutation'],

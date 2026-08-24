@@ -149,6 +149,11 @@ export interface CanalesIpc {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string; version: number };
     res: { valor: number | null; advertencias: string[] };
   };
+  /** Restaura TODAS las desagregaciones del período al estado vigente en un punto en el tiempo (Batch U10) — alcance: solo este período. */
+  'recoleccion:restaurarPeriodo': {
+    req: { indicadorId: string; periodoId: string; timestamp: string };
+    res: { restauradas: number; advertencias: string[] };
+  };
   /** Ejecuta el script del origen configurado y escribe las celdas que su mapeo permite determinar sin ambigüedad. */
   'recoleccion:obtenerAutomatico': { req: { indicadorId: string; periodoId: string }; res: ResultadoObtencionAutomatica };
   /** Marca un resultado ya registrado como Validado/Rechazado (Batch T) — capa de aprobación post-registro, no bloquea la captura. */

@@ -42,6 +42,11 @@ export const recoleccionRouter = router({
     .input(z.object({ indicadorId: z.string(), periodoId: z.string(), claveDesagregacion: z.string(), version: z.number() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:restaurarVersion'](input))),
 
+  /** Batch U10: restaura TODAS las desagregaciones del período (no todo el histórico del indicador) al estado vigente en `timestamp`. */
+  restaurarPeriodo: protectedProcedure
+    .input(z.object({ indicadorId: z.string(), periodoId: z.string(), timestamp: z.string() }))
+    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:restaurarPeriodo'](input))),
+
   /** Ejecuta el script del origen configurado (I/O externa) y escribe celdas — deliberadamente mutation, no query. */
   obtenerAutomatico: protectedProcedure
     .input(z.object({ indicadorId: z.string(), periodoId: z.string() }))

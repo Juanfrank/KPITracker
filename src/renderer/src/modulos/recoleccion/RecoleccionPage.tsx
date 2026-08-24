@@ -54,6 +54,10 @@ export function RecoleccionPage(): React.JSX.Element {
   // panel colapsable de Comentario/Evidencia (Batch U9); PanelAdjuntos sigue
   // siendo dueño de la lista en sí.
   const [cantidadAdjuntos, setCantidadAdjuntos] = useState(0);
+  // Rollback completo del período abierto (Batch U10).
+  const [mostrarRestaurarPeriodo, setMostrarRestaurarPeriodo] = useState(false);
+  const [timestampRestaurar, setTimestampRestaurar] = useState('');
+  const [mensajeRestaurarPeriodo, setMensajeRestaurarPeriodo] = useState<string | null>(null);
 
   const manejarValidacion = async (accion: 'validar' | 'rechazar', clave: string): Promise<void> => {
     setErrorValidacion(null);
@@ -70,6 +74,31 @@ export function RecoleccionPage(): React.JSX.Element {
   // volver a expandir todo lo que el usuario ya colapsó).
   useEffect(() => setColapsadas(new Set()), [vm.indicadorId, vm.periodoId]);
   useEffect(() => setCantidadAdjuntos(0), [vm.indicadorId, vm.periodoId]);
+  useEffect(() => {
+    setMostrarRestaurarPeriodo(false);
+    setTimestampRestaurar('');
+    setMensajeRestaurarPeriodo(null);
+  }, [vm.indicadorId, vm.periodoId]);
+
+  const ejecutarRestaurarPeriodo = async (): Promise<void> => {
+    if (!timestampRestaurar) return;
+    setMensajeRestaurarPeriodo(null);
+    try {
+      // El input datetime-local entrega hora local sin zona; Date lo interpreta
+      // en la zona del navegador y toISOString() lo normaliza a UTC — mismo
+      // formato que ahoraIso() usa para actualizadoEn en el servidor.
+      const timestampIso = new Date(timestampRestaurar).toISOString();
+      const restauradas = await vm.restaurarPeriodo(timestampIso);
+      setMensajeRestaurarPeriodo(
+        restauradas === 0
+          ? 'Ninguna celda cambió: ya coincidían con el estado de ese momento.'
+          : `${restauradas} celda(s) restaurada(s) al estado vigente en ese momento.`
+      );
+      setMostrarRestaurarPeriodo(false);
+    } catch (error) {
+      setMensajeRestaurarPeriodo((error as Error).message);
+    }
+  };
 
   const alternarColapso = (clave: string): void => {
     setColapsadas((prev) => {
@@ -229,6 +258,44 @@ export function RecoleccionPage(): React.JSX.Element {
             </div>
             <span className="texto-suave">La exclusión es temporal: no modifica la configuración del indicador.</span>
           </div>
+        )}
+        {captura && !indicadorSeleccionado?.esCalculado && (
+          <div className="toolbar" style={{ marginTop: 10 }}>
+            <button
+              className="boton sutil"
+              onClick={() => setMostrarRestaurarPeriodo((v) => !v)}
+              data-testid="abrir-restaurar-periodo"
+            >
+              <Icono nombre="historial" tamano={13} /> Restaurar período a…
+            </button>
+            {mostrarRestaurarPeriodo && (
+              <>
+                <input
+                  type="datetime-local"
+                  step={1}
+                  value={timestampRestaurar}
+                  onChange={(e) => setTimestampRestaurar(e.target.value)}
+                  style={{ width: 'auto' }}
+                  data-testid="restaurar-periodo-timestamp"
+                />
+                <button
+                  className="boton"
+                  disabled={!timestampRestaurar}
+                  onClick={() => void ejecutarRestaurarPeriodo()}
+                  data-testid="confirmar-restaurar-periodo"
+                >
+                  Restaurar
+                </button>
+                <span className="texto-suave">
+                  Restaura TODAS las desagregaciones de este período al estado vigente en ese momento (use la fecha/hora de
+                  "Última modificación" de alguna celda, visible también en su historial).
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        {mensajeRestaurarPeriodo && (
+          <div className="aviso info" data-testid="aviso-restaurar-periodo">{mensajeRestaurarPeriodo}</div>
         )}
       </div>
 

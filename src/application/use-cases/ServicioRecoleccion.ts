@@ -6,7 +6,7 @@ import {
 } from '@domain/index';
 import type {
   AccionResultado, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
-  ResultadoHistorial, TypeRegistry
+  Resultado, ResultadoHistorial, TypeRegistry
 } from '@domain/index';
 import type {
   IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IConectorOrigen,
@@ -498,12 +498,79 @@ export class ServicioRecoleccion extends ServicioBase {
 
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
+    await this.aplicarRestauracion(indicadorId, periodoId, claveDesagregacion, anterior, objetivo.valor, objetivo.observacion);
+    this.sincronizarExport();
+
+    const captura = await this.obtenerCaptura(indicadorId, periodoId);
+    return { valor: objetivo.valor, advertencias: captura.advertencias };
+  }
+
+  /**
+   * Restaura TODAS las desagregaciones del período al estado vigente en un
+   * punto en el tiempo (Batch U10): para cada celda con al menos una versión
+   * (el valor actual o alguna del historial) en o antes de `timestamp`, se
+   * aplica la misma restauración que `restaurarVersion` — una escritura y una
+   * fila de auditoría por celda efectivamente cambiada. Alcance confirmado
+   * con el usuario: solo el período indicado, no todo el histórico del
+   * indicador. Las celdas que ya coinciden con ese estado, o que todavía no
+   * existían en ese momento, se dejan intactas (no generan escritura).
+   */
+  async restaurarPeriodo(
+    indicadorId: string,
+    periodoId: string,
+    timestamp: string
+  ): Promise<{ restauradas: number; advertencias: string[] }> {
+    const indicador = await this.indicadorConPermiso(indicadorId, 'registrar');
+    if (indicador.esCalculado) {
+      throw new ValidacionError('Este indicador es calculado: su valor se obtiene de la fórmula y no admite restauración manual.');
+    }
+
+    const captura = await this.obtenerCaptura(indicadorId, periodoId);
+    const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
+    const actualesPorClave = new Map(existentes.map((r) => [r.claveDesagregacion, r]));
+
+    let restauradas = 0;
+    for (const fila of captura.filas) {
+      const clave = fila.claveDesagregacion;
+      const actual = actualesPorClave.get(clave) ?? null;
+      const historial = await this.resultados.obtenerHistorial(indicadorId, periodoId, clave);
+
+      // "Vigente en timestamp" = la versión (actual o histórica) más reciente
+      // cuya fecha no sea posterior a `timestamp` — comparación lexicográfica
+      // válida porque ahoraIso() siempre es un ISO-8601 completo (RelojSistema).
+      const candidatos = [
+        ...(actual ? [{ valor: actual.valor, observacion: actual.observacion, actualizadoEn: actual.actualizadoEn }] : []),
+        ...historial.map((h) => ({ valor: h.valor, observacion: h.observacion, actualizadoEn: h.actualizadoEn }))
+      ].filter((c) => c.actualizadoEn <= timestamp);
+      if (candidatos.length === 0) continue; // esta celda todavía no existía en ese momento
+
+      const objetivo = candidatos.reduce((a, b) => (b.actualizadoEn > a.actualizadoEn ? b : a));
+      if (actual && actual.valor === objetivo.valor && actual.observacion === objetivo.observacion) continue; // ya coincide
+
+      await this.aplicarRestauracion(indicadorId, periodoId, clave, actual, objetivo.valor, objetivo.observacion);
+      restauradas++;
+    }
+
+    if (restauradas > 0) this.sincronizarExport();
+    const capturaFinal = await this.obtenerCaptura(indicadorId, periodoId);
+    return { restauradas, advertencias: capturaFinal.advertencias };
+  }
+
+  /** Escribe `valorObjetivo` como el valor vigente de una celda, archivando el estado que reemplaza en el historial. Compartido por `restaurarVersion` y `restaurarPeriodo`. */
+  private async aplicarRestauracion(
+    indicadorId: string,
+    periodoId: string,
+    claveDesagregacion: string,
+    anterior: Resultado | null,
+    valorObjetivo: number | null,
+    observacionObjetivo: string | null
+  ): Promise<void> {
     if (anterior) {
       await this.registrarVersionAnterior(indicadorId, periodoId, claveDesagregacion, anterior.valor, anterior.observacion, anterior.actualizadoEn);
     }
 
     const ahora = this.ctx.reloj.ahoraIso();
-    // Restaurar una versión es, a efectos de validación, otra edición del valor
+    // Restaurar una celda es, a efectos de validación, otra edición del valor
     // vigente — misma regla de "vuelve a Pendiente" que persistirValorCelda.
     const reiniciaValidacion = anterior != null && anterior.estadoValidacion !== 'Pendiente';
     await this.resultados.guardar({
@@ -512,8 +579,8 @@ export class ServicioRecoleccion extends ServicioBase {
       periodoId,
       anio: Number(periodoId.slice(0, 4)),
       claveDesagregacion,
-      valor: objetivo.valor,
-      observacion: objetivo.observacion,
+      valor: valorObjetivo,
+      observacion: observacionObjetivo,
       estadoValidacion: reiniciaValidacion ? 'Pendiente' : (anterior?.estadoValidacion ?? 'Pendiente'),
       validadoPor: reiniciaValidacion ? null : (anterior?.validadoPor ?? null),
       validadoEn: reiniciaValidacion ? null : (anterior?.validadoEn ?? null),
@@ -522,11 +589,7 @@ export class ServicioRecoleccion extends ServicioBase {
       actualizadoEn: ahora
     });
     await this.auditar('Restaurar', 'Resultado', `${indicadorId}:${periodoId}:${claveDesagregacion}`,
-      'valor', anterior?.valor ?? null, objetivo.valor);
-    this.sincronizarExport();
-
-    const captura = await this.obtenerCaptura(indicadorId, periodoId);
-    return { valor: objetivo.valor, advertencias: captura.advertencias };
+      'valor', anterior?.valor ?? null, valorObjetivo);
   }
 
   private async registrarVersionAnterior(

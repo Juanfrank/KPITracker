@@ -187,6 +187,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
       recoleccion.historialCelda(indicadorId, periodoId, claveDesagregacion),
     'recoleccion:restaurarVersion': ({ indicadorId, periodoId, claveDesagregacion, version }) =>
       recoleccion.restaurarVersion(indicadorId, periodoId, claveDesagregacion, version),
+    'recoleccion:restaurarPeriodo': ({ indicadorId, periodoId, timestamp }) =>
+      recoleccion.restaurarPeriodo(indicadorId, periodoId, timestamp),
     'recoleccion:obtenerAutomatico': ({ indicadorId, periodoId }) =>
       recoleccion.obtenerResultadoAutomatico(indicadorId, periodoId),
     'recoleccion:validar': ({ indicadorId, periodoId, claveDesagregacion, comentario }) =>

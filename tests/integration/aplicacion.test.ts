@@ -898,6 +898,78 @@ describe('Composition root — versionado de resultados y rollback', () => {
   });
 });
 
+describe('Composition root — restaurarPeriodo (Batch U10, rollback de TODAS las desagregaciones del período)', () => {
+  it('restaura GENERAL y todas las desagregaciones al estado vigente en un punto en el tiempo, y no toca celdas que ya coincidían', async () => {
+    const lista = await app.manejadores['listas:guardar']({
+      id: '', nombre: 'Sexo U10', descripcion: '', prefijo: 'SXU', estado: 'Activa', version: 1, orden: 1, jerarquica: false, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    await app.manejadores['listas:guardarElemento']({ id: '', listaId: lista.id, codigo: 'M', nombre: 'Masculino', descripcion: '', orden: 1, padreCodigo: null, activo: true });
+
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ desagregaciones: [lista.id] }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+
+    // t1: primer estado — GENERAL=10, M=5. Nunca se vuelve a tocar M después de esto.
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: `${lista.id}=M`, valorCrudo: '5' });
+    // t1 = el instante justo después de escribir M (la más reciente de las dos escrituras de arriba),
+    // así que ambas celdas ya tienen una versión vigente "en o antes de t1".
+    const capturaT1 = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+    const t1 = capturaT1.filas.find((f) => f.claveDesagregacion === `${lista.id}=M`)!.actualizadoEn!;
+
+    // Separación real de reloj antes de t2: garantiza que su actualizadoEn quede
+    // estrictamente después de t1 (evita un empate de milisegundo con SQLite local).
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // t2: solo GENERAL cambia a 20 (M se queda en 5, sin nueva escritura).
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '20' });
+
+    const resultado = await app.manejadores['recoleccion:restaurarPeriodo']({ indicadorId: guardado.id, periodoId, timestamp: t1 });
+    // Solo GENERAL cambió de verdad (20 -> 10); M ya coincidía con su estado en t1 (5), así que no cuenta.
+    expect(resultado.restauradas).toBe(1);
+
+    const capturaFinal = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+    expect(capturaFinal.filas.find((f) => f.claveDesagregacion === 'GENERAL')?.valor).toBe(10);
+    expect(capturaFinal.filas.find((f) => f.claveDesagregacion === `${lista.id}=M`)?.valor).toBe(5);
+
+    // El 20 que reemplazó queda preservado como versión del historial (nunca se pierde información).
+    const historialGeneral = await app.manejadores['recoleccion:historial']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL' });
+    expect(historialGeneral.map((h) => h.valor)).toContain(20);
+  });
+
+  it('no restaura nada si el timestamp es anterior a cualquier valor registrado', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
+
+    const resultado = await app.manejadores['recoleccion:restaurarPeriodo']({
+      indicadorId: guardado.id, periodoId, timestamp: '1970-01-01T00:00:00.000Z'
+    });
+    expect(resultado.restauradas).toBe(0);
+
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId: guardado.id, periodoId });
+    expect(captura.filas.find((f) => f.claveDesagregacion === 'GENERAL')?.valor).toBe(10);
+  });
+
+  it('rechaza restaurar el período de un indicador calculado', async () => {
+    const base = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'BASE-U10' }), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: base.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    const calculado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'CALC-U10', esCalculado: true, formula: '[BASE-U10] * 2' }), valores: []
+    });
+
+    await expect(
+      app.manejadores['recoleccion:restaurarPeriodo']({ indicadorId: calculado.id, periodoId, timestamp: new Date().toISOString() })
+    ).rejects.toThrow(/calculado/);
+  });
+});
+
 describe('Composition root — indicadores calculados (fórmulas)', () => {
   it('calcula el valor a partir de otros indicadores y rechaza la captura manual', async () => {
     const base = await app.manejadores['indicadores:guardar']({
