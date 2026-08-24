@@ -30,10 +30,24 @@ const SIN_CATEGORIA = '__sin-categoria__';
 /** Id sintético del grupo "sin equipo" — nunca colisiona con un id de equipo real (uuid). */
 const SIN_EQUIPO = '__sin-equipo__';
 
-type NodoArbolSeguimiento =
+/**
+ * Forma mínima que necesita el árbol Categoría/Equipo → Indicador: tanto
+ * `FilaTablero` (pestaña Estado) como `FilaHistorico` (pestaña Histórico,
+ * U5b) la cumplen, así que estos constructores son genéricos sobre `F` — un
+ * único árbol reutilizado por ambas pestañas, sin duplicar la lógica de
+ * agrupación/conteo por tipo de fila.
+ */
+interface FilaClasificable {
+  indicadorId: string;
+  nombre: string;
+  categoriaId: string | null;
+  equipoId: string | null;
+}
+
+type NodoArbolSeguimiento<F extends FilaClasificable = FilaTablero> =
   | { tipo: 'equipo'; id: string; nivel: number; nombre: string; contador: number; tieneHijos: boolean }
   | { tipo: 'categoria'; id: string; nivel: number; nombre: string; prefijo: string | null; contador: number; tieneHijos: boolean }
-  | { tipo: 'indicador'; id: string; nivel: number; fila: FilaTablero };
+  | { tipo: 'indicador'; id: string; nivel: number; fila: F };
 
 /**
  * Nodos categoría → subcategoría → indicador para un subconjunto de
@@ -45,9 +59,9 @@ type NodoArbolSeguimiento =
  * categoría no pertenece a un único equipo— compartan id: sin esto,
  * colapsar uno colapsaría el otro y React vería `key`s duplicadas.
  */
-function construirNodosCategoria(
-  filas: FilaTablero[], categorias: Categoria[], nivelBase: number, prefijoId = ''
-): NodoArbolSeguimiento[] {
+function construirNodosCategoria<F extends FilaClasificable>(
+  filas: F[], categorias: Categoria[], nivelBase: number, prefijoId = ''
+): NodoArbolSeguimiento<F>[] {
   const categoriasPorId = new Map(categorias.map((c) => [c.id, c]));
   const hijosDe = new Map<string | null, Categoria[]>();
   for (const c of categorias) {
@@ -58,8 +72,8 @@ function construirNodosCategoria(
   }
   for (const lista of hijosDe.values()) lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-  const filasPorCategoria = new Map<string, FilaTablero[]>();
-  const sinCategoria: FilaTablero[] = [];
+  const filasPorCategoria = new Map<string, F[]>();
+  const sinCategoria: F[] = [];
   for (const f of filas) {
     if (f.categoriaId && categoriasPorId.has(f.categoriaId)) {
       const lista = filasPorCategoria.get(f.categoriaId) ?? [];
@@ -76,7 +90,7 @@ function construirNodosCategoria(
     return total;
   };
 
-  const nodos: NodoArbolSeguimiento[] = [];
+  const nodos: NodoArbolSeguimiento<F>[] = [];
   const visitar = (categoria: Categoria, nivel: number): void => {
     const hijos = hijosDe.get(categoria.id) ?? [];
     const propias = [...(filasPorCategoria.get(categoria.id) ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -113,7 +127,7 @@ function construirNodosCategoria(
  * `ArbolDesagregaciones`/`calcularFilasVisibles` (RecoleccionPage), para
  * poder expandir/colapsar sin reconstruir el árbol.
  */
-function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+function construirArbolSeguimiento<F extends FilaClasificable>(filas: F[], categorias: Categoria[]): NodoArbolSeguimiento<F>[] {
   return construirNodosCategoria(filas, categorias, 0);
 }
 
@@ -127,7 +141,9 @@ function construirArbolSeguimiento(filas: FilaTablero[], categorias: Categoria[]
  * los indicadores de ese equipo. Un grupo final "Sin equipo" agrupa los
  * indicadores sin equipo efectivo, con su propio árbol de categorías.
  */
-function construirArbolEquipoSeguimiento(filas: FilaTablero[], equipos: Equipo[], categorias: Categoria[]): NodoArbolSeguimiento[] {
+function construirArbolEquipoSeguimiento<F extends FilaClasificable>(
+  filas: F[], equipos: Equipo[], categorias: Categoria[]
+): NodoArbolSeguimiento<F>[] {
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
   const hijosDe = new Map<string | null, Equipo[]>();
   for (const e of equipos) {
@@ -138,8 +154,8 @@ function construirArbolEquipoSeguimiento(filas: FilaTablero[], equipos: Equipo[]
   }
   for (const lista of hijosDe.values()) lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-  const filasPorEquipo = new Map<string, FilaTablero[]>();
-  const sinEquipo: FilaTablero[] = [];
+  const filasPorEquipo = new Map<string, F[]>();
+  const sinEquipo: F[] = [];
   for (const f of filas) {
     if (f.equipoId && equiposPorId.has(f.equipoId)) {
       const lista = filasPorEquipo.get(f.equipoId) ?? [];
@@ -156,7 +172,7 @@ function construirArbolEquipoSeguimiento(filas: FilaTablero[], equipos: Equipo[]
     return total;
   };
 
-  const nodos: NodoArbolSeguimiento[] = [];
+  const nodos: NodoArbolSeguimiento<F>[] = [];
   const visitar = (equipo: Equipo, nivel: number): void => {
     const hijos = hijosDe.get(equipo.id) ?? [];
     const nodosCategoria = construirNodosCategoria(filasPorEquipo.get(equipo.id) ?? [], categorias, nivel + 1, `${equipo.id}:`);
@@ -188,8 +204,8 @@ function construirArbolEquipoSeguimiento(filas: FilaTablero[], equipos: Equipo[]
  * reconstruir el árbol. Solo los nodos que agrupan (todo menos
  * `'indicador'`) son colapsables.
  */
-function nodosVisibles(nodos: NodoArbolSeguimiento[], colapsadas: Set<string>): NodoArbolSeguimiento[] {
-  const visibles: NodoArbolSeguimiento[] = [];
+function nodosVisibles<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F>[], colapsadas: Set<string>): NodoArbolSeguimiento<F>[] {
+  const visibles: NodoArbolSeguimiento<F>[] = [];
   let ocultarDesdeNivel: number | null = null;
   for (const nodo of nodos) {
     if (ocultarDesdeNivel !== null) {
@@ -218,6 +234,10 @@ const FILTROS_ESTADO = [
 export function SeguimientoPage(): React.JSX.Element {
   const [pestana, setPestana] = useState<Pestana>('estado');
   const [vistaEstado, setVistaEstado] = useState<VistaEstado>('lista');
+  // U5b: mismo selector "Ver como" que la pestaña Estado, pero con su propio estado —
+  // cambiar la vista de una pestaña no debe alterar en qué vista está la otra. El
+  // colapso de categorías/equipos SÍ se comparte (mismos ids de nodo en ambos árboles).
+  const [vistaHistorico, setVistaHistorico] = useState<VistaEstado>('lista');
   const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
   const [colapsadasEquipo, setColapsadasEquipo] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
@@ -304,6 +324,10 @@ export function SeguimientoPage(): React.JSX.Element {
   const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
   const arbol = nodosVisibles(construirArbolSeguimiento(visibles, categoriasCatalogo), colapsadasCategorias);
   const arbolEquipo = nodosVisibles(construirArbolEquipoSeguimiento(visibles, equiposCatalogo, categoriasCatalogo), colapsadasEquipo);
+  const arbolHistorico = nodosVisibles(construirArbolSeguimiento(historicoVisible, categoriasCatalogo), colapsadasCategorias);
+  const arbolEquipoHistorico = nodosVisibles(
+    construirArbolEquipoSeguimiento(historicoVisible, equiposCatalogo, categoriasCatalogo), colapsadasEquipo
+  );
   const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string }>();
   for (const fila of historicoVisible) {
     for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio });
@@ -313,6 +337,32 @@ export function SeguimientoPage(): React.JSX.Element {
     .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
+
+  /** Celdas de una fila de Histórico (nombre + línea base + meta + un valor por período) — compartidas entre Lista y ambos árboles (U5b). */
+  const celdaHistorico = (h: FilaHistorico): React.JSX.Element => (
+    <>
+      <td><strong>{h.nombre}</strong></td>
+      <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+      <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+      {columnasHistorico.map((c) => {
+        const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
+        return (
+          <td key={c.periodoId} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
+            {punto?.valor == null ? (
+              <span className="texto-suave">—</span>
+            ) : (
+              <>
+                {punto.valor}
+                {punto.cumplimientoPct != null && (
+                  <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
+                )}
+              </>
+            )}
+          </td>
+        );
+      })}
+    </>
+  );
 
   const alternarColapsoCategoria = (categoriaId: string): void => {
     setColapsadasCategorias((previo) => {
@@ -779,6 +829,22 @@ export function SeguimientoPage(): React.JSX.Element {
       )}
 
       {pestana === 'historico' && (
+        <div className="filtros-chips">
+          <span className="texto-suave" style={{ alignSelf: 'center' }}>Ver como:</span>
+          {VISTAS_ESTADO.map((v) => (
+            <button
+              key={v.id}
+              className={`filtro-chip ${vistaHistorico === v.id ? 'activo' : ''}`}
+              onClick={() => setVistaHistorico(v.id)}
+              data-testid={`vista-historico-${v.id}`}
+            >
+              {v.etiqueta}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {pestana === 'historico' && vistaHistorico === 'lista' && (
         <div className="tabla-envoltura">
           <table className="tabla" data-testid="tabla-historico">
             <thead>
@@ -794,31 +860,140 @@ export function SeguimientoPage(): React.JSX.Element {
             <tbody>
               {historicoVisible.map((h) => (
                 <tr key={h.indicadorId} data-testid={`historico-${h.nombre}`}>
-                  <td><strong>{h.nombre}</strong></td>
-                  <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
-                  <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
-                  {columnasHistorico.map((c) => {
-                    const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
-                    return (
-                      <td key={c.periodoId} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
-                        {punto?.valor == null ? (
-                          <span className="texto-suave">—</span>
-                        ) : (
-                          <>
-                            {punto.valor}
-                            {punto.cumplimientoPct != null && (
-                              <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
-                            )}
-                          </>
-                        )}
-                      </td>
-                    );
-                  })}
+                  {celdaHistorico(h)}
                 </tr>
               ))}
               {historicoVisible.length === 0 && (
                 <tr>
                   <td colSpan={3 + columnasHistorico.length}>
+                    {cargandoHistorico ? (
+                      <Vacio mensaje="Cargando…" />
+                    ) : (
+                      <Vacio icono="▤" mensaje="Sin resultados históricos" detalle="Ajuste los filtros o capture resultados en Recolección." />
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pestana === 'historico' && vistaHistorico === 'arbol' && (
+        <div className="tabla-envoltura">
+          <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-arbol">
+            <thead>
+              <tr>
+                <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                <th>Categoría / Indicador</th>
+                <th>Línea base</th>
+                <th>Meta</th>
+                {columnasHistorico.map((c) => (
+                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {arbolHistorico.map((nodo) => {
+                if (nodo.tipo === 'equipo') return null; // Esta vista no agrupa por equipo — ver abajo.
+                if (nodo.tipo === 'categoria') {
+                  const colapsada = colapsadasCategorias.has(nodo.id);
+                  return (
+                    <tr key={`c-${nodo.id}`} className="fila-categoria" data-testid={`historico-arbol-categoria-${nodo.nombre}`}>
+                      <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                        {nodo.tieneHijos && (
+                          <button
+                            type="button"
+                            className={`boton-arbol ${colapsada ? '' : 'expandido'}`}
+                            onClick={() => alternarColapsoCategoria(nodo.id)}
+                            title={colapsada ? 'Expandir' : 'Colapsar'}
+                            data-testid={`colapsar-historico-categoria-${nodo.nombre}`}
+                          >
+                            <Icono nombre="flecha" tamano={13} />
+                          </button>
+                        )}
+                      </td>
+                      <td colSpan={2 + columnasHistorico.length}>
+                        {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
+                        <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
+                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
+                    {celdaHistorico(nodo.fila)}
+                  </tr>
+                );
+              })}
+              {arbolHistorico.length === 0 && (
+                <tr>
+                  <td colSpan={4 + columnasHistorico.length}>
+                    {cargandoHistorico ? (
+                      <Vacio mensaje="Cargando…" />
+                    ) : (
+                      <Vacio icono="▤" mensaje="Sin resultados históricos" detalle="Ajuste los filtros o capture resultados en Recolección." />
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pestana === 'historico' && vistaHistorico === 'equipo' && (
+        <div className="tabla-envoltura">
+          <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-equipo">
+            <thead>
+              <tr>
+                <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                <th>Equipo / Categoría / Indicador</th>
+                <th>Línea base</th>
+                <th>Meta</th>
+                {columnasHistorico.map((c) => (
+                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {arbolEquipoHistorico.map((nodo) => {
+                if (nodo.tipo === 'indicador') {
+                  return (
+                    <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
+                      <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }} />
+                      {celdaHistorico(nodo.fila)}
+                    </tr>
+                  );
+                }
+                const colapsada = colapsadasEquipo.has(nodo.id);
+                const etiqueta = nodo.tipo === 'categoria' ? etiquetaConPrefijo(nodo.prefijo, nodo.nombre) : nodo.nombre;
+                return (
+                  <tr key={`g-${nodo.id}`} className="fila-categoria" data-testid={`historico-equipo-${nodo.tipo}-${nodo.nombre}`}>
+                    <td className="celda-arbol" style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {nodo.tieneHijos && (
+                        <button
+                          type="button"
+                          className={`boton-arbol ${colapsada ? '' : 'expandido'}`}
+                          onClick={() => alternarColapsoEquipo(nodo.id)}
+                          title={colapsada ? 'Expandir' : 'Colapsar'}
+                          data-testid={`colapsar-historico-equipo-${nodo.tipo}-${nodo.nombre}`}
+                        >
+                          <Icono nombre="flecha" tamano={13} />
+                        </button>
+                      )}
+                    </td>
+                    <td colSpan={2 + columnasHistorico.length}>
+                      {etiqueta}
+                      <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {arbolEquipoHistorico.length === 0 && (
+                <tr>
+                  <td colSpan={4 + columnasHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (

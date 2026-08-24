@@ -1066,6 +1066,27 @@ describe('Composition root — histórico de resultados en Seguimiento', () => {
     const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
     expect(punto?.valor).toBe(20);
   });
+
+  // Batch U (U5b): Histórico gana categoría/equipo — mismo cálculo que el tablero de Estado
+  // (`ServicioSeguimiento.clasificacionDe`), para poder agruparse igual jerárquicamente.
+  it('expone categoría y equipo (directo) igual que el tablero de Estado', async () => {
+    const categoria = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Prioritaria', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
+    });
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Equipo Histórico', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ categoria: categoria.id, equipo: equipo.id }), valores: []
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    expect(fila?.categoriaId).toBe(categoria.id);
+    expect(fila?.categoria).toBe('Prioritaria');
+    expect(fila?.equipoId).toBe(equipo.id);
+    expect(fila?.equipo).toBe('Equipo Histórico');
+  });
 });
 
 describe('Composition root — atributos filtrables en Seguimiento', () => {

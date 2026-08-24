@@ -143,3 +143,24 @@ test('Seguimiento — vista "Árbol (Equipo)" agrupa los indicadores por Equipo 
   await expect(pagina.getByTestId('seguimiento-Indicador vía responsable')).toBeVisible();
   await expect(pagina.getByTestId('seguimiento-Indicador vínculo directo')).toBeVisible();
 });
+
+test('Seguimiento → Histórico gana el mismo selector "Ver como" y agrupa igual por Equipo/Categoría (U5b)', async () => {
+  await pagina.getByTestId('pestana-historico').click();
+  // Por defecto sigue en "Lista" (no rompe los E2E existentes que dependen de eso).
+  await expect(pagina.getByTestId('tabla-historico')).toBeVisible();
+  await expect(pagina.getByTestId('historico-Indicador vía responsable')).toBeVisible();
+
+  await pagina.getByTestId('vista-historico-equipo').click();
+  const tabla = pagina.getByTestId('tabla-historico-equipo');
+  await expect(tabla).toBeVisible();
+  await expect(pagina.getByTestId('historico-equipo-equipo-Dirección de Planificación')).toBeVisible();
+  await expect(pagina.getByTestId('historico-equipo-equipo-Unidad de Estadísticas')).toBeVisible();
+  await expect(pagina.getByTestId('historico-Indicador vía responsable')).toBeVisible();
+  await expect(pagina.getByTestId('historico-Indicador vínculo directo')).toBeVisible();
+
+  await pagina.getByTestId('vista-historico-arbol').click();
+  await expect(pagina.getByTestId('tabla-historico-arbol')).toBeVisible();
+  // Sin categoría explícita, T1 los clasifica en la categoría raíz "General" (respaldo obligatorio).
+  await expect(pagina.getByTestId('historico-arbol-categoria-General')).toBeVisible();
+  await expect(pagina.getByTestId('historico-Indicador vía responsable')).toBeVisible();
+});

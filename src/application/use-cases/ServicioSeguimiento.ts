@@ -63,6 +63,11 @@ export interface FilaHistorico {
   lineaBase: number | null;
   metaGlobal: number | null;
   unidadMedida: string | null;
+  categoriaId: string | null;
+  categoria: string | null;
+  /** Equipo EFECTIVO (directo si está seteado, si no indirecto vía el responsable) — ver `equipoEfectivo`. */
+  equipoId: string | null;
+  equipo: string | null;
   puntos: PuntoHistorico[];
 }
 
@@ -134,6 +139,29 @@ export class ServicioSeguimiento extends ServicioBase {
     return definiciones.get(indicador.periodicidadPersonalizadaId);
   }
 
+  /**
+   * Resuelve la clasificación (categoría + equipo EFECTIVO) de un
+   * indicador a su forma legible {id, nombre} — factorizado (U5b) porque
+   * `tablero()` e `historico()` necesitan exactamente el mismo cálculo, y
+   * el segundo lo usaba solo parcialmente hasta ahora (Histórico no traía
+   * categoría/equipo en absoluto, así que su vista no podía agruparse
+   * jerárquicamente como ya hace Estado).
+   */
+  private clasificacionDe(
+    indicador: Indicador,
+    nombreCategoria: ReadonlyMap<string, string>,
+    nombreEquipo: ReadonlyMap<string, string>,
+    usuariosPorId: ReadonlyMap<string, { equipoId: string | null }>
+  ): Pick<FilaTablero, 'categoriaId' | 'categoria' | 'equipoId' | 'equipo'> {
+    const equipoIdEfectivo = equipoEfectivo(indicador, usuariosPorId);
+    return {
+      categoriaId: indicador.categoria,
+      categoria: indicador.categoria == null ? null : (nombreCategoria.get(indicador.categoria) ?? indicador.categoria),
+      equipoId: equipoIdEfectivo,
+      equipo: equipoIdEfectivo == null ? null : (nombreEquipo.get(equipoIdEfectivo) ?? equipoIdEfectivo)
+    };
+  }
+
   async tablero(): Promise<FilaTablero[]> {
     const [config, indicadores, resumen, levantamientos, definicionesLista, usuarios, categorias, equipos, atributosFiltrables] =
       await Promise.all([
@@ -197,8 +225,6 @@ export class ServicioSeguimiento extends ServicioBase {
         .map((x) => x.ultimaActualizacion)
         .filter((x): x is string => x != null)
         .sort();
-      const equipoIdEfectivo = equipoEfectivo(indicador, usuariosPorId);
-
       filas.push({
         indicadorId: indicador.id,
         codigo: indicador.codigo,
@@ -211,10 +237,7 @@ export class ServicioSeguimiento extends ServicioBase {
         ultimaActualizacion: ultimas[ultimas.length - 1] ?? null,
         responsableId: indicador.responsable,
         responsable: indicador.responsable == null ? null : (nombreResponsable.get(indicador.responsable) ?? indicador.responsable),
-        categoriaId: indicador.categoria,
-        categoria: indicador.categoria == null ? null : (nombreCategoria.get(indicador.categoria) ?? indicador.categoria),
-        equipoId: equipoIdEfectivo,
-        equipo: equipoIdEfectivo == null ? null : (nombreEquipo.get(equipoIdEfectivo) ?? equipoIdEfectivo),
+        ...this.clasificacionDe(indicador, nombreCategoria, nombreEquipo, usuariosPorId),
         totalPeriodos: estados.length,
         periodosCompletos: estados.filter((e) => e.estado === 'Completo').length,
         atributosFiltro: await this.valoresFiltroPara(indicador.id, atributosFiltrables, elementosPorLista)
@@ -273,14 +296,17 @@ export class ServicioSeguimiento extends ServicioBase {
    * `resultados` (no tienen filas propias, ver ExportAnaliticoService).
    */
   async historico(): Promise<FilaHistorico[]> {
-    const [config, indicadores, usuarios] = await Promise.all([
-      this.configuracion.obtener(), this.indicadores.listar(), this.usuariosRepo.listar()
+    const [config, indicadores, usuarios, categorias, equipos] = await Promise.all([
+      this.configuracion.obtener(), this.indicadores.listar(), this.usuariosRepo.listar(),
+      this.categoriasRepo.listar(), this.equiposRepo.listar()
     ]);
     const definicionesLista = await this.periodicidadesRepo.listar();
     const definiciones = new Map(definicionesLista.map((d) => [d.id, d]));
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaHistorico[] = [];
 
+    const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
+    const nombreEquipo = new Map(equipos.map((e) => [e.id, e.nombre]));
     const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     const visibles = indicadores.filter((i) =>
@@ -312,6 +338,7 @@ export class ServicioSeguimiento extends ServicioBase {
         lineaBase: indicador.lineaBase,
         metaGlobal: indicador.metaGlobal,
         unidadMedida: indicador.unidadMedida,
+        ...this.clasificacionDe(indicador, nombreCategoria, nombreEquipo, usuariosPorId),
         puntos
       });
     }
