@@ -102,6 +102,22 @@ test('vincular un indicador directo desde el panel de Equipos lo muestra como "T
   await pagina.getByRole('button', { name: 'Cancelar' }).click();
 });
 
+test('la tabla de Equipos muestra el conector de jerarquía y el conteo de indicadores (propios + heredados)', async () => {
+  await pagina.getByTestId('nav-admin').click();
+
+  const filaSubEquipo = pagina.getByTestId('equipo-Unidad de Estadísticas');
+  // Conector visual (U4) antes del nombre, en la fila anidada (nivel > 0).
+  await expect(filaSubEquipo.locator('td').first()).toContainText('└');
+  // 2 indicadores propios (uno directo, otro indirecto vía responsable).
+  await expect(filaSubEquipo.locator('td').nth(2)).toHaveText('2');
+
+  // "Dirección de Planificación" (equipo raíz, sin indicadores propios) hereda
+  // el conteo de su sub-equipo.
+  const filaRaiz = pagina.getByTestId('equipo-Dirección de Planificación');
+  await expect(filaRaiz.locator('td').first()).not.toContainText('└');
+  await expect(filaRaiz.locator('td').nth(2)).toHaveText('2');
+});
+
 test('Seguimiento — vista "Árbol (Equipo)" agrupa los indicadores por Equipo > Sub-equipo > Categoría', async () => {
   await pagina.getByTestId('nav-seguimiento').click();
   await pagina.getByTestId('vista-equipo').click();

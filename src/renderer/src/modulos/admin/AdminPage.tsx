@@ -4,7 +4,7 @@ import type {
   AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
   Rol, TipoOrigenAutomatico
 } from '@domain/index';
-import { agruparPermisosParaGrid, ejemploParaFuente, sinCiclo } from '@domain/index';
+import { agruparPermisosParaGrid, ejemploParaFuente, equipoEfectivo, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { descargar, postTexto } from '../../rest';
@@ -63,6 +63,43 @@ function ordenarJerarquia<T extends { id: string; padreId: string | null; nombre
   };
   visitar(null, 0);
   return resultado;
+}
+
+/**
+ * Cuenta indicadores por nodo de un catálogo jerárquico (Batch U, U4/U5a):
+ * "propios" (los que resuelven directo a ese nodo, vía `indicadorNodoId`)
+ * más "heredados" de todos sus descendientes — mismo criterio recursivo que
+ * ya usa el árbol de Seguimiento (`contarTotal` en `SeguimientoPage.tsx`,
+ * duplicado aquí en pequeño porque opera sobre el catálogo plano de
+ * Administración, no sobre `FilaTablero[]`).
+ */
+function contarIndicadoresPorNodo<T extends { id: string; padreId: string | null }>(
+  items: readonly T[], indicadores: readonly Indicador[], indicadorNodoId: (i: Indicador) => string | null
+): Map<string, number> {
+  const ids = new Set(items.map((i) => i.id));
+  const hijosDe = new Map<string | null, T[]>();
+  for (const item of items) {
+    const clave = item.padreId && ids.has(item.padreId) ? item.padreId : null;
+    const lista = hijosDe.get(clave) ?? [];
+    lista.push(item);
+    hijosDe.set(clave, lista);
+  }
+  const propiosDe = new Map<string, number>();
+  for (const i of indicadores) {
+    const nodoId = indicadorNodoId(i);
+    if (nodoId && ids.has(nodoId)) propiosDe.set(nodoId, (propiosDe.get(nodoId) ?? 0) + 1);
+  }
+  const totales = new Map<string, number>();
+  const contar = (id: string): number => {
+    const memo = totales.get(id);
+    if (memo !== undefined) return memo;
+    let total = propiosDe.get(id) ?? 0;
+    for (const hijo of hijosDe.get(id) ?? []) total += contar(hijo.id);
+    totales.set(id, total);
+    return total;
+  };
+  for (const item of items) contar(item.id);
+  return totales;
 }
 
 function origenVacio(): OrigenAutomatico {
@@ -239,12 +276,18 @@ function EditorParametrosGenerales({
 
 function SeccionCategorias(): React.JSX.Element {
   const [items, setItems] = useState<Categoria[]>([]);
+  const [indicadores, setIndicadores] = useState<Indicador[]>([]);
   const [editando, setEditando] = useState<Categoria | null>(null);
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    setItems(await invocar('categorias:listar', { incluirEliminados: mostrarEliminados }));
+    const [categorias, listaIndicadores] = await Promise.all([
+      invocar('categorias:listar', { incluirEliminados: mostrarEliminados }),
+      invocar('indicadores:listar', undefined)
+    ]);
+    setItems(categorias);
+    setIndicadores(listaIndicadores);
   }, [mostrarEliminados]);
 
   useEffect(() => {
@@ -276,6 +319,7 @@ function SeccionCategorias(): React.JSX.Element {
   };
 
   const filas = ordenarJerarquia(items);
+  const conteoIndicadores = contarIndicadoresPorNodo(items, indicadores, (i) => i.categoria);
   // Opciones válidas de "categoría padre": excluye la propia categoría en edición y sus descendientes
   // (evita ciclos client-side; el backend vuelve a validarlo con `sinCiclo`), y las ya eliminadas.
   const opcionesPadre = editando
@@ -310,6 +354,7 @@ function SeccionCategorias(): React.JSX.Element {
               <th>Nombre</th>
               <th>Prefijo</th>
               <th>Descripción</th>
+              <th style={{ textAlign: 'right' }}>Indicadores</th>
               <th>Activa</th>
               <th style={{ width: 90 }} />
             </tr>
@@ -324,10 +369,12 @@ function SeccionCategorias(): React.JSX.Element {
                 data-testid={`categoria-${c.nombre}`}
               >
                 <td style={{ paddingLeft: 12 + c.nivel * 20 }}>
+                  {c.nivel > 0 && <span className="conector-jerarquia">└</span>}
                   {c.nombre} {c.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}
                 </td>
                 <td className="texto-suave">{c.prefijo ?? '—'}</td>
                 <td className="texto-suave">{c.descripcion || '—'}</td>
+                <td className="texto-suave" style={{ textAlign: 'right' }}>{conteoIndicadores.get(c.id) ?? 0}</td>
                 <td>{c.activo ? 'Sí' : 'No'}</td>
                 <td>
                   {c.eliminado && (
@@ -345,7 +392,7 @@ function SeccionCategorias(): React.JSX.Element {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <Vacio mensaje="Sin categorías" detalle="Créelas para clasificar indicadores." />
                 </td>
               </tr>
@@ -489,6 +536,7 @@ function SeccionEquipos(): React.JSX.Element {
     : [];
 
   const responsablesPorId = new Map(responsables.map((r) => [r.id, r]));
+  const conteoIndicadores = contarIndicadoresPorNodo(items, indicadores, (i) => equipoEfectivo(i, responsablesPorId));
   const vinculoDe = (i: Indicador): 'directo' | 'indirecto' | 'ninguno' => {
     if (!editando) return 'ninguno';
     if (i.equipo === editando.id) return 'directo';
@@ -525,6 +573,7 @@ function SeccionEquipos(): React.JSX.Element {
             <tr>
               <th>Nombre</th>
               <th>Descripción</th>
+              <th style={{ textAlign: 'right' }}>Indicadores</th>
               <th>Activo</th>
               <th style={{ width: 90 }} />
             </tr>
@@ -539,9 +588,11 @@ function SeccionEquipos(): React.JSX.Element {
                 data-testid={`equipo-${eq.nombre}`}
               >
                 <td style={{ paddingLeft: 12 + eq.nivel * 20 }}>
+                  {eq.nivel > 0 && <span className="conector-jerarquia">└</span>}
                   {eq.nombre} {eq.eliminado && <span className="etiqueta-eliminado">Eliminado</span>}
                 </td>
                 <td className="texto-suave">{eq.descripcion || '—'}</td>
+                <td className="texto-suave" style={{ textAlign: 'right' }}>{conteoIndicadores.get(eq.id) ?? 0}</td>
                 <td>{eq.activo ? 'Sí' : 'No'}</td>
                 <td>
                   {eq.eliminado && (
@@ -559,7 +610,7 @@ function SeccionEquipos(): React.JSX.Element {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={5}>
                   <Vacio mensaje="Sin equipos" detalle="Créelos para agrupar indicadores organizacionalmente." />
                 </td>
               </tr>

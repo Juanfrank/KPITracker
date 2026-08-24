@@ -485,6 +485,12 @@ table.tabla tbody tr.fila-eliminada:hover {
   background: transparent;
 }
 
+/* Conector visual de jerarquía (Batch U, U4/U5a) antes del nombre en filas anidadas de Categorías/Equipos. */
+.conector-jerarquia {
+  color: var(--texto-3);
+  margin-right: 6px;
+}
+
 .etiqueta-eliminado {
   display: inline-block;
   padding: 1px 8px;
