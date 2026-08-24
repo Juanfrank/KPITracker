@@ -20,6 +20,7 @@ import { sistemaRouter } from './routers/sistema';
 import { authRouter } from './routers/auth';
 import { usuariosRouter } from './routers/usuarios';
 import { rolesRouter } from './routers/roles';
+import { simulacionRouter } from './routers/simulacion';
 
 /**
  * Router raíz: un sub-router por prefijo de `CanalesIpc` (ver
@@ -48,7 +49,8 @@ export const appRouter = router({
   sistema: sistemaRouter,
   auth: authRouter,
   usuarios: usuariosRouter,
-  roles: rolesRouter
+  roles: rolesRouter,
+  simulacion: simulacionRouter
 });
 
 export type AppRouter = typeof appRouter;

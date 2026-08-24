@@ -3,7 +3,7 @@ import type { IdentidadSesion } from '@application/use-cases/ServicioAutenticaci
 import { HORAS_EXPIRACION_SESION } from '@application/use-cases/ServicioAutenticacion';
 import type { AplicacionServidor } from '../../composicionServidor';
 import { router, publicProcedure, protectedProcedure, invocar } from '../trpc';
-import { COOKIE_SESION } from '../context';
+import { COOKIE_SESION, COOKIE_SIMULACION } from '../context';
 
 /**
  * Identidad + permisos efectivos (Batch T) — misma forma para `login` y
@@ -53,9 +53,22 @@ export const authRouter = router({
   logout: protectedProcedure.mutation(async ({ ctx }) => {
     if (ctx.sesionId) await ctx.aplicacion.autenticacion.cerrarSesion(ctx.sesionId);
     ctx.res.clearCookie(COOKIE_SESION);
+    // No debe sobrevivir una simulación activa a un logout — limpia también su cookie.
+    ctx.res.clearCookie(COOKIE_SIMULACION);
     return { ok: true } as const;
   }),
 
-  /** Identidad + permisos de la sesión actual, o `null` si no hay ninguna vigente — nunca lanza `UNAUTHORIZED`. */
-  yo: publicProcedure.query(({ ctx }) => (ctx.usuario ? conPermisos(ctx.aplicacion, ctx.usuario) : null))
+  /**
+   * Identidad + permisos de la sesión actual, o `null` si no hay ninguna
+   * vigente — nunca lanza `UNAUTHORIZED`. U2 ("Ver como"): mientras haya una
+   * simulación activa, devuelve la identidad/permisos del usuario SIMULADO,
+   * no los del administrador real — así toda la UI (incluido el gating de
+   * pantallas de administración) se adapta a lo que ese usuario vería, tal
+   * como pide el requisito. El banner "Viendo como" (que sí necesita saber
+   * quién es el administrador real detrás) usa `simulacion.actual` aparte.
+   */
+  yo: publicProcedure.query(({ ctx }) => {
+    if (!ctx.usuario) return null;
+    return conPermisos(ctx.aplicacion, ctx.usuarioSimulado ?? ctx.usuario);
+  })
 });

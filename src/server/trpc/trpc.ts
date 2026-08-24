@@ -21,17 +21,37 @@ export const middleware = t.middleware;
 export const publicProcedure = t.procedure;
 
 /**
+ * Rutas exentas del bloqueo de mutaciones en modo simulación (U2): sin esta
+ * excepción, un administrador simulando a otro usuario no podría llamar la
+ * mutación que le permite SALIR de la simulación (quedaría atrapado en modo
+ * lectura hasta borrar la cookie a mano) ni cerrar sesión por completo.
+ */
+const RUTAS_EXENTAS_DE_SIMULACION = new Set(['simulacion.terminar', 'auth.logout']);
+
+/**
  * Exige una sesión válida (`ctx.usuario` no nulo) y establece esa identidad
  * como "usuario ambiente" (`conUsuario`, ver `contextoUsuario.ts`) para toda
  * la auditoría que dispare el resolver — el mismo mecanismo que hoy usa la
  * app de escritorio con el valor implícito `'local'`.
+ *
+ * U2 ("Ver como"): si hay una simulación activa (`ctx.usuarioSimulado`, ya
+ * validado en `context.ts` como admin-only), el `ContextoPermisos` ambiente
+ * se resuelve para el usuario SIMULADO — así las queries (tablero, listar,
+ * etc.) devuelven exactamente lo que ese usuario vería — pero la identidad
+ * de auditoría (`conUsuario`) sigue siendo la del administrador real: nunca
+ * se le atribuye una acción a alguien que no la realizó. Toda mutación se
+ * rechaza mientras la simulación esté activa (salvo la que la termina),
+ * dejando la simulación puramente de lectura.
  */
-export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+export const protectedProcedure = t.procedure.use(async ({ ctx, next, type, path }) => {
   if (!ctx.usuario) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Se requiere iniciar sesión.' });
   const usuario = ctx.usuario;
+  if (ctx.usuarioSimulado && type === 'mutation' && !RUTAS_EXENTAS_DE_SIMULACION.has(path)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Modo simulación ("Ver como"): solo lectura. Salga de la simulación para modificar datos.' });
+  }
   // Batch T: además de la identidad (conUsuario, para auditoría), resuelve y planta el
   // ContextoPermisos ambiente que consumen los Servicio* para filtrar/gatear por permiso.
-  const permisos = await ctx.aplicacion.permisos.resolver(usuario.id);
+  const permisos = await ctx.aplicacion.permisos.resolver(ctx.usuarioSimulado?.id ?? usuario.id);
   return conPermisos(permisos, () => conUsuario(usuario.id, () => next({ ctx: { ...ctx, usuario } })));
 });
 

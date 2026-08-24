@@ -74,10 +74,34 @@ body {
 }
 
 /* ============ Shell ============ */
+.pagina-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 232px 1fr;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* "Ver como" (Batch U, U2): banner persistente mientras un administrador simula a otro usuario. */
+.banner-simulacion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--alerta-suave);
+  color: var(--alerta);
+  border-bottom: 1px solid var(--borde);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.banner-simulacion .boton {
+  margin-left: auto;
 }
 
 .sidebar {

@@ -43,7 +43,7 @@ const MODULOS: ModuloDef[] = [
 function Shell(): React.JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
-  const { usuario, logout } = useAuth();
+  const { usuario, simulando, logout, salirSimulacion } = useAuth();
   const [tema, setTema] = useState<string>(() => localStorage.getItem('kpitracker-tema') ?? 'claro');
   const [buscando, setBuscando] = useState(false);
 
@@ -71,55 +71,70 @@ function Shell(): React.JSX.Element {
     void logout().then(() => navigate('/login', { replace: true }));
   };
 
+  const salirDeSimulacion = (): void => {
+    void salirSimulacion();
+  };
+
   return (
-    <div className="shell">
-      <nav className="sidebar">
-        <div className="logo">
-          KPI<span>Tracker</span>
-        </div>
-        {secciones.map((seccion) => (
-          <div key={seccion}>
-            <div className="seccion">{seccion}</div>
-            {MODULOS.filter((m) => m.seccion === seccion).map((m) => (
-              <NavLink
-                key={m.id}
-                to={`/${m.id}`}
-                className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
-                data-testid={`nav-${m.id}`}
-              >
-                <Icono nombre={m.icono} />
-                {m.etiqueta}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-        <div style={{ marginTop: 'auto', padding: '10px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="pagina-shell">
+      {simulando && (
+        <div className="banner-simulacion" data-testid="banner-ver-como">
           <Icono nombre="usuario" tamano={15} />
-          <span className="texto-suave" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {usuario?.nombreCompleto}
-          </span>
-          <button className="boton sutil" onClick={salir} title="Cerrar sesión" data-testid="cerrar-sesion">
-            <Icono nombre="salir" tamano={15} />
+          Viendo como: <strong>{simulando.nombreCompleto}</strong> — modo solo lectura
+          <button className="boton sutil" onClick={salirDeSimulacion} data-testid="salir-ver-como">
+            Salir
           </button>
         </div>
-        <div className="pie">
-          <button
-            className="boton sutil"
-            onClick={() => setTema(tema === 'claro' ? 'oscuro' : 'claro')}
-            title={tema === 'claro' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro'}
-          >
-            <Icono nombre={tema === 'claro' ? 'luna' : 'sol'} />
-          </button>
-          <button className="boton sutil" onClick={() => setBuscando(true)} title="Búsqueda global (Ctrl+K)">
-            <Icono nombre="buscar" />
-          </button>
-          <span className="atajo">Ctrl+K</span>
-        </div>
-      </nav>
-      <main className="contenido" data-testid={`pagina-${idActual}`}>
-        <Outlet />
-      </main>
-      {buscando && <BusquedaGlobal alCerrar={() => setBuscando(false)} />}
+      )}
+      <div className="shell">
+        <nav className="sidebar">
+          <div className="logo">
+            KPI<span>Tracker</span>
+          </div>
+          {secciones.map((seccion) => (
+            <div key={seccion}>
+              <div className="seccion">{seccion}</div>
+              {MODULOS.filter((m) => m.seccion === seccion).map((m) => (
+                <NavLink
+                  key={m.id}
+                  to={`/${m.id}`}
+                  className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
+                  data-testid={`nav-${m.id}`}
+                >
+                  <Icono nombre={m.icono} />
+                  {m.etiqueta}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+          <div style={{ marginTop: 'auto', padding: '10px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icono nombre="usuario" tamano={15} />
+            <span className="texto-suave" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {usuario?.nombreCompleto}
+            </span>
+            <button className="boton sutil" onClick={salir} title="Cerrar sesión" data-testid="cerrar-sesion">
+              <Icono nombre="salir" tamano={15} />
+            </button>
+          </div>
+          <div className="pie">
+            <button
+              className="boton sutil"
+              onClick={() => setTema(tema === 'claro' ? 'oscuro' : 'claro')}
+              title={tema === 'claro' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro'}
+            >
+              <Icono nombre={tema === 'claro' ? 'luna' : 'sol'} />
+            </button>
+            <button className="boton sutil" onClick={() => setBuscando(true)} title="Búsqueda global (Ctrl+K)">
+              <Icono nombre="buscar" />
+            </button>
+            <span className="atajo">Ctrl+K</span>
+          </div>
+        </nav>
+        <main className="contenido" data-testid={`pagina-${idActual}`}>
+          <Outlet />
+        </main>
+        {buscando && <BusquedaGlobal alCerrar={() => setBuscando(false)} />}
+      </div>
     </div>
   );
 }

@@ -70,6 +70,12 @@ export class ServicioUsuarios {
     return Promise.all(usuarios.map((u) => this.aPublico(u)));
   }
 
+  /** Usado por "Ver como" (Batch U, panel de simulación de solo lectura) para validar y describir al usuario elegido. */
+  async obtener(id: string): Promise<UsuarioPublico | null> {
+    const usuario = await this.repo.obtener(id);
+    return usuario ? this.aPublico(usuario) : null;
+  }
+
   private async rolGeneralPorDefecto(): Promise<string | null> {
     const roles = await this.rolesRepo.listar();
     return roles.find((r) => r.esSistema && r.ambito === 'general' && r.nombre === NOMBRE_ROL_USUARIO_ESTANDAR)?.id ?? null;

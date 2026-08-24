@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type {
   AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
   Rol, TipoOrigenAutomatico
@@ -1231,6 +1232,8 @@ function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; c
  * por completo: ya no hace falta, la identidad es la misma.
  */
 function SeccionUsuarios(): React.JSX.Element {
+  const { usuario: yo, verComo } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<UsuarioFila[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
@@ -1320,6 +1323,19 @@ function SeccionUsuarios(): React.JSX.Element {
   const restaurar = async (id: string): Promise<void> => {
     await trpcClient.usuarios.restaurar.mutate({ id });
     await cargar();
+  };
+
+  /**
+   * U2 ("Ver como"): activa la simulación de solo lectura y navega a
+   * Seguimiento — el punto de entrada normal de cualquier usuario, y el
+   * único lugar garantizado visible sin importar si el usuario simulado es
+   * administrador o no (esta misma pantalla de Usuarios se oculta si no lo
+   * es). El banner persistente del shell (`App.tsx`) es, desde ahí en
+   * adelante, la única forma de volver — por diseño.
+   */
+  const iniciarVerComo = async (id: string): Promise<void> => {
+    await verComo(id);
+    navigate('/seguimiento');
   };
 
   const alternarPermisoExcepcional = (permiso: string): void => {
@@ -1427,9 +1443,21 @@ function SeccionUsuarios(): React.JSX.Element {
                       Restaurar
                     </button>
                   ) : (
-                    <button className="boton sutil" onClick={(e) => { e.stopPropagation(); setEditandoPassword(u); }} title="Cambiar contraseña">
-                      Contraseña
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="boton sutil" onClick={(e) => { e.stopPropagation(); setEditandoPassword(u); }} title="Cambiar contraseña">
+                        Contraseña
+                      </button>
+                      {u.id !== yo?.id && (
+                        <button
+                          className="boton sutil"
+                          title="Ver la aplicación como este usuario (solo lectura)"
+                          onClick={(e) => { e.stopPropagation(); void iniciarVerComo(u.id); }}
+                          data-testid={`ver-como-${u.nombreUsuario}`}
+                        >
+                          Ver como
+                        </button>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>

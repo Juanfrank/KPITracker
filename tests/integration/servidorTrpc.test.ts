@@ -25,15 +25,30 @@ let construida: AppConstruida;
 let servidor: Server;
 let baseUrl: string;
 
-/** `fetch` con un jar de cookies mínimo (una sola cookie de sesión) — imita lo que hace un navegador entre requests. */
+/**
+ * `fetch` con un jar de cookies mínimo — imita lo que hace un navegador
+ * entre requests. Guarda TODAS las cookies por nombre (no solo la última):
+ * desde U2 ("Ver como") una misma sesión puede traer dos cookies firmadas a
+ * la vez (`kpitracker_sesion` + `kpitracker_simulacion`), y `getSetCookie()`
+ * (Node/undici) devuelve cada `Set-Cookie` de la respuesta por separado —
+ * a diferencia de `headers.get('set-cookie')`, que las pisa entre sí.
+ */
 function fetchConCookies(): typeof fetch {
-  let cookie: string | null = null;
+  const jar = new Map<string, string>();
   return async (input, init) => {
     const headers = new Headers(init?.headers);
-    if (cookie) headers.set('cookie', cookie);
+    if (jar.size > 0) headers.set('cookie', [...jar.entries()].map(([n, v]) => `${n}=${v}`).join('; '));
     const respuesta = await fetch(input, { ...init, headers });
-    const setCookie = respuesta.headers.get('set-cookie');
-    if (setCookie) cookie = setCookie.split(';')[0] ?? null;
+    for (const setCookie of respuesta.headers.getSetCookie()) {
+      const [par] = setCookie.split(';');
+      const igual = par?.indexOf('=') ?? -1;
+      if (!par || igual <= 0) continue;
+      const nombre = par.slice(0, igual);
+      const valor = par.slice(igual + 1);
+      // `res.clearCookie(...)` (auth.logout/simulacion.terminar) manda el valor vacío — un
+      // navegador real simplemente deja de enviar esa cookie, así que se borra del jar.
+      if (valor) jar.set(nombre, valor); else jar.delete(nombre);
+    }
     return respuesta;
   };
 }
@@ -156,6 +171,94 @@ describe('Servidor tRPC — autenticación', () => {
     expect(error).toBeInstanceOf(TRPCClientError);
     expect((error as TRPCClientError<AppRouter>).data?.code).toBe('BAD_REQUEST');
     expect((error as TRPCClientError<AppRouter>).message).toContain('Ya existe un usuario');
+  });
+});
+
+describe('Servidor tRPC — "Ver como" (U2, simulación de solo lectura)', () => {
+  it('iniciar/actual/terminar: la cookie de simulación es independiente de la sesión real del admin', async () => {
+    const admin = await clienteAdmin();
+    const simulado = await admin.usuarios.crear.mutate({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'correcta123' });
+
+    expect(await admin.simulacion.actual.query()).toBeNull();
+    const iniciado = await admin.simulacion.iniciar.mutate({ usuarioId: simulado.id });
+    expect(iniciado).toMatchObject({ id: simulado.id, nombreCompleto: 'Ana' });
+    await expect(admin.simulacion.actual.query()).resolves.toMatchObject({ id: simulado.id, nombreCompleto: 'Ana' });
+
+    await admin.simulacion.terminar.mutate();
+    expect(await admin.simulacion.actual.query()).toBeNull();
+  });
+
+  it('mientras simula, `auth.yo` devuelve la identidad/permisos del usuario simulado, no los del admin', async () => {
+    const admin = await clienteAdmin();
+    const simulado = await admin.usuarios.crear.mutate({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'correcta123' });
+
+    await expect(admin.auth.yo.query()).resolves.toMatchObject({ nombreUsuario: 'admin', esAdministrador: true });
+    await admin.simulacion.iniciar.mutate({ usuarioId: simulado.id });
+    await expect(admin.auth.yo.query()).resolves.toMatchObject({ nombreUsuario: 'ana', esAdministrador: false });
+
+    await admin.simulacion.terminar.mutate();
+    await expect(admin.auth.yo.query()).resolves.toMatchObject({ nombreUsuario: 'admin', esAdministrador: true });
+  });
+
+  it('mientras simula, toda mutación se rechaza con FORBIDDEN — salvo terminar la simulación y cerrar sesión', async () => {
+    const admin = await clienteAdmin();
+    const simulado = await admin.usuarios.crear.mutate({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'correcta123' });
+    await admin.simulacion.iniciar.mutate({ usuarioId: simulado.id });
+
+    const error = await admin.indicadores.guardar
+      .mutate({
+        indicador: {
+          id: '', codigo: '', nombre: 'No debería guardarse', definicion: 'Definición', formaCalculo: null,
+          periodicidad: 'Trimestral', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
+          metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, unidadMedida: null,
+          esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        },
+        valores: []
+      } as never)
+      .catch((e: unknown) => e);
+    expect((error as TRPCClientError<AppRouter>).data?.code).toBe('FORBIDDEN');
+    expect((error as TRPCClientError<AppRouter>).message).toContain('solo lectura');
+
+    // Las queries normales sí funcionan (es lectura, filtrada según el usuario simulado).
+    await expect(admin.indicadores.listar.query()).resolves.toEqual([]);
+
+    // Terminar la simulación es la excepción explícita a la regla.
+    await admin.simulacion.terminar.mutate();
+    expect(await admin.simulacion.actual.query()).toBeNull();
+
+    // Ya sin simular, la misma mutación vuelve a funcionar con normalidad.
+    const guardado = await admin.indicadores.guardar.mutate({
+      indicador: {
+        id: '', codigo: '', nombre: 'Ahora sí', definicion: 'Definición', formaCalculo: null,
+        periodicidad: 'Trimestral', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
+        metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, unidadMedida: null,
+        esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+      },
+      valores: []
+    } as never);
+    expect(guardado.id).not.toBe('');
+  });
+
+  it('`auth.logout` sigue funcionando mientras se simula, y también apaga la simulación', async () => {
+    const admin = await clienteAdmin();
+    const simulado = await admin.usuarios.crear.mutate({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'correcta123' });
+    await admin.simulacion.iniciar.mutate({ usuarioId: simulado.id });
+
+    await expect(admin.auth.logout.mutate()).resolves.toEqual({ ok: true });
+    const error = await admin.indicadores.listar.query().catch((e: unknown) => e);
+    expect((error as TRPCClientError<AppRouter>).data?.code).toBe('UNAUTHORIZED');
+  });
+
+  it('un usuario sin rol admin no puede iniciar una simulación', async () => {
+    const admin = await clienteAdmin();
+    const objetivo = await admin.usuarios.crear.mutate({ nombreUsuario: 'ana', nombreCompleto: 'Ana', password: 'correcta123' });
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'beto', nombreCompleto: 'Beto', password: 'correcta123' });
+
+    const cliente = crearCliente(fetchConCookies());
+    await cliente.auth.login.mutate({ nombreUsuario: 'beto', password: 'correcta123' });
+
+    const error = await cliente.simulacion.iniciar.mutate({ usuarioId: objetivo.id }).catch((e: unknown) => e);
+    expect((error as TRPCClientError<AppRouter>).data?.code).toBe('FORBIDDEN');
   });
 });
 
