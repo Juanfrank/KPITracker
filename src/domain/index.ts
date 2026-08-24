@@ -42,6 +42,7 @@ export * from './services/PoliticaPermisos';
 export * from './services/GeneradorConsultaDax';
 export * from './services/CalculadoraEstados';
 export * from './services/CalculoMetas';
+export * from './services/ResolucionMetaPeriodo';
 export * from './services/ValidacionCaptura';
 export * from './services/EvaluadorFormulas';
 export * from './services/ValidadorTexto';

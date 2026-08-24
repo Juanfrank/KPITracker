@@ -84,7 +84,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   );
   const seguimiento = new ServicioSeguimiento(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
-    infra.periodicidades, infra.usuarios, infra.categorias, infra.equipos, infra.atributos, reglasFechaLimite
+    infra.periodicidades, infra.usuarios, infra.categorias, infra.equipos, infra.atributos, reglasFechaLimite,
+    infra.metas
   );
   const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos);
   const automatizacion = new ServicioAutomatizacionIndicador(

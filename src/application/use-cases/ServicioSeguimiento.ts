@@ -1,14 +1,14 @@
 import {
   CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo,
-  puedeVerIndicador
+  metaVigenteParaPeriodo, puedeVerIndicador
 } from '@domain/index';
 import type {
   Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
-  EstadoSeguimiento, Indicador
+  EstadoSeguimiento, Indicador, Meta
 } from '@domain/index';
 import type {
   IAtributoRepository, ICatalogoRepository, IConfiguracionRepository, IDefinicionPeriodicidadRepository,
-  IIndicadorRepository, IListaRepository, IResultadoRepository, IUsuarioRepository
+  IIndicadorRepository, IListaRepository, IMetaRepository, IResultadoRepository, IUsuarioRepository
 } from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
@@ -54,6 +54,8 @@ export interface PuntoHistorico {
   etiqueta: string;
   fechaInicio: string;
   valor: number | null;
+  /** Meta configurada vigente para este período específico (Meta.valor), de existir — ver `metaVigenteParaPeriodo`. `null` si no hay ninguna. */
+  metaPeriodo: number | null;
   cumplimientoPct: number | null;
 }
 
@@ -93,7 +95,8 @@ export class ServicioSeguimiento extends ServicioBase {
     private readonly categoriasRepo: ICatalogoRepository<Categoria>,
     private readonly equiposRepo: ICatalogoRepository<Equipo>,
     private readonly atributosRepo: IAtributoRepository,
-    reglasFechaLimite: DeadlineRuleRegistry
+    reglasFechaLimite: DeadlineRuleRegistry,
+    private readonly metasRepo: IMetaRepository
   ) {
     super(ctx);
     this.calculadora = new CalculadoraEstados(reglasFechaLimite);
@@ -326,11 +329,16 @@ export class ServicioSeguimiento extends ServicioBase {
           valoresPorPeriodo.set(dato.periodoId, dato.valor);
         }
       }
+      // Metas configuradas del indicador (no solo el escalar Indicador.metaGlobal) — se
+      // resuelve la vigente en cada período; a falta de una, se cae al global (compatibilidad).
+      const metasIndicador: Meta[] = await this.metasRepo.listarPorIndicador(indicador.id);
       const puntos: PuntoHistorico[] = periodos.map((periodo) => {
         const valor = valoresPorPeriodo.get(periodo.id) ?? null;
-        const meta = indicador.metaGlobal;
+        const metaVigente = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones);
+        const metaPeriodo = metaVigente?.valor ?? null;
+        const meta = metaPeriodo ?? indicador.metaGlobal;
         const cumplimientoPct = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
-        return { periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, valor, cumplimientoPct };
+        return { periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, valor, metaPeriodo, cumplimientoPct };
       });
       filas.push({
         indicadorId: indicador.id,

@@ -1134,6 +1134,50 @@ describe('Composition root — histórico de resultados en Seguimiento', () => {
     expect(punto?.cumplimientoPct).toBe(80);
   });
 
+  it('prefiere la Meta configurada para el período (si existe) sobre el escalar metaGlobal', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ metaGlobal: 100 }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const hoy = new Date().toISOString().slice(0, 10);
+    const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+    const anioVigencia = Number(periodoId.slice(0, 4));
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '80'
+    });
+    await app.manejadores['metas:guardar']({
+      id: '', indicadorId: guardado.id, claveDesagregacion: 'GENERAL', valor: 200,
+      periodicidadMedicion: Periodicidad.Trimestral, periodicidadPersonalizadaId: null,
+      metodoCalculo: 'Promedio', anioVigencia, creadoEn: '', actualizadoEn: ''
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
+    expect(punto?.metaPeriodo).toBe(200);
+    expect(punto?.cumplimientoPct).toBe(40); // 80/200, NO 80/100 (el metaGlobal escalar queda de respaldo).
+  });
+
+  it('sin una Meta configurada para el período, cae al escalar metaGlobal (compatibilidad)', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ metaGlobal: 100 }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const hoy = new Date().toISOString().slice(0, 10);
+    const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '80'
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
+    expect(punto?.metaPeriodo).toBeNull();
+    expect(punto?.cumplimientoPct).toBe(80); // 80/100 vía metaGlobal.
+  });
+
   it('evalúa la fórmula por período para indicadores calculados', async () => {
     const base = await app.manejadores['indicadores:guardar']({
       indicador: indicador({ codigo: 'IND-BASE' }), valores: []

@@ -3,7 +3,9 @@ import type {
   Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Meta, Periodo,
   ReglaNegocio, ValorAtributo
 } from '@domain/index';
-import { GeneradorPeriodos, Periodicidad, construirContextoIndicador, etiquetaConPrefijo } from '@domain/index';
+import {
+  GeneradorPeriodos, Periodicidad, ProductoCartesiano, claveATexto, construirContextoIndicador, etiquetaConPrefijo
+} from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
@@ -18,6 +20,39 @@ import { ImportarExcelIndicadores } from './ImportarExcelIndicadores';
 import { ModalAutomatizacionIndicador } from './ModalAutomatizacionIndicador';
 
 const generadorPeriodos = new GeneradorPeriodos();
+const productoCartesiano = new ProductoCartesiano();
+
+interface OpcionDesagregacion {
+  value: string;
+  label: string;
+}
+
+/**
+ * Opciones para el `<select>` de "Desagregación (clave)" de una Meta: la
+ * misma cardinalidad que puede capturarse en Recolección (General + todas
+ * las combinaciones/subtotales del cubo), con una etiqueta legible en vez
+ * del texto técnico `<listaId>=<codigo>` que antes había que teclear a mano.
+ */
+function opcionesDesagregacion(
+  desagregaciones: string[],
+  listasPorId: Map<string, { nombre: string }>,
+  elementosPorLista: Map<string, ElementoLista[]>
+): OpcionDesagregacion[] {
+  return productoCartesiano.generar(desagregaciones, elementosPorLista).map((combinacion) => ({
+    value: claveATexto(combinacion.clave),
+    label:
+      combinacion.etiquetas.length === 0
+        ? 'General (todo el indicador)'
+        : combinacion.etiquetas.map((e) => `${listasPorId.get(e.listaId)?.nombre ?? e.listaId}: ${e.descripcion}`).join(', ') +
+          (combinacion.nivel < desagregaciones.length ? ' (subtotal)' : '')
+  }));
+}
+
+/** Empareja texto pegado desde Excel contra las opciones válidas de una columna, sin distinguir mayúsculas/minúsculas. */
+function emparejarTexto<T extends string>(texto: string, opciones: readonly T[]): T | undefined {
+  const normalizado = texto.trim().toLowerCase();
+  return opciones.find((o) => o.toLowerCase() === normalizado);
+}
 
 /** Ruta completa "Equipo > Sub-equipo > ..." de un equipo, para etiquetar su `<optgroup>` (que no anida más de un nivel). */
 function rutaEquipo(equipo: Equipo, porId: Map<string, Equipo>): string {
@@ -160,13 +195,18 @@ export function IndicadoresPage(): React.JSX.Element {
   };
 
   useEffect(() => {
-    const idsListas = [...new Set(atributos.filter((a) => a.listaId).map((a) => a.listaId as string))];
+    const idsAtributos = atributos.filter((a) => a.listaId).map((a) => a.listaId as string);
+    // También se necesitan los elementos de las propias desagregaciones del
+    // indicador en edición, para poder listarlas por nombre en el selector
+    // de "Desagregación (clave)" de la grilla de Metas.
+    const idsDesagregaciones = editando?.desagregaciones ?? [];
+    const idsListas = [...new Set([...idsAtributos, ...idsDesagregaciones])];
     const pendientes = idsListas.filter((id) => !elementosPorLista.has(id));
     if (pendientes.length === 0) return;
     void Promise.all(pendientes.map((id) => invocar('listas:elementos', { listaId: id }).then((els) => [id, els] as const))).then(
       (pares) => setElementosPorLista((previo) => new Map([...previo, ...pares]))
     );
-  }, [atributos, elementosPorLista]);
+  }, [atributos, elementosPorLista, editando?.desagregaciones]);
 
   const abrirEditor = async (indicador: Indicador): Promise<void> => {
     setErrores([]);
@@ -231,14 +271,78 @@ export function IndicadoresPage(): React.JSX.Element {
     };
   }
 
+  /**
+   * Crea una meta con valores específicos (usado tanto por "+ Meta", que no
+   * pasa overrides, como por el pegado desde Excel, que sí). Sigue el mismo
+   * criterio que el resto del formulario: si el indicador todavía no existe,
+   * la meta queda en `metasPendientes` hasta que `guardar()` resuelva un id
+   * real; si ya existe, se persiste de inmediato.
+   */
+  const crearMetaConValores = async (indicador: Indicador, overrides: Partial<Meta>): Promise<Meta> => {
+    const base = { ...metaVacia(indicador), ...overrides };
+    if (!indicador.id) {
+      setMetasPendientes((previas) => [...previas, base]);
+      return base;
+    }
+    const nueva = await invocar('metas:guardar', { ...base, id: '' });
+    setMetas((previas) => [...previas, nueva]);
+    return nueva;
+  };
+
   const agregarMeta = async (): Promise<void> => {
     if (!editando) return;
-    if (!editando.id) {
-      setMetasPendientes([...metasPendientes, metaVacia(editando)]);
-      return;
+    await crearMetaConValores(editando, {});
+  };
+
+  /**
+   * Pegado masivo estilo Excel sobre la grilla de Metas: cada línea son 5
+   * columnas [Valor, Año, Periodicidad, Desagregación, Método] separadas por
+   * tabulador. Periodicidad/Método/Desagregación se emparejan contra las
+   * opciones válidas (por valor técnico o por etiqueta), sin distinguir
+   * mayúsculas — una columna que no matchea ninguna opción simplemente se
+   * ignora y la fila conserva su valor/default previo. Actualiza filas
+   * existentes a partir de `indiceInicio` y crea metas nuevas para las
+   * líneas que excedan las ya existentes, igual que `pegarElementos` en
+   * Listas.
+   */
+  const pegarMetas = async (indiceInicio: number, textoPortapapeles: string): Promise<void> => {
+    if (!editando) return;
+    const listasPorId = new Map(listas.map((l) => [l.id, l]));
+    const opciones = opcionesDesagregacion(editando.desagregaciones, listasPorId, elementosPorLista);
+    const filas = textoPortapapeles.replace(/\r/g, '').split('\n').filter((linea) => linea.trim() !== '');
+    const actuales = editando.id ? metas : metasPendientes;
+    const actualizadas = [...actuales];
+
+    for (let i = 0; i < filas.length; i++) {
+      const [valorTxt, anioTxt, periodicidadTxt, desagregacionTxt, metodoTxt] = (filas[i] ?? '').split('\t');
+      const indice = indiceInicio + i;
+      const existente = actualizadas[indice];
+
+      const periodicidad = periodicidadTxt ? emparejarTexto(periodicidadTxt, PERIODICIDADES_META) : undefined;
+      const metodo = metodoTxt ? emparejarTexto(metodoTxt, METODOS_CALCULO) : undefined;
+      const desagregacionNormalizada = desagregacionTxt?.trim().toLowerCase();
+      const opcionDesagregacion = desagregacionNormalizada
+        ? opciones.find((o) => o.value.toLowerCase() === desagregacionNormalizada || o.label.toLowerCase() === desagregacionNormalizada)
+        : undefined;
+
+      const cambios: Partial<Meta> = {};
+      if (valorTxt?.trim()) cambios.valor = Number(valorTxt) || 0;
+      if (anioTxt?.trim()) cambios.anioVigencia = Number(anioTxt) || new Date().getFullYear();
+      if (periodicidad) {
+        cambios.periodicidadMedicion = periodicidad;
+        if (periodicidad !== Periodicidad.Personalizada) cambios.periodicidadPersonalizadaId = null;
+      }
+      if (opcionDesagregacion) cambios.claveDesagregacion = opcionDesagregacion.value;
+      if (metodo) cambios.metodoCalculo = metodo;
+
+      if (existente) {
+        const actualizado = { ...existente, ...cambios };
+        actualizadas[indice] = actualizado;
+        actualizarMeta(actualizado);
+      } else {
+        actualizadas.push(await crearMetaConValores(editando, cambios));
+      }
     }
-    const nueva = await invocar('metas:guardar', { ...metaVacia(editando), id: '' });
-    setMetas([...metas, nueva]);
   };
 
   const actualizarMeta = (meta: Meta): void => {
@@ -665,62 +769,128 @@ export function IndicadoresPage(): React.JSX.Element {
                 Se guardarán junto con el indicador al hacer clic en "Guardar".
               </p>
             )}
-            {(editando.id ? metas : metasPendientes).map((m) => (
-              <div key={m.id} className="tarjeta" style={{ padding: 12, display: 'grid', gap: 8 }}>
-                <div className="fila-form c3">
-                  <Campo etiqueta="Valor">
-                    <input type="number" value={m.valor} onChange={(e) => void actualizarMeta({ ...m, valor: Number(e.target.value) })} />
-                  </Campo>
-                  <Campo etiqueta="Año">
-                    <input type="number" value={m.anioVigencia} onChange={(e) => void actualizarMeta({ ...m, anioVigencia: Number(e.target.value) })} />
-                  </Campo>
-                  <Campo etiqueta="Método">
-                    <select value={m.metodoCalculo} onChange={(e) => void actualizarMeta({ ...m, metodoCalculo: e.target.value as Meta['metodoCalculo'] })}>
-                      {METODOS_CALCULO.map((mc) => <option key={mc} value={mc}>{mc}</option>)}
-                    </select>
-                  </Campo>
-                </div>
-                <div className="fila-form c2">
-                  <Campo etiqueta="Periodicidad de medición">
-                    <select
-                      value={m.periodicidadMedicion}
-                      onChange={(e) => {
-                        const periodicidadMedicion = e.target.value as Periodicidad;
-                        void actualizarMeta({
-                          ...m,
-                          periodicidadMedicion,
-                          periodicidadPersonalizadaId: periodicidadMedicion === Periodicidad.Personalizada ? m.periodicidadPersonalizadaId : null
-                        });
-                      }}
-                    >
-                      {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </Campo>
-                  <Campo etiqueta="Desagregación (clave)">
-                    <input
-                      type="text"
-                      value={m.claveDesagregacion}
-                      placeholder="GENERAL o lista=codigo|…"
-                      onChange={(e) => void actualizarMeta({ ...m, claveDesagregacion: e.target.value || 'GENERAL' })}
-                    />
-                  </Campo>
-                </div>
-                {m.periodicidadMedicion === Periodicidad.Personalizada && (
-                  <Campo etiqueta="Definición de periodicidad personalizada">
-                    <select
-                      value={m.periodicidadPersonalizadaId ?? ''}
-                      onChange={(e) => void actualizarMeta({ ...m, periodicidadPersonalizadaId: e.target.value || null })}
-                    >
-                      <option value="">— seleccionar —</option>
-                      {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                    </select>
-                  </Campo>
-                )}
-                <button className="boton peligro" style={{ justifySelf: 'start' }} onClick={() => eliminarMeta(m)}>
-                  Eliminar meta
-                </button>
-              </div>
-            ))}
+            <p className="texto-suave" style={{ margin: 0 }}>
+              Se comporta como una hoja de cálculo: puede pegar filas copiadas de Excel (columnas Valor, Año, Periodicidad, Desagregación, Método) en
+              cualquier celda de "Valor"; se crean metas nuevas si exceden las ya existentes.
+            </p>
+            {/* `flexShrink: 0`: dentro del cuerpo flex-column de PanelLateral, un hijo con
+                `overflow: auto` (como esta envoltura) puede recibir un `min-height` implícito
+                de 0 y quedar aplastado por el flexbox en vez de conservar su alto natural —
+                dejando filas de la tabla renderizadas pero visualmente recortadas/no
+                clicables. El scroll vertical real lo sigue dando el propio `.cuerpo`. */}
+            <div className="tabla-envoltura" style={{ flexShrink: 0 }}>
+              <table className="tabla tabla-metas" data-testid="tabla-metas">
+                <thead>
+                  <tr>
+                    <th style={{ width: 68 }}>Valor</th>
+                    <th style={{ width: 74 }}>Año</th>
+                    <th style={{ width: 116 }}>Periodicidad</th>
+                    <th>Desagregación</th>
+                    <th style={{ width: 88 }}>Método</th>
+                    <th style={{ width: 38 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(editando.id ? metas : metasPendientes).map((m, indice) => {
+                    const opciones = opcionesDesagregacion(
+                      editando.desagregaciones,
+                      new Map(listas.map((l) => [l.id, l])),
+                      elementosPorLista
+                    );
+                    return (
+                      <tr key={m.id}>
+                        <td>
+                          <input
+                            type="number"
+                            value={m.valor}
+                            onChange={(e) => void actualizarMeta({ ...m, valor: Number(e.target.value) })}
+                            onPaste={(e) => {
+                              const contenido = e.clipboardData.getData('text');
+                              if (contenido.includes('\n') || contenido.includes('\t')) {
+                                e.preventDefault();
+                                void pegarMetas(indice, contenido);
+                              }
+                            }}
+                            data-testid={`meta-valor-${indice}`}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={m.anioVigencia}
+                            onChange={(e) => void actualizarMeta({ ...m, anioVigencia: Number(e.target.value) })}
+                            data-testid={`meta-anio-${indice}`}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={m.periodicidadMedicion}
+                            onChange={(e) => {
+                              const periodicidadMedicion = e.target.value as Periodicidad;
+                              void actualizarMeta({
+                                ...m,
+                                periodicidadMedicion,
+                                periodicidadPersonalizadaId: periodicidadMedicion === Periodicidad.Personalizada ? m.periodicidadPersonalizadaId : null
+                              });
+                            }}
+                            data-testid={`meta-periodicidad-${indice}`}
+                          >
+                            {PERIODICIDADES_META.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </select>
+                          {m.periodicidadMedicion === Periodicidad.Personalizada && (
+                            <select
+                              value={m.periodicidadPersonalizadaId ?? ''}
+                              onChange={(e) => void actualizarMeta({ ...m, periodicidadPersonalizadaId: e.target.value || null })}
+                              style={{ marginTop: 4 }}
+                              title="Definición de periodicidad personalizada"
+                              data-testid={`meta-periodicidad-personalizada-${indice}`}
+                            >
+                              <option value="">— definición —</option>
+                              {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                            </select>
+                          )}
+                        </td>
+                        <td>
+                          <select
+                            value={m.claveDesagregacion}
+                            onChange={(e) => void actualizarMeta({ ...m, claveDesagregacion: e.target.value })}
+                            data-testid={`meta-desagregacion-${indice}`}
+                          >
+                            {opciones.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={m.metodoCalculo}
+                            onChange={(e) => void actualizarMeta({ ...m, metodoCalculo: e.target.value as Meta['metodoCalculo'] })}
+                            data-testid={`meta-metodo-${indice}`}
+                          >
+                            {METODOS_CALCULO.map((mc) => <option key={mc} value={mc}>{mc}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            className="boton sutil"
+                            title="Eliminar meta"
+                            onClick={() => eliminarMeta(m)}
+                            data-testid={`eliminar-meta-${indice}`}
+                          >
+                            <Icono nombre="cerrar" tamano={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(editando.id ? metas : metasPendientes).length === 0 && (
+                    <tr>
+                      <td colSpan={6}>
+                        <Vacio mensaje="Sin metas" detalle='Agregue una con "+ Meta" o pegue filas copiadas de Excel.' />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         </PanelLateral>
       )}

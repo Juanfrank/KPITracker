@@ -500,6 +500,46 @@ table.tabla tbody tr:last-child td {
   border-bottom: none;
 }
 
+/* Grilla de Metas (grid Excel-like en IndicadoresPage): celdas y controles
+   compactos, y sin las flechas nativas de spin de `type="number"" — en
+   columnas angostas ese control nativo dejaba el valor tecleado invisible
+   (recortado detrás de las flechas), aunque el valor real ya estuviera
+   correctamente guardado en el campo. `table-layout: fixed` es necesario
+   además: con el `auto` por defecto el navegador redistribuye el ancho de
+   columnas según contenido (p. ej. las opciones largas del `<select>` de
+   Desagregación) ignorando en la práctica los anchos pedidos por columna,
+   dejando columnas angostas (Valor/Año) más chicas de lo pedido.
+*/
+.tabla-metas {
+  table-layout: fixed;
+}
+
+.tabla-metas td {
+  padding: 5px 6px;
+}
+
+.tabla-metas input,
+.tabla-metas select {
+  padding: 5px 6px;
+}
+
+.tabla-metas input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.tabla-metas input[type='number']::-webkit-outer-spin-button,
+.tabla-metas input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Botón "Eliminar meta": el padding por defecto de `.boton` (pensado para
+   texto + ícono) fuerza un ancho mínimo mayor que el de esta columna
+   angosta, empujando la tabla entera a desbordar horizontalmente. */
+.tabla-metas .boton {
+  padding: 4px 6px;
+}
+
 table.tabla tbody tr:hover {
   background: var(--superficie-2);
 }

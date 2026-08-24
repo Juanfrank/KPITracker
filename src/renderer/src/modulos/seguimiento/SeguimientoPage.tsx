@@ -356,15 +356,15 @@ export function SeguimientoPage(): React.JSX.Element {
         const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
         return (
           <td key={c.periodoId} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
-            {punto?.valor == null ? (
-              <span className="texto-suave">—</span>
-            ) : (
-              <>
-                {punto.valor}
-                {punto.cumplimientoPct != null && (
-                  <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
-                )}
-              </>
+            {punto?.valor == null ? <span className="texto-suave">—</span> : punto.valor}
+            {/* Meta configurada VIGENTE para este período específico (no el escalar Meta global) — Batch de mejora "grid de metas". */}
+            {punto?.metaPeriodo != null && (
+              <div className="texto-suave" style={{ fontSize: '0.85em' }} data-testid={`historico-${h.nombre}-${c.periodoId}-meta`}>
+                Meta: {punto.metaPeriodo}
+              </div>
+            )}
+            {punto?.cumplimientoPct != null && (
+              <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
             )}
           </td>
         );
