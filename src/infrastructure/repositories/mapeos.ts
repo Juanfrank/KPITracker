@@ -152,6 +152,7 @@ export const aMeta = (f: Fila): Meta => ({
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   metodoCalculo: s(f.metodo_calculo) as Meta['metodoCalculo'],
   anioVigencia: n(f.anio_vigencia),
+  periodoId: sn(f.periodo_id),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -159,7 +160,8 @@ export const aMeta = (f: Fila): Meta => ({
 export const deMeta = (m: Meta): Fila => ({
   id: m.id, indicador_id: m.indicadorId, clave_desagregacion: m.claveDesagregacion, valor: m.valor,
   periodicidad_medicion: m.periodicidadMedicion, periodicidad_personalizada_id: m.periodicidadPersonalizadaId ?? null,
-  metodo_calculo: m.metodoCalculo, anio_vigencia: m.anioVigencia, creado_en: m.creadoEn, actualizado_en: m.actualizadoEn
+  metodo_calculo: m.metodoCalculo, anio_vigencia: m.anioVigencia, periodo_id: m.periodoId ?? null,
+  creado_en: m.creadoEn, actualizado_en: m.actualizadoEn
 });
 
 export const aRegla = (f: Fila): ReglaNegocio => ({

@@ -14,6 +14,7 @@ function meta(parcial: Partial<Meta> = {}): Meta {
     periodicidadPersonalizadaId: null,
     metodoCalculo: 'Promedio',
     anioVigencia: 2026,
+    periodoId: parcial.periodoId ?? null,
     creadoEn: '',
     actualizadoEn: '',
     ...parcial
@@ -57,5 +58,35 @@ describe('metaVigenteParaPeriodo', () => {
   it('devuelve null si no hay ninguna meta configurada para ese año/clave', () => {
     const enero = crearPeriodo(2026, Periodicidad.Mensual, 1);
     expect(metaVigenteParaPeriodo([], 'GENERAL', enero, new Map())).toBeNull();
+  });
+
+  it('un override de período puntual (Configuración de Metas) gana sobre la meta recurrente de igual periodicidad', () => {
+    const marzo = crearPeriodo(2026, Periodicidad.Mensual, 3);
+    const recurrente = meta({ id: 'recurrente', periodicidadMedicion: Periodicidad.Mensual, valor: 100 });
+    const override = meta({ id: 'override', periodicidadMedicion: Periodicidad.Mensual, valor: 150, periodoId: marzo.id });
+    const resultado = metaVigenteParaPeriodo([recurrente, override], 'GENERAL', marzo, new Map());
+    expect(resultado?.id).toBe('override');
+
+    // El override solo aplica a SU período puntual — otro mes cae de vuelta a la recurrente.
+    const abril = crearPeriodo(2026, Periodicidad.Mensual, 4);
+    expect(metaVigenteParaPeriodo([recurrente, override], 'GENERAL', abril, new Map())?.id).toBe('recurrente');
+  });
+
+  it('un override de período puntual con periodicidad más ancha (Trimestral) igual se refleja por contención en cada mes de ese trimestre', () => {
+    const t1 = crearPeriodo(2026, Periodicidad.Trimestral, 1);
+    const overrideT1 = meta({ id: 'override-t1', periodicidadMedicion: Periodicidad.Trimestral, valor: 300, periodoId: t1.id });
+
+    const febrero = crearPeriodo(2026, Periodicidad.Mensual, 2);
+    const abril = crearPeriodo(2026, Periodicidad.Mensual, 4); // fuera de T1
+    expect(metaVigenteParaPeriodo([overrideT1], 'GENERAL', febrero, new Map())?.id).toBe('override-t1');
+    expect(metaVigenteParaPeriodo([overrideT1], 'GENERAL', abril, new Map())).toBeNull();
+  });
+
+  it('un override Mensual puntual sigue ganando sobre una meta recurrente Trimestral más ancha (gana el segmento más angosto, no solo "es override")', () => {
+    const febrero = crearPeriodo(2026, Periodicidad.Mensual, 2);
+    const recurrenteTrimestral = meta({ id: 'trimestral', periodicidadMedicion: Periodicidad.Trimestral, valor: 300 });
+    const overrideMensual = meta({ id: 'mensual-override', periodicidadMedicion: Periodicidad.Mensual, valor: 90, periodoId: febrero.id });
+    const resultado = metaVigenteParaPeriodo([recurrenteTrimestral, overrideMensual], 'GENERAL', febrero, new Map());
+    expect(resultado?.id).toBe('mensual-override');
   });
 });

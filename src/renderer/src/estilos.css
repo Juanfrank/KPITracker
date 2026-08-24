@@ -455,9 +455,14 @@ td.invalido input {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+.fila-form.c4 {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
 @media (max-width: 1100px) {
   .fila-form.c2,
-  .fila-form.c3 {
+  .fila-form.c3,
+  .fila-form.c4 {
     grid-template-columns: 1fr;
   }
 }

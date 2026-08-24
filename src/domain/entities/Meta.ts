@@ -23,6 +23,14 @@ export interface Meta {
   periodicidadPersonalizadaId: string | null;
   metodoCalculo: MetodoCalculo;
   anioVigencia: number;
+  /**
+   * Id de `Periodo` (p. ej. "2026-Trimestral-01") cuando esta meta es un
+   * valor específico para UN solo período de su propio calendario —
+   * "Configuración de Metas" (por período según su recurrencia). `null`
+   * (comportamiento original) = meta recurrente: aplica por igual a TODOS
+   * los segmentos de `periodicidadMedicion` dentro de `anioVigencia`.
+   */
+  periodoId: string | null;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

@@ -210,7 +210,7 @@ describe('Infraestructura DuckDB + Parquet', () => {
     await infra.metas.guardar({
       id: 'm1', indicadorId: 'i1', claveDesagregacion: 'GENERAL', valor: 95,
       periodicidadMedicion: Periodicidad.Anual, periodicidadPersonalizadaId: null, metodoCalculo: 'Promedio', anioVigencia: 2025,
-      creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z'
+      periodoId: null, creadoEn: '2025-01-01T00:00:00Z', actualizadoEn: '2025-01-01T00:00:00Z'
     });
 
     const json = await infra.configPortable.exportar();

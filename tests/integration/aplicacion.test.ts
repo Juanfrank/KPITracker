@@ -839,7 +839,7 @@ describe('Composition root — metas con periodicidad personalizada', () => {
   const meta = (parcial: Partial<Meta> = {}): Meta => ({
     id: '', indicadorId: '', claveDesagregacion: 'GENERAL', valor: 100,
     periodicidadMedicion: Periodicidad.Anual, periodicidadPersonalizadaId: null,
-    metodoCalculo: 'Promedio', anioVigencia: 2025, creadoEn: '', actualizadoEn: '',
+    metodoCalculo: 'Promedio', anioVigencia: 2025, periodoId: null, creadoEn: '', actualizadoEn: '',
     ...parcial
   });
 
@@ -1149,7 +1149,7 @@ describe('Composition root — histórico de resultados en Seguimiento', () => {
     await app.manejadores['metas:guardar']({
       id: '', indicadorId: guardado.id, claveDesagregacion: 'GENERAL', valor: 200,
       periodicidadMedicion: Periodicidad.Trimestral, periodicidadPersonalizadaId: null,
-      metodoCalculo: 'Promedio', anioVigencia, creadoEn: '', actualizadoEn: ''
+      metodoCalculo: 'Promedio', anioVigencia, periodoId: null, creadoEn: '', actualizadoEn: ''
     });
 
     const historico = await app.manejadores['seguimiento:historico'](undefined);
@@ -1176,6 +1176,45 @@ describe('Composition root — histórico de resultados en Seguimiento', () => {
     const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
     expect(punto?.metaPeriodo).toBeNull();
     expect(punto?.cumplimientoPct).toBe(80); // 80/100 vía metaGlobal.
+  });
+
+  it('un override puntual (Configuración de Metas, periodoId fijado) gana sobre la meta recurrente de igual periodicidad', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ metaGlobal: 100 }), valores: []
+    });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const hoy = new Date().toISOString().slice(0, 10);
+    const cerrados = periodos.slice().reverse().filter((p) => p.fechaFin < hoy);
+    const periodoId = cerrados[0]!.id;
+    const otroPeriodoId = cerrados[1]!.id;
+    const anioVigencia = Number(periodoId.slice(0, 4));
+
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '80' });
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId: otroPeriodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: guardado.id, periodoId: otroPeriodoId, claveDesagregacion: 'GENERAL', valorCrudo: '80' });
+
+    // Recurrente: aplica a TODOS los períodos Trimestrales del año (el indicador de prueba captura Trimestral por defecto).
+    await app.manejadores['metas:guardar']({
+      id: '', indicadorId: guardado.id, claveDesagregacion: 'GENERAL', valor: 200,
+      periodicidadMedicion: Periodicidad.Trimestral, periodicidadPersonalizadaId: null,
+      metodoCalculo: 'Promedio', anioVigencia, periodoId: null, creadoEn: '', actualizadoEn: ''
+    });
+    // Override puntual: SOLO para `periodoId` — el otro período sigue con la recurrente.
+    await app.manejadores['metas:guardar']({
+      id: '', indicadorId: guardado.id, claveDesagregacion: 'GENERAL', valor: 400,
+      periodicidadMedicion: Periodicidad.Trimestral, periodicidadPersonalizadaId: null,
+      metodoCalculo: 'Promedio', anioVigencia, periodoId, creadoEn: '', actualizadoEn: ''
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    const puntoOverride = fila!.puntos.find((p) => p.periodoId === periodoId);
+    const puntoRecurrente = fila!.puntos.find((p) => p.periodoId === otroPeriodoId);
+    expect(puntoOverride?.metaPeriodo).toBe(400);
+    expect(puntoOverride?.cumplimientoPct).toBe(20); // 80/400
+    expect(puntoRecurrente?.metaPeriodo).toBe(200);
+    expect(puntoRecurrente?.cumplimientoPct).toBe(40); // 80/200
   });
 
   it('evalúa la fórmula por período para indicadores calculados', async () => {

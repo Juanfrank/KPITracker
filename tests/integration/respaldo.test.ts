@@ -123,7 +123,7 @@ async function poblarPerfilA(): Promise<void> {
   await appA.manejadores['metas:guardar']({
     id: '', indicadorId: ind.id, claveDesagregacion: 'GENERAL', valor: 90,
     periodicidadMedicion: Periodicidad.Anual, periodicidadPersonalizadaId: null, metodoCalculo: 'Promedio', anioVigencia: 2026,
-    creadoEn: '', actualizadoEn: ''
+    periodoId: null, creadoEn: '', actualizadoEn: ''
   });
   await appA.manejadores['reglas:guardar'](regla({ atributoObjetivoId: at.id }));
   await appA.manejadores['automatizacion:guardar']({
@@ -247,7 +247,7 @@ describe('RespaldoPerfilService — dependencias rotas: advertencia y omisión, 
     await appA.manejadores['metas:guardar']({
       id: '', indicadorId: ind.id, claveDesagregacion: 'GENERAL', valor: 50,
       periodicidadMedicion: Periodicidad.Anual, periodicidadPersonalizadaId: null, metodoCalculo: 'Promedio', anioVigencia: 2026,
-      creadoEn: '', actualizadoEn: ''
+      periodoId: null, creadoEn: '', actualizadoEn: ''
     });
     const json = await appA.infra.respaldoPerfil.exportar();
 

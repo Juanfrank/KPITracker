@@ -266,6 +266,10 @@ export function IndicadoresPage(): React.JSX.Element {
       periodicidadPersonalizadaId: indicador.periodicidad === Periodicidad.Personalizada ? indicador.periodicidadPersonalizadaId : null,
       metodoCalculo: 'Promedio',
       anioVigencia: new Date().getFullYear(),
+      // Recurrente por defecto (aplica a todos los períodos de su periodicidad
+      // en el año): un valor específico por período puntual se define en
+      // "Configuración de Metas", no acá.
+      periodoId: null,
       creadoEn: '',
       actualizadoEn: ''
     };
