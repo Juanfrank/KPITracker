@@ -50,6 +50,10 @@ export const aIndicador = (f: Fila): Indicador => ({
   periodicidadPersonalizadaId: sn(f.periodicidad_personalizada_id),
   esCalculado: b(f.es_calculado),
   formula: sn(f.formula),
+  // Batch U (U7): registros de antes de la migración (o importados de un respaldo/config
+  // portable anterior) no traen la columna — el default es "requiere validación" (true),
+  // el comportamiento que ya tenían todos los indicadores.
+  requiereValidacion: f.requiere_validacion == null ? true : b(f.requiere_validacion),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -66,7 +70,8 @@ export const deIndicador = (i: Indicador): Fila => ({
   meta_global: i.metaGlobal, desagregaciones: JSON.stringify(i.desagregaciones), estado: i.estado,
   responsable: i.responsable, categoria: i.categoria, equipo: i.equipo ?? null, unidad_medida: i.unidadMedida,
   periodicidad_personalizada_id: i.periodicidadPersonalizadaId, es_calculado: i.esCalculado ?? false,
-  formula: i.formula ?? null, creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
+  formula: i.formula ?? null, requiere_validacion: i.requiereValidacion ?? true,
+  creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
 });
 
 export const aAtributo = (f: Fila): Atributo => ({

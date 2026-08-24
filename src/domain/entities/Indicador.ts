@@ -38,6 +38,18 @@ export interface Indicador {
   esCalculado: boolean;
   /** Expresión aritmética sobre códigos de otros indicadores (p. ej. "IND-001 + IND-002 * 0.5"). Requerida cuando esCalculado = true. */
   formula: string | null;
+  /**
+   * Si es `false` (Batch U, U7), sus resultados nunca pasan por el flujo de
+   * aprobación (Batch T5) — la UI de Recolección oculta la columna/los
+   * botones de validación para este indicador, y sus resultados quedan
+   * permanentemente en el estado que tengan, sin revisión visible. No
+   * cambia `puedeSobreIndicador`/`ServicioRecoleccion`: quien tenga el
+   * permiso de validar sigue pudiendo hacerlo por API si quisiera, esto es
+   * puramente una preferencia de presentación por indicador. Default
+   * `true` — el comportamiento actual (todo indicador requiere validación)
+   * no cambia salvo que se desmarque explícitamente.
+   */
+  requiereValidacion: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

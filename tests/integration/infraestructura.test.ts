@@ -30,6 +30,7 @@ function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
     unidadMedida: '%',
     esCalculado: false,
     formula: null,
+    requiereValidacion: true,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z',
     ...parcial

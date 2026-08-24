@@ -58,6 +58,7 @@ function indicadorVacio(): Indicador {
     unidadMedida: null,
     esCalculado: false,
     formula: null,
+    requiereValidacion: true,
     creadoEn: '',
     actualizadoEn: ''
   };
@@ -541,6 +542,18 @@ export function IndicadoresPage(): React.JSX.Element {
             />
             Indicador calculado (su valor se obtiene de una fórmula, no se captura manualmente)
           </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={editando.requiereValidacion}
+              onChange={(e) => setEditando({ ...editando, requiereValidacion: e.target.checked })}
+              style={{ width: 'auto' }}
+              data-testid="indicador-requiere-validacion"
+            />
+            Requiere validación (sus resultados pasan por el flujo de aprobación en Recolección)
+          </label>
+
           {editando.esCalculado && (
             <Campo etiqueta="Fórmula" obligatorio>
               <input

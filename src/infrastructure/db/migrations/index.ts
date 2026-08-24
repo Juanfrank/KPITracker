@@ -3,6 +3,7 @@ import * as esquemaInicial from './20260101000000_esquema_inicial';
 import * as categoriasEquipos from './20260825000000_categorias_equipos';
 import * as rolesPermisos from './20260901000000_roles_permisos';
 import * as unificarUsuarioResponsable from './20260915000000_unificar_usuario_responsable';
+import * as requiereValidacion from './20260920000000_requiere_validacion';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -13,7 +14,8 @@ const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20260101000000_esquema_inicial', modulo: esquemaInicial },
   { nombre: '20260825000000_categorias_equipos', modulo: categoriasEquipos },
   { nombre: '20260901000000_roles_permisos', modulo: rolesPermisos },
-  { nombre: '20260915000000_unificar_usuario_responsable', modulo: unificarUsuarioResponsable }
+  { nombre: '20260915000000_unificar_usuario_responsable', modulo: unificarUsuarioResponsable },
+  { nombre: '20260920000000_requiere_validacion', modulo: requiereValidacion }
 ];
 
 /**

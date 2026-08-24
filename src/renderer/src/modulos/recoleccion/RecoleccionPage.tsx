@@ -250,7 +250,7 @@ export function RecoleccionPage(): React.JSX.Element {
                 {desagregacionesActivas.length === 0 && <th>Desagregación</th>}
                 <th style={{ textAlign: 'right', width: 160 }}>Resultado — {captura.periodoEtiqueta}</th>
                 <th style={{ width: 170 }}>Última modificación</th>
-                <th style={{ width: 150 }}>Validación</th>
+                {indicadorSeleccionado?.requiereValidacion !== false && <th style={{ width: 150 }}>Validación</th>}
               </tr>
             </thead>
             <tbody ref={cuerpoTabla}>
@@ -321,41 +321,43 @@ export function RecoleccionPage(): React.JSX.Element {
                         />
                       )}
                     </td>
-                    <td>
-                      {fila.valor != null && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span
-                            className={`chip ${fila.estadoValidacion.toLowerCase()}`}
-                            title={fila.comentarioValidacion ?? undefined}
-                            data-testid={`validacion-${fila.claveDesagregacion}`}
-                          >
-                            {fila.estadoValidacion}
-                          </span>
-                          {fila.estadoValidacion !== 'Validado' && (
-                            <button
-                              type="button"
-                              className="boton sutil"
-                              title="Validar"
-                              onClick={() => void manejarValidacion('validar', fila.claveDesagregacion)}
-                              data-testid={`validar-${fila.claveDesagregacion}`}
+                    {indicadorSeleccionado?.requiereValidacion !== false && (
+                      <td>
+                        {fila.valor != null && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              className={`chip ${fila.estadoValidacion.toLowerCase()}`}
+                              title={fila.comentarioValidacion ?? undefined}
+                              data-testid={`validacion-${fila.claveDesagregacion}`}
                             >
-                              ✓
-                            </button>
-                          )}
-                          {fila.estadoValidacion !== 'Rechazado' && (
-                            <button
-                              type="button"
-                              className="boton sutil"
-                              title="Rechazar"
-                              onClick={() => void manejarValidacion('rechazar', fila.claveDesagregacion)}
-                              data-testid={`rechazar-${fila.claveDesagregacion}`}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
+                              {fila.estadoValidacion}
+                            </span>
+                            {fila.estadoValidacion !== 'Validado' && (
+                              <button
+                                type="button"
+                                className="boton sutil"
+                                title="Validar"
+                                onClick={() => void manejarValidacion('validar', fila.claveDesagregacion)}
+                                data-testid={`validar-${fila.claveDesagregacion}`}
+                              >
+                                ✓
+                              </button>
+                            )}
+                            {fila.estadoValidacion !== 'Rechazado' && (
+                              <button
+                                type="button"
+                                className="boton sutil"
+                                title="Rechazar"
+                                onClick={() => void manejarValidacion('rechazar', fila.claveDesagregacion)}
+                                data-testid={`rechazar-${fila.claveDesagregacion}`}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

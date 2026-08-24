@@ -224,7 +224,7 @@ describe('ServicioUsuarios', () => {
       periodicidad: 'Mensual' as never, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null,
       desagregaciones: [], estado: 'Activo' as never, responsable: enUso.id, categoria: null,
       equipo: null, unidadMedida: null, periodicidadPersonalizadaId: null, esCalculado: false, formula: null,
-      creadoEn: '', actualizadoEn: ''
+      requiereValidacion: true, creadoEn: '', actualizadoEn: ''
     });
 
     await expect(servicio.eliminar(admin.id)).rejects.toThrow(/administrador/);

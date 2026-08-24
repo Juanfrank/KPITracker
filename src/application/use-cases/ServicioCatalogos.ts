@@ -305,6 +305,7 @@ export class ServicioIndicadores extends ServicioBase {
           unidadMedida: mapeo.unidadMedida ? (fila[mapeo.unidadMedida] ?? '').trim() || null : null,
           esCalculado: false,
           formula: null,
+          requiereValidacion: true,
           creadoEn: ahora,
           actualizadoEn: ahora
         };

@@ -16,7 +16,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
-    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null,
+    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null, requiereValidacion: true,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -757,6 +757,23 @@ describe('Composition root — código único de indicador', () => {
       indicador: { ...creado, nombre: 'Renombrado' }, valores: []
     });
     expect(editado.codigo).toBe('IND-002');
+  });
+});
+
+describe('Composition root — Indicador.requiereValidacion (Batch U, U7)', () => {
+  it('por defecto es true, y se puede desactivar/reactivar', async () => {
+    const creado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    expect(creado.requiereValidacion).toBe(true);
+
+    const desactivado = await app.manejadores['indicadores:guardar']({
+      indicador: { ...creado, requiereValidacion: false }, valores: []
+    });
+    expect(desactivado.requiereValidacion).toBe(false);
+
+    const reactivado = await app.manejadores['indicadores:guardar']({
+      indicador: { ...desactivado, requiereValidacion: true }, valores: []
+    });
+    expect(reactivado.requiereValidacion).toBe(true);
   });
 });
 
