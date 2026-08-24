@@ -48,3 +48,39 @@ export function permisoValido(id: string): boolean {
 export function ambitoDePermiso(id: string): AmbitoPermiso | undefined {
   return AMBITO_POR_ID.get(id);
 }
+
+/** Una fila del grid de permisos (Batch U, U3): un concepto, con su permiso general y/o de equipo (uno de los dos puede faltar). */
+export interface FilaGridPermisos {
+  etiqueta: string;
+  general: DefinicionPermiso | null;
+  equipo: DefinicionPermiso | null;
+}
+
+/**
+ * Agrupación fila→{general,equipo} del catálogo, para reemplazar el
+ * checklist plano por una tabla de checkboxes (una fila por concepto, una
+ * columna por ámbito). El emparejamiento es explícito (no se infiere de los
+ * ids/etiquetas, que no siguen un patrón textual uniforme: "resultados.ver.
+ * todos"/".equipo" sí, pero "catalogos.administrar" o "equipo.miembros.
+ * gestionar" no tienen contraparte del otro ámbito) — agregar un permiso
+ * nuevo al catálogo es agregar una fila aquí.
+ */
+const FILAS_GRID_PERMISOS: ReadonlyArray<{ etiqueta: string; general?: string; equipo?: string }> = [
+  { etiqueta: 'Ver indicadores', general: 'indicadores.ver.todos' },
+  { etiqueta: 'Ver resultados', general: 'resultados.ver.todos', equipo: 'resultados.ver.equipo' },
+  { etiqueta: 'Registrar resultados', general: 'resultados.registrar.todos', equipo: 'resultados.registrar.equipo' },
+  { etiqueta: 'Validar resultados', general: 'resultados.validar.todos', equipo: 'resultados.validar.equipo' },
+  { etiqueta: 'Ver auditoría', general: 'auditoria.ver.todos', equipo: 'auditoria.ver.equipo' },
+  { etiqueta: 'Administrar configuración', general: 'catalogos.administrar' },
+  { etiqueta: 'Gestionar miembros del equipo', equipo: 'equipo.miembros.gestionar' },
+  { etiqueta: 'Asignar indicadores del equipo', equipo: 'equipo.indicadores.asignar' }
+];
+
+export function agruparPermisosParaGrid(): FilaGridPermisos[] {
+  const porId = new Map(CATALOGO_PERMISOS.map((p) => [p.id, p] as const));
+  return FILAS_GRID_PERMISOS.map(({ etiqueta, general, equipo }) => ({
+    etiqueta,
+    general: general ? porId.get(general) ?? null : null,
+    equipo: equipo ? porId.get(equipo) ?? null : null
+  }));
+}

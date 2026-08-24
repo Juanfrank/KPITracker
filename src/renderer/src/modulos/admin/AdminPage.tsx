@@ -4,7 +4,7 @@ import type {
   AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
   Rol, TipoOrigenAutomatico
 } from '@domain/index';
-import { CATALOGO_PERMISOS, ejemploParaFuente, sinCiclo } from '@domain/index';
+import { agruparPermisosParaGrid, ejemploParaFuente, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { descargar, postTexto } from '../../rest';
@@ -1040,6 +1040,62 @@ function SeccionOrigenesAutomaticos(): React.JSX.Element {
   );
 }
 
+/**
+ * Grid de permisos (Batch U, U3): reemplaza el checklist plano por una
+ * tabla de checkboxes — filas por concepto (`agruparPermisosParaGrid`,
+ * dominio), columnas General/Equipo. En `SeccionRoles` un rol es de un solo
+ * ámbito, así que la columna que no le corresponde queda deshabilitada
+ * (visible pero no interactiva, para que la relación general↔equipo del
+ * mismo concepto siga siendo evidente); en el panel de permisos
+ * excepcionales de `SeccionUsuarios` ambas columnas están habilitadas.
+ */
+function GridPermisos({
+  seleccionados, alternar, columnaGeneralHabilitada, columnaEquipoHabilitada, testidPrefijo
+}: {
+  seleccionados: string[];
+  alternar: (id: string) => void;
+  columnaGeneralHabilitada: boolean;
+  columnaEquipoHabilitada: boolean;
+  testidPrefijo: string;
+}): React.JSX.Element {
+  const casilla = (
+    permiso: { id: string } | null, habilitada: boolean
+  ): React.JSX.Element => {
+    if (!permiso) return <span className="texto-suave">—</span>;
+    return (
+      <input
+        type="checkbox"
+        style={{ width: 'auto' }}
+        checked={seleccionados.includes(permiso.id)}
+        disabled={!habilitada}
+        onChange={() => alternar(permiso.id)}
+        data-testid={`${testidPrefijo}${permiso.id}`}
+      />
+    );
+  };
+
+  return (
+    <table className="tabla">
+      <thead>
+        <tr>
+          <th>Permiso</th>
+          <th style={{ textAlign: 'center', width: 80 }}>General</th>
+          <th style={{ textAlign: 'center', width: 80 }}>Equipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {agruparPermisosParaGrid().map((fila) => (
+          <tr key={fila.etiqueta}>
+            <td style={{ fontSize: 13 }}>{fila.etiqueta}</td>
+            <td style={{ textAlign: 'center' }}>{casilla(fila.general, columnaGeneralHabilitada)}</td>
+            <td style={{ textAlign: 'center' }}>{casilla(fila.equipo, columnaEquipoHabilitada)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function rolVacio(ambito: AmbitoPermiso): Rol {
   return { id: '', nombre: '', ambito, permisos: [], esSistema: false, creadoEn: '', actualizadoEn: '' };
 }
@@ -1101,7 +1157,6 @@ function SeccionRoles(): React.JSX.Element {
 
   const generales = items.filter((r) => r.ambito === 'general');
   const deEquipo = items.filter((r) => r.ambito === 'equipo');
-  const permisosDelAmbito = editando ? CATALOGO_PERMISOS.filter((p) => p.ambito === editando.ambito) : [];
 
   const tabla = (titulo: string, filas: Rol[], testidBoton: string, ambito: AmbitoPermiso): React.JSX.Element => (
     <div className="tarjeta">
@@ -1174,20 +1229,13 @@ function SeccionRoles(): React.JSX.Element {
             {editando.esSistema && <span className="texto-suave">Los roles del sistema no se pueden renombrar.</span>}
           </Campo>
           <Campo etiqueta="Permisos">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {permisosDelAmbito.map((p) => (
-                <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-                  <input
-                    type="checkbox"
-                    style={{ width: 'auto' }}
-                    checked={editando.permisos.includes(p.id)}
-                    onChange={() => alternarPermiso(p.id)}
-                    data-testid={`rol-permiso-${p.id}`}
-                  />
-                  {p.etiqueta}
-                </label>
-              ))}
-            </div>
+            <GridPermisos
+              seleccionados={editando.permisos}
+              alternar={alternarPermiso}
+              columnaGeneralHabilitada={editando.ambito === 'general'}
+              columnaEquipoHabilitada={editando.ambito === 'equipo'}
+              testidPrefijo="rol-permiso-"
+            />
           </Campo>
         </PanelLateral>
       )}
@@ -1628,20 +1676,13 @@ function SeccionUsuarios(): React.JSX.Element {
             Activo
           </label>
           <Campo etiqueta="Permisos excepcionales">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {CATALOGO_PERMISOS.map((p) => (
-                <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-                  <input
-                    type="checkbox"
-                    style={{ width: 'auto' }}
-                    checked={editando.permisosExcepcionales.includes(p.id)}
-                    onChange={() => alternarPermisoExcepcional(p.id)}
-                    data-testid={`usuario-permiso-excepcional-${p.id}`}
-                  />
-                  {p.etiqueta} <span className="texto-suave">({p.ambito})</span>
-                </label>
-              ))}
-            </div>
+            <GridPermisos
+              seleccionados={editando.permisosExcepcionales}
+              alternar={alternarPermisoExcepcional}
+              columnaGeneralHabilitada
+              columnaEquipoHabilitada
+              testidPrefijo="usuario-permiso-excepcional-"
+            />
             <span className="texto-suave">Concedidos fuera de su rol nativo, además de lo que ya le dé su rol general/de equipo.</span>
           </Campo>
         </PanelLateral>
