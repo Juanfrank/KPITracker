@@ -50,6 +50,10 @@ export function RecoleccionPage(): React.JSX.Element {
   const cuerpoTabla = useRef<HTMLTableSectionElement>(null);
   const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
+  // Cantidad de adjuntos del levantamiento actual — solo para el resumen del
+  // panel colapsable de Comentario/Evidencia (Batch U9); PanelAdjuntos sigue
+  // siendo dueño de la lista en sí.
+  const [cantidadAdjuntos, setCantidadAdjuntos] = useState(0);
 
   const manejarValidacion = async (accion: 'validar' | 'rechazar', clave: string): Promise<void> => {
     setErrorValidacion(null);
@@ -65,6 +69,7 @@ export function RecoleccionPage(): React.JSX.Element {
   // `captura` cambia de referencia con cada celda guardada, pero eso no debe
   // volver a expandir todo lo que el usuario ya colapsó).
   useEffect(() => setColapsadas(new Set()), [vm.indicadorId, vm.periodoId]);
+  useEffect(() => setCantidadAdjuntos(0), [vm.indicadorId, vm.periodoId]);
 
   const alternarColapso = (clave: string): void => {
     setColapsadas((prev) => {
@@ -162,15 +167,38 @@ export function RecoleccionPage(): React.JSX.Element {
           </Campo>
         </div>
         {captura && !indicadorSeleccionado?.esCalculado && (
-          <div className="fila-form c1" style={{ marginTop: 10 }}>
-            <Campo etiqueta="Comentario del levantamiento">
-              <ComentarioLevantamiento
-                valorInicial={captura.comentario}
-                alConfirmar={(texto) => void vm.establecerComentario(texto || null)}
-              />
-              <span className="texto-suave">Opcional, uno solo por indicador y período (no por celda).</span>
-            </Campo>
-          </div>
+          // Colapsado por defecto (Batch U9): el comentario y la evidencia no
+          // son parte del flujo de captura del día a día, pero su ausencia/
+          // presencia debe notarse sin tener que desplegar el panel.
+          <details className="tarjeta-colapsable" style={{ marginTop: 10 }} data-testid="panel-comentario-evidencia">
+            <summary data-testid="resumen-comentario-evidencia">
+              <span>Comentario y evidencia</span>
+              {captura.comentario && <span className="chip" data-testid="resumen-con-comentario">💬 con comentario</span>}
+              {cantidadAdjuntos > 0 && (
+                <span className="chip" data-testid="resumen-cantidad-adjuntos">
+                  📎 {cantidadAdjuntos} {cantidadAdjuntos === 1 ? 'adjunto' : 'adjuntos'}
+                </span>
+              )}
+            </summary>
+            <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+              <Campo etiqueta="Comentario del levantamiento">
+                <ComentarioLevantamiento
+                  valorInicial={captura.comentario}
+                  alConfirmar={(texto) => void vm.establecerComentario(texto || null)}
+                />
+                <span className="texto-suave">Opcional, uno solo por indicador y período (no por celda).</span>
+              </Campo>
+              {vm.indicadorId && vm.periodoId && (
+                <PanelAdjuntos
+                  entidad="Levantamiento"
+                  entidadId={`${vm.indicadorId}:${vm.periodoId}`}
+                  maxArchivos={1}
+                  titulo="Evidencia adjunta (opcional)"
+                  alCambiarCantidad={setCantidadAdjuntos}
+                />
+              )}
+            </div>
+          </details>
         )}
         {captura && vm.automatizacionConfigurada && !indicadorSeleccionado?.esCalculado && (
           <div className="toolbar" style={{ marginTop: 10 }}>
@@ -182,16 +210,6 @@ export function RecoleccionPage(): React.JSX.Element {
         )}
         {vm.mensajeAutomatico && (
           <div className="aviso info" data-testid="aviso-obtener-automatico">{vm.mensajeAutomatico}</div>
-        )}
-        {captura && !indicadorSeleccionado?.esCalculado && vm.indicadorId && vm.periodoId && (
-          <div style={{ marginTop: 10 }}>
-            <PanelAdjuntos
-              entidad="Levantamiento"
-              entidadId={`${vm.indicadorId}:${vm.periodoId}`}
-              maxArchivos={1}
-              titulo="Evidencia adjunta (opcional)"
-            />
-          </div>
         )}
         {captura && captura.desagregacionesDisponibles.length > 0 && (
           <div className="toolbar" style={{ marginTop: 10 }}>

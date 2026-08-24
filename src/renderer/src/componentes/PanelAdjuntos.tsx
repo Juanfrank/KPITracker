@@ -16,12 +16,14 @@ import { Icono } from './Icono';
  * oculto en vez del diálogo nativo que abría el propio backend.
  */
 export function PanelAdjuntos({
-  entidad, entidadId, maxArchivos, titulo = 'Evidencias adjuntas'
+  entidad, entidadId, maxArchivos, titulo = 'Evidencias adjuntas', alCambiarCantidad
 }: {
   entidad: EntidadAdjunto;
   entidadId: string;
   maxArchivos?: number;
   titulo?: string;
+  /** Notifica al padre cuántos adjuntos hay (p. ej. para un resumen colapsado que los cuenta sin desplegar el panel). */
+  alCambiarCantidad?: (cantidad: number) => void;
 }): React.JSX.Element {
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
   const [subiendo, setSubiendo] = useState(false);
@@ -34,6 +36,10 @@ export function PanelAdjuntos({
   useEffect(() => {
     cargar();
   }, [entidad, entidadId]);
+
+  useEffect(() => {
+    alCambiarCantidad?.(adjuntos.length);
+  }, [adjuntos, alCambiarCantidad]);
 
   const subir = async (archivo: File): Promise<void> => {
     setSubiendo(true);

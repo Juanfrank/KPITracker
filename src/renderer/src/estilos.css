@@ -297,6 +297,38 @@ body {
   box-shadow: var(--sombra);
 }
 
+/* Panel colapsable (p. ej. Comentario/Evidencia en Recolección, Batch U9):
+   cerrado por defecto, con un resumen que sigue visible incluso abierto. */
+.tarjeta-colapsable {
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  padding: 10px 14px;
+}
+
+.tarjeta-colapsable > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.tarjeta-colapsable > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tarjeta-colapsable > summary::before {
+  content: '▸';
+  color: var(--texto-3);
+  transition: transform var(--transicion);
+}
+
+.tarjeta-colapsable[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 .boton {
   display: inline-flex;
   align-items: center;
@@ -603,6 +635,11 @@ table.tabla tbody tr.fila-eliminada:hover {
   font-weight: 600;
   padding: 3px 10px;
   white-space: nowrap;
+  /* Fondo neutro por defecto para un chip sin modificador de estado (p. ej. los
+     badges de resumen "con comentario"/"N adjuntos" de Recolección) — los
+     modificadores de abajo lo sobreescriben cuando sí representan un estado. */
+  background: var(--neutro-suave);
+  color: var(--texto-3);
 }
 
 .chip.pendiente {
