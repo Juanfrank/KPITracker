@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ContextoPermisos } from '@domain/index';
 import {
-  puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo, puedeGestionarMiembrosEquipo, puedeSobreIndicador,
-  puedeVerAuditoriaEquipo, puedeVerAuditoriaTodo, puedeVerIndicador
+  puedeAdministrarCatalogos, puedeAdministrarCategorias, puedeAdministrarEquipos, puedeAdministrarOrigenes,
+  puedeAdministrarRoles, puedeAsignarIndicadoresEquipo, puedeGestionarMiembrosEquipo, puedeImportarExportarRespaldo,
+  puedeModificarAtributos, puedeModificarIndicadores, puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
+  puedeSobreIndicador, puedeVerAuditoriaEquipo, puedeVerAuditoriaTodo, puedeVerIndicador
 } from '@domain/index';
 
 function ctx(parcial: Partial<ContextoPermisos> = {}): ContextoPermisos {
@@ -94,6 +96,47 @@ describe('auditoría', () => {
     expect(puedeVerAuditoriaEquipo(contexto, 'equipo-a')).toBe(true);
     expect(puedeVerAuditoriaEquipo(contexto, 'equipo-b')).toBe(false);
     expect(puedeVerAuditoriaEquipo(contexto, null)).toBe(false);
+  });
+});
+
+describe('permisos "Modificar X" (Batch X, X6) — indicadores/metas/atributos/listas/reglas', () => {
+  it.each([
+    ['indicadores.modificar', puedeModificarIndicadores],
+    ['metas.modificar', puedeModificarMetas],
+    ['atributos.modificar', puedeModificarAtributos],
+    ['listas.modificar', puedeModificarListas],
+    ['reglas.modificar', puedeModificarReglas]
+  ] as const)('%s: admin, catalogos.administrar, o el permiso de equipo/excepcional puntual — nunca sin nada de eso', (permiso, fn) => {
+    expect(fn(ctx({ esAdministrador: true }))).toBe(true);
+    expect(fn(ctx({ permisosGenerales: new Set(['catalogos.administrar']) }))).toBe(true);
+    expect(fn(ctx({ permisosEquipo: new Set([permiso]) }))).toBe(true);
+    expect(fn(ctx({ permisosExcepcionales: new Set([permiso]) }))).toBe(true);
+    expect(fn(ctx())).toBe(false);
+  });
+});
+
+describe('permisos "Administrar X" (Batch X, X7) — categorías/equipos/orígenes/respaldo', () => {
+  it.each([
+    ['categorias.administrar', puedeAdministrarCategorias],
+    ['equipos.administrar', puedeAdministrarEquipos],
+    ['origenes.administrar', puedeAdministrarOrigenes],
+    ['respaldo.importarExportar', puedeImportarExportarRespaldo]
+  ] as const)('%s: admin, catalogos.administrar, o el permiso general/excepcional puntual', (permiso, fn) => {
+    expect(fn(ctx({ esAdministrador: true }))).toBe(true);
+    expect(fn(ctx({ permisosGenerales: new Set(['catalogos.administrar']) }))).toBe(true);
+    expect(fn(ctx({ permisosGenerales: new Set([permiso]) }))).toBe(true);
+    expect(fn(ctx({ permisosExcepcionales: new Set([permiso]) }))).toBe(true);
+    expect(fn(ctx())).toBe(false);
+  });
+});
+
+describe('puedeAdministrarRoles (Batch X, X7)', () => {
+  it('exige admin o el permiso puntual roles.administrar — catalogos.administrar NO alcanza (deliberado)', () => {
+    expect(puedeAdministrarRoles(ctx({ esAdministrador: true }))).toBe(true);
+    expect(puedeAdministrarRoles(ctx({ permisosGenerales: new Set(['roles.administrar']) }))).toBe(true);
+    expect(puedeAdministrarRoles(ctx({ permisosExcepcionales: new Set(['roles.administrar']) }))).toBe(true);
+    expect(puedeAdministrarRoles(ctx({ permisosGenerales: new Set(['catalogos.administrar']) }))).toBe(false);
+    expect(puedeAdministrarRoles(ctx())).toBe(false);
   });
 });
 

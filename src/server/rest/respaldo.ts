@@ -2,10 +2,10 @@ import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { Router } from 'express';
 import multer from 'multer';
-import { ValidacionError } from '@domain/index';
+import { ValidacionError, puedeImportarExportarRespaldo } from '@domain/index';
 import type { SeleccionRespaldo } from '@infrastructure/perfiles/esquemaRespaldo';
 import type { AplicacionServidor } from '../composicionServidor';
-import { requireAuth } from './authMiddleware';
+import { requireAuth, requierePermiso } from './authMiddleware';
 import { responderError } from './errores';
 
 const subida = multer({ dest: tmpdir(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -17,11 +17,14 @@ const subida = multer({ dest: tmpdir(), limits: { fileSize: 50 * 1024 * 1024 } }
  * ANTES de que el usuario elija qué importar, se exponen dos rutas de
  * subida en vez de una — el plan (§5) las agrupaba en una sola por brevedad,
  * pero el flujo real de dos pasos (`respaldo:seleccionar` → `respaldo:importar`)
- * lo exige.
+ * lo exige. Batch X (X7): exige el permiso `respaldo.importarExportar` (o
+ * `catalogos.administrar`/admin) — antes cualquier sesión válida podía
+ * exportar/importar todo el respaldo, sin excepción.
  */
 export function crearRouterRespaldo(aplicacion: AplicacionServidor): Router {
   const router = Router();
   router.use(requireAuth(aplicacion));
+  router.use(requierePermiso(puedeImportarExportarRespaldo, 'Requiere permiso para importar/exportar respaldos.'));
 
   router.get('/exportar', async (_req, res) => {
     try {

@@ -132,6 +132,110 @@ describe('Roles — catálogo configurable', () => {
   });
 });
 
+describe('Roles — semillas Validador/Técnico (Batch X, X6/X7)', () => {
+  it('Validador (equipo) trae los permisos de Colaborador + validar + auditoría del equipo; Técnico (general) sin permisos por defecto', async () => {
+    const admin = await clienteAdmin();
+    const roles = await admin.roles.listar.query();
+
+    const validador = roles.find((r) => r.nombre === 'Validador');
+    expect(validador?.ambito).toBe('equipo');
+    expect(validador?.esSistema).toBe(true);
+    expect(validador?.permisos).toEqual(
+      expect.arrayContaining(['resultados.ver.equipo', 'resultados.registrar.equipo', 'resultados.validar.equipo', 'auditoria.ver.equipo'])
+    );
+    expect(validador?.permisos).not.toContain('equipo.miembros.gestionar');
+
+    const tecnico = roles.find((r) => r.nombre === 'Técnico');
+    expect(tecnico?.ambito).toBe('general');
+    expect(tecnico?.esSistema).toBe(true);
+    expect(tecnico?.permisos).toEqual([]);
+  });
+
+  it('ninguno de los dos se puede borrar (esSistema)', async () => {
+    const admin = await clienteAdmin();
+    const roles = await admin.roles.listar.query();
+    for (const nombre of ['Validador', 'Técnico']) {
+      const rol = roles.find((r) => r.nombre === nombre)!;
+      expect(await codigoError(admin.roles.eliminar.mutate({ id: rol.id }))).toBe('BAD_REQUEST');
+    }
+  });
+});
+
+describe('Permisos de delegación puntual (Batch X, X6/X7) — Modificar X / Administrar X / roles.administrar', () => {
+  async function usuarioConPermisoDeEquipo(nombreUsuario: string, permiso: string) {
+    const admin = await clienteAdmin();
+    const equipo = await admin.equipos.guardar.mutate({
+      id: '', nombre: `Equipo ${nombreUsuario}`, descripcion: '', padreId: null, activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    const rol = await admin.roles.guardar.mutate({
+      id: '', nombre: `Rol ${nombreUsuario}`, ambito: 'equipo', permisos: [permiso], esSistema: false, creadoEn: '', actualizadoEn: ''
+    });
+    await admin.usuarios.crear.mutate({ nombreUsuario, nombreCompleto: nombreUsuario, password: 'contrasenaSegura1' });
+    const usuarios = await admin.usuarios.listar.query();
+    const id = usuarios.find((u) => u.nombreUsuario === nombreUsuario)!.id;
+    await admin.usuarios.establecerEquipo.mutate({ id, equipoId: equipo.id, rolEquipoId: rol.id });
+
+    const cliente = crearCliente(fetchConCookies());
+    await cliente.auth.login.mutate({ nombreUsuario, password: 'contrasenaSegura1' });
+    return cliente;
+  }
+
+  async function usuarioConPermisoGeneral(nombreUsuario: string, permiso: string) {
+    const admin = await clienteAdmin();
+    const rol = await admin.roles.guardar.mutate({
+      id: '', nombre: `Rol ${nombreUsuario}`, ambito: 'general', permisos: [permiso], esSistema: false, creadoEn: '', actualizadoEn: ''
+    });
+    await admin.usuarios.crear.mutate({ nombreUsuario, nombreCompleto: nombreUsuario, password: 'contrasenaSegura1', rolGeneralId: rol.id });
+
+    const cliente = crearCliente(fetchConCookies());
+    await cliente.auth.login.mutate({ nombreUsuario, password: 'contrasenaSegura1' });
+    return cliente;
+  }
+
+  it('"indicadores.modificar" (equipo) alcanza para indicadores.guardar sin catalogos.administrar; sin ese permiso se rechaza', async () => {
+    const admin = await clienteAdmin();
+    const sinPermiso = await usuarioConPermisoDeEquipo('sin.mod.indicadores', 'resultados.ver.equipo');
+    const conPermiso = await usuarioConPermisoDeEquipo('con.mod.indicadores', 'indicadores.modificar');
+
+    const nuevoIndicador = {
+      id: '', codigo: '', nombre: 'Probar permiso', definicion: 'x', formaCalculo: null, periodicidad: 'Mensual',
+      periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
+      estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null,
+      requiereValidacion: true, creadoEn: '', actualizadoEn: ''
+    };
+
+    expect(await codigoError(sinPermiso.indicadores.guardar.mutate({ indicador: nuevoIndicador, valores: [] } as never))).toBe('FORBIDDEN');
+    const guardado = await conPermiso.indicadores.guardar.mutate({ indicador: nuevoIndicador, valores: [] } as never);
+    expect((guardado as { id: string }).id).not.toBe('');
+    void admin;
+  });
+
+  it('"categorias.administrar" (general) alcanza para categorias.guardar sin catalogos.administrar; sin ese permiso se rechaza', async () => {
+    const sinPermiso = await usuarioConPermisoGeneral('sin.admin.categorias', 'auditoria.ver.todos');
+    const conPermiso = await usuarioConPermisoGeneral('con.admin.categorias', 'categorias.administrar');
+
+    const nuevaCategoria = { id: '', nombre: 'Delegada', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: '' };
+    expect(await codigoError(sinPermiso.categorias.guardar.mutate(nuevaCategoria))).toBe('FORBIDDEN');
+    const guardada = await conPermiso.categorias.guardar.mutate(nuevaCategoria);
+    expect(guardada.id).not.toBe('');
+  });
+
+  it('"roles.administrar" (general) permite asignar el rol general de otro usuario; catalogos.administrar NO alcanza para esto', async () => {
+    const admin = await clienteAdmin();
+    const conRolesAdmin = await usuarioConPermisoGeneral('con.roles.admin', 'roles.administrar');
+    const conCatalogosAdmin = await usuarioConPermisoGeneral('con.catalogos.admin', 'catalogos.administrar');
+
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'objetivo', nombreCompleto: 'Objetivo', password: 'contrasenaSegura1' });
+    const objetivo = (await admin.usuarios.listar.query()).find((u) => u.nombreUsuario === 'objetivo')!;
+    const roles = await admin.roles.listar.query();
+    const rolGeneral = roles.find((r) => r.nombre === 'Usuario estándar')!;
+
+    expect(await codigoError(conCatalogosAdmin.usuarios.establecerRolGeneral.mutate({ id: objetivo.id, rolGeneralId: rolGeneral.id })))
+      .toBe('FORBIDDEN');
+    await expect(conRolesAdmin.usuarios.establecerRolGeneral.mutate({ id: objetivo.id, rolGeneralId: rolGeneral.id })).resolves.toBeUndefined();
+  });
+});
+
 describe('Usuarios — invariante "al menos un administrador activo"', () => {
   it('rechaza quitarle el flag de administrador al único administrador', async () => {
     const admin = await clienteAdmin();

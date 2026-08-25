@@ -17,7 +17,10 @@ import { AcercaDePage } from './modulos/acerca-de/AcercaDePage';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import type { IdentidadConPermisos } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
-import { puedeAdministrarCatalogos, puedeVerAuditoria } from './auth/permisosNav';
+import {
+  puedeAdministrarCatalogos, puedeModificarAtributos, puedeModificarIndicadores, puedeModificarListas,
+  puedeModificarMetas, puedeModificarReglas, puedeVerAdministracion, puedeVerAuditoria
+} from './auth/permisosNav';
 
 interface ModuloDef {
   id: string;
@@ -40,15 +43,15 @@ interface ModuloDef {
 const MODULOS: ModuloDef[] = [
   { id: 'seguimiento', etiqueta: 'Seguimiento', icono: 'tablero', seccion: 'Operación', Componente: SeguimientoPage },
   { id: 'recoleccion', etiqueta: 'Recolección', icono: 'captura', seccion: 'Operación', Componente: RecoleccionPage },
-  { id: 'indicadores', etiqueta: 'Indicadores', icono: 'indicador', seccion: 'Configuración', Componente: IndicadoresPage, visible: puedeAdministrarCatalogos },
-  { id: 'configuracion-metas', etiqueta: 'Metas', icono: 'meta', seccion: 'Configuración', Componente: ConfiguracionMetasPage, visible: puedeAdministrarCatalogos },
-  { id: 'atributos', etiqueta: 'Atributos', icono: 'atributo', seccion: 'Configuración', Componente: AtributosPage, visible: puedeAdministrarCatalogos },
-  { id: 'listas', etiqueta: 'Listas', icono: 'lista', seccion: 'Configuración', Componente: ListasPage, visible: puedeAdministrarCatalogos },
-  { id: 'reglas', etiqueta: 'Reglas', icono: 'regla', seccion: 'Configuración', Componente: ReglasPage, visible: puedeAdministrarCatalogos },
+  { id: 'indicadores', etiqueta: 'Indicadores', icono: 'indicador', seccion: 'Configuración', Componente: IndicadoresPage, visible: puedeModificarIndicadores },
+  { id: 'configuracion-metas', etiqueta: 'Metas', icono: 'meta', seccion: 'Configuración', Componente: ConfiguracionMetasPage, visible: puedeModificarMetas },
+  { id: 'atributos', etiqueta: 'Atributos', icono: 'atributo', seccion: 'Configuración', Componente: AtributosPage, visible: puedeModificarAtributos },
+  { id: 'listas', etiqueta: 'Listas', icono: 'lista', seccion: 'Configuración', Componente: ListasPage, visible: puedeModificarListas },
+  { id: 'reglas', etiqueta: 'Reglas', icono: 'regla', seccion: 'Configuración', Componente: ReglasPage, visible: puedeModificarReglas },
   { id: 'config-general', etiqueta: 'General', icono: 'ajustes', seccion: 'Configuración', Componente: ConfigGeneralPage, visible: puedeAdministrarCatalogos },
   { id: 'exportacion', etiqueta: 'Exportación', icono: 'exportar', seccion: 'Sistema', Componente: ExportacionPage },
   { id: 'auditoria', etiqueta: 'Auditoría', icono: 'auditoria', seccion: 'Sistema', Componente: AuditoriaPage, visible: puedeVerAuditoria },
-  { id: 'admin', etiqueta: 'Administración', icono: 'admin', seccion: 'Sistema', Componente: AdminPage, visible: (u) => u.esAdministrador || puedeAdministrarCatalogos(u) },
+  { id: 'admin', etiqueta: 'Administración', icono: 'admin', seccion: 'Sistema', Componente: AdminPage, visible: puedeVerAdministracion },
   { id: 'acerca-de', etiqueta: 'Acerca de', icono: 'informacion', seccion: 'Sistema', Componente: AcercaDePage }
 ];
 

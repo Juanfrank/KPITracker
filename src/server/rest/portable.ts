@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
+import { puedeImportarExportarRespaldo } from '@domain/index';
 import type { AplicacionServidor } from '../composicionServidor';
-import { requireAuth } from './authMiddleware';
+import { requireAuth, requierePermiso } from './authMiddleware';
 import { responderError } from './errores';
 
 /**
@@ -9,10 +10,14 @@ import { responderError } from './errores';
  * hace falta `multer`: el cuerpo de la petición ES el JSON, se lee tal cual
  * con `express.text()` (evita un parse+stringify de ida y vuelta) y se pasa
  * directo a `ConfigPortableService.importar`, que ya hace su propio `JSON.parse`.
+ * Batch X (X7): mismo permiso `respaldo.importarExportar` que `respaldo:*`
+ * — es el mismo concepto de negocio ("exportar/importar todo"), no tiene
+ * sentido un permiso aparte solo porque el mecanismo interno es distinto.
  */
 export function crearRouterPortable(aplicacion: AplicacionServidor): Router {
   const router = Router();
   router.use(requireAuth(aplicacion));
+  router.use(requierePermiso(puedeImportarExportarRespaldo, 'Requiere permiso para importar/exportar respaldos.'));
 
   router.get('/exportar', async (_req, res) => {
     try {

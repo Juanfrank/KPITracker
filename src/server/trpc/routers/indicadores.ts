@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { GuardarIndicadorInput, MapeoImportacionIndicadores } from '@application/use-cases/ServicioCatalogos';
-import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { indicadoresModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
 
 export const indicadoresRouter = router({
   listar: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['indicadores:listar']())),
@@ -9,11 +9,11 @@ export const indicadoresRouter = router({
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:obtener'](input))),
 
-  guardar: catalogosAdminProcedure
+  guardar: indicadoresModificarProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:guardar'](input as GuardarIndicadorInput))),
 
-  eliminar: catalogosAdminProcedure
+  eliminar: indicadoresModificarProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:eliminar'](input))),
 
@@ -25,7 +25,7 @@ export const indicadoresRouter = router({
     }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['indicadores:reasignarMasivo'](input))),
 
-  importarExcel: catalogosAdminProcedure
+  importarExcel: indicadoresModificarProcedure
     .input(z.object({ filas: z.array(z.record(z.string())), mapeo: z.any() }))
     .mutation(({ ctx, input }) =>
       invocar(() => ctx.aplicacion.manejadores['indicadores:importarExcel']({ filas: input.filas, mapeo: input.mapeo as MapeoImportacionIndicadores }))

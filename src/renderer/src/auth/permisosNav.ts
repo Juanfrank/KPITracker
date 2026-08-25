@@ -28,3 +28,59 @@ export function puedeAdministrarCatalogos(usuario: IdentidadConPermisos): boolea
 export function puedeVerAuditoria(usuario: IdentidadConPermisos): boolean {
   return tienePermisoGeneral(usuario, 'auditoria.ver.todos') || tienePermisoEquipo(usuario, 'auditoria.ver.equipo');
 }
+
+// --- Batch X (X6/X7): espejo cliente de los `puedeAdministrarX`/`puedeModificarX` de `PoliticaPermisos.ts` — mismo
+// criterio, solo para gating de UI (mostrar/ocultar tarjetas y la propia entrada de nav "Administración"). ---
+
+export function puedeModificarIndicadores(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoEquipo(usuario, 'indicadores.modificar');
+}
+
+export function puedeModificarMetas(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoEquipo(usuario, 'metas.modificar');
+}
+
+export function puedeModificarAtributos(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoEquipo(usuario, 'atributos.modificar');
+}
+
+export function puedeModificarListas(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoEquipo(usuario, 'listas.modificar');
+}
+
+export function puedeModificarReglas(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoEquipo(usuario, 'reglas.modificar');
+}
+
+export function puedeAdministrarCategorias(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoGeneral(usuario, 'categorias.administrar');
+}
+
+export function puedeAdministrarEquipos(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoGeneral(usuario, 'equipos.administrar');
+}
+
+export function puedeAdministrarOrigenes(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoGeneral(usuario, 'origenes.administrar');
+}
+
+export function puedeImportarExportarRespaldo(usuario: IdentidadConPermisos): boolean {
+  return puedeAdministrarCatalogos(usuario) || tienePermisoGeneral(usuario, 'respaldo.importarExportar');
+}
+
+/** Deliberadamente NO OR'd con `puedeAdministrarCatalogos` — mismo criterio que `puedeAdministrarRoles` (dominio). */
+export function puedeAdministrarRoles(usuario: IdentidadConPermisos): boolean {
+  return usuario.esAdministrador || tienePermisoGeneral(usuario, 'roles.administrar');
+}
+
+/** Visible en el nav "Administración" si hay algo que hacer ahí: cualquiera de las tarjetas de arriba. */
+export function puedeVerAdministracion(usuario: IdentidadConPermisos): boolean {
+  return (
+    puedeAdministrarCatalogos(usuario) ||
+    puedeAdministrarCategorias(usuario) ||
+    puedeAdministrarEquipos(usuario) ||
+    puedeAdministrarOrigenes(usuario) ||
+    puedeImportarExportarRespaldo(usuario) ||
+    puedeAdministrarRoles(usuario)
+  );
+}

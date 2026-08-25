@@ -1,21 +1,21 @@
 import { z } from 'zod';
 import type { AliasDesagregacionOrigen, ElementoLista, Lista } from '@domain/index';
-import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { listasModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
 
 export const listasRouter = router({
   listar: protectedProcedure
     .input(z.object({ incluirEliminados: z.boolean().optional() }).optional())
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:listar'](input))),
 
-  guardar: catalogosAdminProcedure
+  guardar: listasModificarProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardar'](input as Lista))),
 
-  eliminar: catalogosAdminProcedure
+  eliminar: listasModificarProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:eliminar'](input))),
 
-  restaurar: catalogosAdminProcedure
+  restaurar: listasModificarProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:restaurar'](input))),
 
@@ -23,11 +23,11 @@ export const listasRouter = router({
     .input(z.object({ listaId: z.string() }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:elementos'](input))),
 
-  guardarElemento: catalogosAdminProcedure
+  guardarElemento: listasModificarProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardarElemento'](input as ElementoLista))),
 
-  eliminarElemento: catalogosAdminProcedure
+  eliminarElemento: listasModificarProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:eliminarElemento'](input))),
 
@@ -39,11 +39,11 @@ export const listasRouter = router({
     .input(z.object({ origenAutomaticoId: z.string() }))
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:aliasPorOrigen'](input))),
 
-  guardarAliasOrigen: catalogosAdminProcedure
+  guardarAliasOrigen: listasModificarProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardarAliasOrigen'](input as AliasDesagregacionOrigen))),
 
-  eliminarAliasOrigen: catalogosAdminProcedure
+  eliminarAliasOrigen: listasModificarProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:eliminarAliasOrigen'](input)))
 });

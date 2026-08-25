@@ -9,6 +9,10 @@ import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
 import { useAuth } from '../../auth/AuthContext';
+import {
+  puedeAdministrarCategorias, puedeAdministrarEquipos, puedeAdministrarOrigenes, puedeAdministrarRoles,
+  puedeImportarExportarRespaldo
+} from '../../auth/permisosNav';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
 import { TarjetaRespaldo } from './TarjetaRespaldo';
@@ -1776,13 +1780,18 @@ export function AdminPage(): React.JSX.Element {
         descripcion="Respaldo, catálogos y mantenimiento del sistema."
       />
 
-      <TarjetaRespaldo />
+      {usuario && puedeImportarExportarRespaldo(usuario) && <TarjetaRespaldo />}
 
-      <SeccionCategorias />
-      <SeccionEquipos />
-      <SeccionOrigenesAutomaticos />
+      {usuario && puedeAdministrarCategorias(usuario) && <SeccionCategorias />}
+      {usuario && puedeAdministrarEquipos(usuario) && <SeccionEquipos />}
+      {usuario && puedeAdministrarOrigenes(usuario) && <SeccionOrigenesAutomaticos />}
 
-      {usuario?.esAdministrador && <SeccionRoles />}
+      {/* SeccionRoles ya acepta también `roles.administrar` (rolesAdminProcedure) — se muestra a quien lo tenga,
+          aunque no sea administrador. SeccionUsuarios permanece exclusiva de esAdministrador: mezcla acciones
+          que sí abrió Batch X (establecerRolGeneral) con otras que siguen siendo admin-only (crear cuentas,
+          contraseñas, esAdministrador, permisos excepcionales) — mostrarla completa a un no-admin expondría
+          botones que igual rechazaría el servidor. Queda como límite conocido de esta ronda. */}
+      {usuario && puedeAdministrarRoles(usuario) && <SeccionRoles />}
       {usuario?.esAdministrador && <SeccionUsuarios />}
     </>
   );

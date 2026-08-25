@@ -5,6 +5,7 @@ import * as rolesPermisos from './20260901000000_roles_permisos';
 import * as unificarUsuarioResponsable from './20260915000000_unificar_usuario_responsable';
 import * as requiereValidacion from './20260920000000_requiere_validacion';
 import * as metaPeriodoId from './20260925000000_meta_periodo_id';
+import * as rolesValidadorTecnico from './20260930000000_roles_validador_tecnico';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -17,7 +18,8 @@ const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20260901000000_roles_permisos', modulo: rolesPermisos },
   { nombre: '20260915000000_unificar_usuario_responsable', modulo: unificarUsuarioResponsable },
   { nombre: '20260920000000_requiere_validacion', modulo: requiereValidacion },
-  { nombre: '20260925000000_meta_periodo_id', modulo: metaPeriodoId }
+  { nombre: '20260925000000_meta_periodo_id', modulo: metaPeriodoId },
+  { nombre: '20260930000000_roles_validador_tecnico', modulo: rolesValidadorTecnico }
 ];
 
 /**

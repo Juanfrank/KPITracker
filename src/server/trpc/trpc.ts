@@ -1,5 +1,11 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { EntidadNoEncontradaError, NoImplementadoError, ValidacionError, puedeAdministrarCatalogos } from '@domain/index';
+import {
+  puedeAdministrarCatalogos, puedeAdministrarCategorias, puedeAdministrarEquipos, puedeAdministrarOrigenes,
+  puedeAdministrarRoles, puedeImportarExportarRespaldo, puedeModificarAtributos, puedeModificarIndicadores,
+  puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
+  EntidadNoEncontradaError, NoImplementadoError, ValidacionError
+} from '@domain/index';
+import type { ContextoPermisos } from '@domain/index';
 import { conPermisos, conUsuario, permisosActuales } from '@application/use-cases/contextoUsuario';
 import type { Context } from './context';
 
@@ -78,6 +84,35 @@ export const catalogosAdminProcedure = protectedProcedure.use(({ ctx, next }) =>
   }
   return next({ ctx });
 });
+
+/**
+ * Factory genérica para las procedures de delegación puntual de Batch X
+ * (X6/X7): mismo patrón que `catalogosAdminProcedure`, parametrizado por la
+ * función de `PoliticaPermisos` que decide el permiso concreto — evita
+ * repetir el `.use(...)` una vez por cada uno de los 10 permisos nuevos.
+ */
+function procedureConPermiso(chequeo: (ctx: ContextoPermisos) => boolean, mensaje: string) {
+  return protectedProcedure.use(({ ctx, next }) => {
+    if (!chequeo(permisosActuales())) throw new TRPCError({ code: 'FORBIDDEN', message: mensaje });
+    return next({ ctx });
+  });
+}
+
+/** "Modificar indicadores" (equipo) u OR `catalogos.administrar` — ver `puedeModificarIndicadores`. */
+export const indicadoresModificarProcedure = procedureConPermiso(puedeModificarIndicadores, 'Requiere permiso para modificar indicadores.');
+export const metasModificarProcedure = procedureConPermiso(puedeModificarMetas, 'Requiere permiso para modificar metas.');
+export const atributosModificarProcedure = procedureConPermiso(puedeModificarAtributos, 'Requiere permiso para modificar atributos.');
+export const listasModificarProcedure = procedureConPermiso(puedeModificarListas, 'Requiere permiso para modificar listas.');
+export const reglasModificarProcedure = procedureConPermiso(puedeModificarReglas, 'Requiere permiso para modificar reglas.');
+
+/** "Administrar X" (general) u OR `catalogos.administrar` — ver los `puedeAdministrarX` de `PoliticaPermisos`. */
+export const categoriasAdminProcedure = procedureConPermiso(puedeAdministrarCategorias, 'Requiere permiso para administrar categorías.');
+export const equiposAdminProcedure = procedureConPermiso(puedeAdministrarEquipos, 'Requiere permiso para administrar equipos.');
+export const origenesAdminProcedure = procedureConPermiso(puedeAdministrarOrigenes, 'Requiere permiso para administrar orígenes automáticos.');
+export const respaldoProcedure = procedureConPermiso(puedeImportarExportarRespaldo, 'Requiere permiso para importar/exportar respaldos.');
+
+/** Administrar roles/permisos — deliberadamente NO cubierto por `catalogos.administrar`, ver `puedeAdministrarRoles`. */
+export const rolesAdminProcedure = procedureConPermiso(puedeAdministrarRoles, 'Requiere permiso para administrar roles.');
 
 /**
  * Ejecuta `fn` (normalmente una llamada a `ctx.aplicacion.manejadores[...]`)

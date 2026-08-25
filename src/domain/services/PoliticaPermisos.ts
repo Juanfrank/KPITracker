@@ -84,3 +84,73 @@ export function puedeGestionarMiembrosEquipo(ctx: ContextoPermisos, equipoId: st
 export function puedeAsignarIndicadoresEquipo(ctx: ContextoPermisos, equipoId: string | null): boolean {
   return tienePermisoDeEquipo(ctx, equipoId, 'equipo.indicadores.asignar');
 }
+
+/**
+ * Delegación puntual de un catálogo concreto (Batch X, X6): admin, o
+ * `catalogos.administrar` (ya cubre todos los catálogos), o el permiso de
+ * equipo específico (`resultados.<x>`, tenerlo alcanza sin importar el
+ * equipo propio — estos catálogos son globales, sin noción de "mi equipo"
+ * al que restringir la edición, ver el docstring de `CATALOGO_PERMISOS`).
+ */
+function tienePermisoDeModificarCatalogo(ctx: ContextoPermisos, permiso: string): boolean {
+  if (puedeAdministrarCatalogos(ctx)) return true;
+  return ctx.permisosEquipo.has(permiso) || ctx.permisosExcepcionales.has(permiso);
+}
+
+export function puedeModificarIndicadores(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeModificarCatalogo(ctx, 'indicadores.modificar');
+}
+
+export function puedeModificarMetas(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeModificarCatalogo(ctx, 'metas.modificar');
+}
+
+export function puedeModificarAtributos(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeModificarCatalogo(ctx, 'atributos.modificar');
+}
+
+export function puedeModificarListas(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeModificarCatalogo(ctx, 'listas.modificar');
+}
+
+export function puedeModificarReglas(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeModificarCatalogo(ctx, 'reglas.modificar');
+}
+
+/**
+ * Delegación puntual de una porción general de `catalogos.administrar`
+ * (Batch X, X7): admin, `catalogos.administrar`, o el permiso general
+ * específico (propio o excepcional).
+ */
+function tienePermisoDeAdministrarPorcion(ctx: ContextoPermisos, permiso: string): boolean {
+  return puedeAdministrarCatalogos(ctx) || tienePermisoEfectivo(ctx, permiso);
+}
+
+export function puedeAdministrarCategorias(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeAdministrarPorcion(ctx, 'categorias.administrar');
+}
+
+export function puedeAdministrarEquipos(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeAdministrarPorcion(ctx, 'equipos.administrar');
+}
+
+export function puedeAdministrarOrigenes(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeAdministrarPorcion(ctx, 'origenes.administrar');
+}
+
+export function puedeImportarExportarRespaldo(ctx: ContextoPermisos): boolean {
+  return tienePermisoDeAdministrarPorcion(ctx, 'respaldo.importarExportar');
+}
+
+/**
+ * Administrar roles/permisos (Batch X, X7): deliberadamente NO implicado por
+ * `catalogos.administrar` — es más sensible (puede conceder otros permisos)
+ * que el resto de los catálogos, así que exige admin o el permiso puntual.
+ * Puede asignar/desasignar cualquier rol (general o de equipo) a cualquier
+ * usuario y gestionar el catálogo de roles, pero nunca el flag
+ * `esAdministrador` en sí — eso sigue siendo exclusivo de un administrador
+ * (`usuariosRouter.establecerAdministrador`, siempre `adminProcedure`).
+ */
+export function puedeAdministrarRoles(ctx: ContextoPermisos): boolean {
+  return ctx.esAdministrador || tienePermisoEfectivo(ctx, 'roles.administrar');
+}

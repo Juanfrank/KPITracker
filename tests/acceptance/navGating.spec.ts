@@ -74,3 +74,46 @@ test('ese usuario solo ve Seguimiento/Recolección/Exportación/Acerca de en el 
 
   await contexto.close();
 });
+
+test('un usuario con solo "origenes.administrar" (delegación puntual, Batch X X7) ve Administración pero solo la tarjeta de Orígenes', async () => {
+  await admin.getByTestId('nav-admin').click();
+
+  const rol = 'Solo orígenes';
+  await admin.getByTestId('nuevo-rol-general').click();
+  await admin.getByTestId('rol-nombre').fill(rol);
+  await admin.getByTestId('rol-permiso-origenes.administrar').check();
+  await admin.getByTestId('guardar-rol').click();
+  await expect(admin.getByTestId(`rol-${rol}`)).toBeVisible();
+
+  await admin.getByTestId('nuevo-usuario').click();
+  await admin.getByTestId('usuario-nombreUsuario').fill('tecnico.origenes');
+  await admin.getByTestId('usuario-nombreCompleto').fill('Técnico Orígenes');
+  await admin.getByTestId('usuario-password').fill(PASSWORD);
+  await admin.getByTestId('guardar-usuario').click();
+  await expect(admin.getByTestId('usuario-tecnico.origenes')).toBeVisible();
+  await admin.getByTestId('usuario-tecnico.origenes').click();
+  await admin.getByTestId('usuario-rol-general').selectOption({ label: rol });
+  await admin.getByTestId('guardar-usuario-edicion').click();
+
+  const contexto = await browser.newContext();
+  const tecnico = await contexto.newPage();
+  await tecnico.goto(baseUrl);
+  await tecnico.getByTestId('login-usuario').fill('tecnico.origenes');
+  await tecnico.getByTestId('login-password').fill(PASSWORD);
+  await tecnico.getByTestId('login-enviar').click();
+  await tecnico.getByTestId('pagina-seguimiento').waitFor();
+
+  // "Administración" ahora es visible (antes no lo hubiera sido: X1 solo consideraba esAdministrador/catalogos.administrar).
+  await expect(tecnico.getByTestId('nav-admin')).toBeVisible();
+  await tecnico.getByTestId('nav-admin').click();
+  await expect(tecnico.getByTestId('nuevo-origen')).toBeVisible();
+
+  // Pero NADA más: ni Categorías, ni Equipos, ni Respaldo, ni Roles, ni Usuarios — ninguno de esos permisos los tiene.
+  await expect(tecnico.getByTestId('nueva-categoria')).toHaveCount(0);
+  await expect(tecnico.getByTestId('nuevo-equipo')).toHaveCount(0);
+  await expect(tecnico.getByTestId('exportar-respaldo')).toHaveCount(0);
+  await expect(tecnico.getByTestId('nuevo-rol-general')).toHaveCount(0);
+  await expect(tecnico.getByTestId('nuevo-usuario')).toHaveCount(0);
+
+  await contexto.close();
+});

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { adminProcedure, catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { adminProcedure, catalogosAdminProcedure, invocar, protectedProcedure, rolesAdminProcedure, router } from '../trpc';
 
 /**
  * Gestión de usuarios (pantalla de administración). Batch U unifica Usuario
@@ -8,9 +8,11 @@ import { adminProcedure, catalogosAdminProcedure, invocar, protectedProcedure, r
  * el selector de responsables en Indicadores) y `establecerEquipo`
  * (que un líder de equipo puede usar para mover gente de/hacia su propio
  * equipo, gating dentro de `ServicioUsuarios.establecerEquipo`) NO son
- * `adminProcedure` — todo lo demás (crear cuentas, contraseñas, rol
- * general/administrador, permisos excepcionales) sigue siendo exclusivo del
- * administrador.
+ * `adminProcedure`. Batch X (X7) abre además `establecerRolGeneral` a
+ * `roles.administrar` (`rolesAdminProcedure`). Todo lo demás (crear cuentas,
+ * contraseñas, el flag `esAdministrador`, permisos excepcionales) sigue
+ * siendo exclusivo del administrador — `roles.administrar` nunca alcanza
+ * para eso, ver `puedeAdministrarRoles` en `PoliticaPermisos.ts`.
  */
 export const usuariosRouter = router({
   listar: protectedProcedure
@@ -40,7 +42,9 @@ export const usuariosRouter = router({
     .input(z.object({ id: z.string(), activo: z.boolean() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.establecerActivo(input.id, input.activo))),
 
-  establecerRolGeneral: adminProcedure
+  /** `rolesAdminProcedure`, no `adminProcedure`: Batch X (X7) permite delegar la asignación de roles
+   * generales vía `roles.administrar`, sin dar acceso administrador completo — ver `roles.ts`. */
+  establecerRolGeneral: rolesAdminProcedure
     .input(z.object({ id: z.string(), rolGeneralId: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.establecerRolGeneral(input.id, input.rolGeneralId))),
 

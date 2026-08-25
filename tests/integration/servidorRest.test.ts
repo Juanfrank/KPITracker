@@ -44,21 +44,43 @@ afterEach(async () => {
   delete process.env.ADMIN_INICIAL_PASSWORD;
 });
 
-async function iniciarSesionAdmin(): Promise<void> {
-  const cliente = createTRPCClient<AppRouter>({
+/** Cliente tRPC que reenvía la cookie ya capturada en cada request y actualiza `cookieRef` con cualquier Set-Cookie nueva — suficiente para login + llamadas subsiguientes con la misma sesión, sin un cookie-jar real (Node `fetch` no trae uno). */
+function clienteTrpc(cookieRef: { valor: string | null }) {
+  return createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
         url: `${baseUrl}/api/trpc`,
         fetch: async (input, init) => {
-          const respuesta = await fetch(input, init);
+          const headers = new Headers(init?.headers);
+          if (cookieRef.valor) headers.set('cookie', cookieRef.valor);
+          const respuesta = await fetch(input, { ...init, headers });
           const setCookie = respuesta.headers.get('set-cookie');
-          if (setCookie) cookieSesion = setCookie.split(';')[0] ?? null;
+          if (setCookie) cookieRef.valor = setCookie.split(';')[0] ?? null;
           return respuesta;
         }
       })
     ]
   });
+}
+
+async function iniciarSesionAdmin(): Promise<void> {
+  const ref = { valor: null as string | null };
+  const cliente = clienteTrpc(ref);
   await cliente.auth.login.mutate({ nombreUsuario: 'admin', password: 'admin12345' });
+  cookieSesion = ref.valor;
+}
+
+/** Crea (como admin) un usuario SIN rol/permiso alguno y devuelve la cookie de SU propia sesión, ya autenticada. */
+async function crearUsuarioSinPermisosYLoguearse(nombreUsuario: string): Promise<string> {
+  const refAdmin = { valor: null as string | null };
+  const clienteAdmin = clienteTrpc(refAdmin);
+  await clienteAdmin.auth.login.mutate({ nombreUsuario: 'admin', password: 'admin12345' });
+  await clienteAdmin.usuarios.crear.mutate({ nombreUsuario, nombreCompleto: nombreUsuario, password: 'sinPermisos123' });
+
+  const refUsuario = { valor: null as string | null };
+  const clienteUsuario = clienteTrpc(refUsuario);
+  await clienteUsuario.auth.login.mutate({ nombreUsuario, password: 'sinPermisos123' });
+  return refUsuario.valor!;
 }
 
 describe('Rutas REST — autenticación compartida con tRPC', () => {
@@ -135,6 +157,29 @@ describe('Rutas REST — /api/respaldo', () => {
     const importado = await fetch(`${baseUrl}/api/respaldo/importar`, { method: 'POST', headers: { cookie: cookieSesion! }, body: formularioImportar });
     expect(importado.status).toBe(200);
     expect(await importado.json()).toMatchObject({ importados: { configuracionGeneral: 1 } });
+  });
+});
+
+describe('Rutas REST — /api/respaldo y /api/portable exigen respaldo.importarExportar (Batch X, X7)', () => {
+  it('un usuario sin ese permiso recibe 403 en export/leer/importar de ambos prefijos', async () => {
+    const cookieUsuario = await crearUsuarioSinPermisosYLoguearse('sin.permiso.respaldo');
+
+    const exportadoRespaldo = await fetch(`${baseUrl}/api/respaldo/exportar`, { headers: { cookie: cookieUsuario } });
+    expect(exportadoRespaldo.status).toBe(403);
+
+    const exportadoPortable = await fetch(`${baseUrl}/api/portable/exportar`, { headers: { cookie: cookieUsuario } });
+    expect(exportadoPortable.status).toBe(403);
+
+    const formulario = new FormData();
+    formulario.set('archivo', new Blob(['{}'], { type: 'application/json' }), 'x.json');
+    const leido = await fetch(`${baseUrl}/api/respaldo/leer`, { method: 'POST', headers: { cookie: cookieUsuario }, body: formulario });
+    expect(leido.status).toBe(403);
+  });
+
+  it('el administrador (esAdministrador=true) sigue pudiendo exportar sin necesitar el permiso puntual', async () => {
+    await iniciarSesionAdmin();
+    const exportado = await fetch(`${baseUrl}/api/respaldo/exportar`, { headers: { cookie: cookieSesion! } });
+    expect(exportado.status).toBe(200);
   });
 });
 
