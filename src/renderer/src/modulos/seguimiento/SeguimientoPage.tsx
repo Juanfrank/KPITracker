@@ -8,6 +8,8 @@ import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
 import { BarraProgreso, ChipEstado, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
+import type { OrdenColumna } from '../../utils/ordenTabla';
+import { ORDEN_POR_DEFECTO, alternarOrden, ordenarFilas } from '../../utils/ordenTabla';
 
 /** Usuario asignable como responsable de un indicador (Batch U: unificado con el antiguo catálogo Responsable). */
 type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.query>>[number];
@@ -227,6 +229,57 @@ const FILTROS_ESTADO = [
 ];
 
 /**
+ * Orden por encabezado (Batch X, X4) — solo en las vistas "Lista" (Estado e
+ * Histórico): las vistas Árbol agrupan por categoría/equipo, reordenar sus
+ * filas rompería esa jerarquía, así que quedan con su orden estructural de
+ * siempre. "Progreso" se ordena por la proporción completa/total, no por
+ * `periodosCompletos` a secas (dos indicadores con distinto total de
+ * períodos no son comparables por el numerador solo).
+ */
+const VALOR_COLUMNA_ESTADO: Record<string, (f: FilaTablero) => string | number | null> = {
+  nombre: (f) => f.nombre,
+  estado: (f) => f.estado,
+  periodicidad: (f) => f.periodicidad,
+  responsable: (f) => f.responsable,
+  categoria: (f) => f.categoria,
+  periodoPendiente: (f) => f.periodoPendiente,
+  fechaLimite: (f) => f.fechaLimite,
+  fechaCorte: (f) => f.fechaCorte,
+  progreso: (f) => (f.totalPeriodos > 0 ? f.periodosCompletos / f.totalPeriodos : null),
+  ultimaActualizacion: (f) => f.ultimaActualizacion
+};
+
+const VALOR_COLUMNA_HISTORICO: Record<string, (h: FilaHistorico) => string | number | null> = {
+  nombre: (h) => h.nombre,
+  responsable: (h) => h.responsable,
+  lineaBase: (h) => h.lineaBase,
+  metaGlobal: (h) => h.metaGlobal
+};
+
+/** Encabezado clickeable: ciclo asc → desc → orden por defecto (`alternarOrden`), con una flecha indicando el estado activo. */
+function EncabezadoOrdenable({
+  columna, etiqueta, orden, alClic
+}: {
+  columna: string;
+  etiqueta: string;
+  orden: OrdenColumna;
+  alClic: (columna: string) => void;
+}): React.JSX.Element {
+  const activa = orden.columna === columna;
+  return (
+    <th
+      onClick={() => alClic(columna)}
+      style={{ cursor: 'pointer', userSelect: 'none' }}
+      title="Ordenar"
+      data-testid={`orden-${columna}`}
+    >
+      {etiqueta}
+      {activa && <span style={{ marginLeft: 4 }}>{orden.direccion === 'asc' ? '▲' : '▼'}</span>}
+    </th>
+  );
+}
+
+/**
  * Tablero de Seguimiento: estados calculados dinámicamente (fecha actual,
  * fecha límite, periodicidad, períodos registrados y fecha de corte) —
  * nunca a partir de banderas persistidas.
@@ -238,6 +291,9 @@ export function SeguimientoPage(): React.JSX.Element {
   // cambiar la vista de una pestaña no debe alterar en qué vista está la otra. El
   // colapso de categorías/equipos SÍ se comparte (mismos ids de nodo en ambos árboles).
   const [vistaHistorico, setVistaHistorico] = useState<VistaEstado>('lista');
+  // X4: orden por encabezado, solo aplicado a las vistas Lista (ver docstring de VALOR_COLUMNA_ESTADO).
+  const [ordenEstado, setOrdenEstado] = useState<OrdenColumna>(ORDEN_POR_DEFECTO);
+  const [ordenHistorico, setOrdenHistorico] = useState<OrdenColumna>(ORDEN_POR_DEFECTO);
   const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
   const [colapsadasEquipo, setColapsadasEquipo] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
@@ -322,6 +378,11 @@ export function SeguimientoPage(): React.JSX.Element {
   );
   const idsVisibles = new Set(visibles.map((f) => f.indicadorId));
   const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
+  // X4: orden por encabezado — SOLO para el render de la vista Lista de cada pestaña.
+  // `visibles`/`historicoVisible` en sí quedan sin ordenar: los árboles (abajo) construyen
+  // su propio orden jerárquico y no deben verse afectados por esto.
+  const visiblesLista = ordenarFilas(visibles, ordenEstado, VALOR_COLUMNA_ESTADO);
+  const historicoVisibleLista = ordenarFilas(historicoVisible, ordenHistorico, VALOR_COLUMNA_HISTORICO);
   const arbol = nodosVisibles(construirArbolSeguimiento(visibles, categoriasCatalogo), colapsadasCategorias);
   const arbolEquipo = nodosVisibles(construirArbolEquipoSeguimiento(visibles, equiposCatalogo, categoriasCatalogo), colapsadasEquipo);
   const arbolHistorico = nodosVisibles(construirArbolSeguimiento(historicoVisible, categoriasCatalogo), colapsadasCategorias);
@@ -571,21 +632,20 @@ export function SeguimientoPage(): React.JSX.Element {
                   data-testid="seleccionar-todos"
                 />
               </th>
-              <th>Indicador</th>
-              <th>Responsable</th>
-              <th>Estado</th>
-              <th>Periodicidad</th>
-              <th>Responsable</th>
-              <th>Categoría</th>
-              <th>Período pendiente</th>
-              <th>Fecha límite</th>
-              <th>Fecha de corte</th>
-              <th>Progreso</th>
-              <th>Última actualización</th>
+              <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="estado" etiqueta="Estado" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="periodicidad" etiqueta="Periodicidad" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="categoria" etiqueta="Categoría" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="periodoPendiente" etiqueta="Período pendiente" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="fechaLimite" etiqueta="Fecha límite" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="fechaCorte" etiqueta="Fecha de corte" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="progreso" etiqueta="Progreso" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
+              <EncabezadoOrdenable columna="ultimaActualizacion" etiqueta="Última actualización" orden={ordenEstado} alClic={(c) => setOrdenEstado(alternarOrden(ordenEstado, c))} />
             </tr>
           </thead>
           <tbody>
-            {visibles.map((f) => (
+            {visiblesLista.map((f) => (
               <tr
                 key={f.indicadorId}
                 style={{ cursor: 'pointer' }}
@@ -872,17 +932,18 @@ export function SeguimientoPage(): React.JSX.Element {
           <table className="tabla" data-testid="tabla-historico">
             <thead>
               <tr>
-                <th>Indicador</th>
-                <th>Responsable</th>
-                <th>Línea base</th>
-                <th>Meta</th>
+                <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                {/* Las columnas de período (dinámicas, una por período) no se ordenan — ver docstring de VALOR_COLUMNA_HISTORICO. */}
                 {columnasHistorico.map((c) => (
                   <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {historicoVisible.map((h) => (
+              {historicoVisibleLista.map((h) => (
                 <tr
                   key={h.indicadorId}
                   style={{ cursor: 'pointer' }}
