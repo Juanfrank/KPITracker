@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
@@ -7,7 +7,6 @@ import type {
 import { agruparPermisosParaGrid, ejemploParaFuente, equipoEfectivo, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
-import { descargar, postTexto } from '../../rest';
 import { trpcClient } from '../../trpc';
 import { useAuth } from '../../auth/AuthContext';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
@@ -1761,75 +1760,21 @@ function SeccionUsuarios(): React.JSX.Element {
 }
 
 /**
- * Administración: configuración portable (export/import de TODA la
- * configuración en un único JSON versionado, preparado para migraciones) y
- * catálogos de responsables/categorías asignables a indicadores.
+ * Administración: respaldo/importación y catálogos de responsables/
+ * categorías asignables a indicadores. Hasta X9 (Batch X) había además una
+ * tarjeta "Configuración portable" con su propio export/import de JSON —
+ * duplicaba exactamente lo que ya hace `TarjetaRespaldo` (Respaldo e
+ * importación, categoría por categoría) y se retiró.
  */
 export function AdminPage(): React.JSX.Element {
   const { usuario } = useAuth();
-  const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error' | 'info'; texto: string } | null>(null);
-  const selectorArchivo = useRef<HTMLInputElement>(null);
-
-  const exportar = async (): Promise<void> => {
-    try {
-      await descargar('/api/portable/exportar', `kpitracker-config-${new Date().toISOString().slice(0, 10)}.json`);
-      setMensaje({ tipo: 'exito', texto: 'Configuración exportada correctamente.' });
-    } catch (error) {
-      setMensaje({ tipo: 'error', texto: (error as Error).message });
-    }
-  };
-
-  const importar = async (archivo: File): Promise<void> => {
-    try {
-      const json = await archivo.text();
-      const { advertencias } = await postTexto<{ advertencias: string[] }>('/api/portable/importar', json);
-      setMensaje({
-        tipo: 'exito',
-        texto:
-          advertencias.length > 0
-            ? `Configuración importada. ${advertencias.join(' ')}`
-            : 'Configuración importada correctamente.'
-      });
-    } catch (error) {
-      setMensaje({ tipo: 'error', texto: `No se pudo importar: ${(error as Error).message}` });
-    }
-  };
 
   return (
     <>
       <Encabezado
         titulo="Administración"
-        descripcion="Configuración portable, catálogos y mantenimiento del sistema."
+        descripcion="Respaldo, catálogos y mantenimiento del sistema."
       />
-      {mensaje && <div className={`aviso ${mensaje.tipo}`}>{mensaje.texto}</div>}
-
-      <div className="tarjeta">
-        <h3 style={{ marginTop: 0 }}>Configuración portable</h3>
-        <p className="texto-suave">
-          Exporta indicadores, atributos, listas, reglas, desagregaciones, metas, periodicidades personalizadas,
-          catálogos y parámetros generales en un único archivo JSON versionado. El archivo puede importarse en otra
-          instalación; las versiones antiguas se migran automáticamente.
-        </p>
-        <div className="toolbar">
-          <button className="boton primario" onClick={() => void exportar()} data-testid="exportar-config">
-            <Icono nombre="exportar" /> Exportar configuración
-          </button>
-          <button className="boton" onClick={() => selectorArchivo.current?.click()} data-testid="importar-config">
-            Importar configuración…
-          </button>
-          <input
-            ref={selectorArchivo}
-            type="file"
-            accept="application/json"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const archivo = e.target.files?.[0];
-              if (archivo) void importar(archivo);
-              e.target.value = '';
-            }}
-          />
-        </div>
-      </div>
 
       <TarjetaRespaldo />
 

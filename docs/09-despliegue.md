@@ -75,8 +75,8 @@ Corridas posteriores del proceso son idempotentes: `migrate.latest()` no vuelve 
 
 Dos mecanismos independientes, para necesidades distintas:
 
-- **Respaldo/restauración completos** (Administración → Respaldo): exporta un JSON con todo el estado configurable + operativo (indicadores, resultados, catálogos, etc.) desde la base activa, e importa selectivamente (por sección) a otra instancia — pensado para migrar entre `DB_CLIENT`s (p. ej. de SQLite local a SQL Server) o para copias de resguardo periódicas fuera de la base de datos misma.
-- **Configuración portable** (Administración → Configuración portable): exporta/importa solo la configuración (indicadores, atributos, listas, reglas, metas — sin resultados capturados), versionado y con migración automática entre versiones del formato — pensado para llevar una configuración de un entorno a otro (p. ej. de pruebas a producción) sin arrastrar datos operativos.
+- **Respaldo/restauración completos** (Administración → Respaldo e importación): exporta un JSON con todo el estado configurable + operativo (indicadores, resultados, catálogos, etc.) desde la base activa, e importa selectivamente (por sección) a otra instancia — pensado para migrar entre `DB_CLIENT`s (p. ej. de SQLite local a SQL Server) o para copias de resguardo periódicas fuera de la base de datos misma.
+- **Configuración portable** (`docs/03-configuracion-portable.md`, `/api/portable/*`): exporta/importa solo la configuración (indicadores, atributos, listas, reglas, metas — sin resultados capturados), versionado y con migración automática entre versiones del formato. Batch X (X9) retiró su tarjeta de Administración por ser un duplicado funcional de Respaldo — el mecanismo sigue disponible vía API para integraciones que solo necesiten configuración, sin datos operativos.
 
 Además, la responsabilidad estándar de respaldo de la base de datos en sí (`DB_NAME` en SQL Server, o el archivo `kpitracker.sqlite` en `KPITRACKER_DATA_DIR` si es local) sigue las prácticas normales de backup del motor elegido — eso está fuera del alcance de la aplicación.
 

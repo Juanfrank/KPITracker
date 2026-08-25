@@ -1,6 +1,8 @@
 # Configuración Portable (JSON versionado)
 
-Toda la configuración se exporta e importa mediante **un único archivo JSON versionado** desde el módulo Administración. Incluye: parámetros generales, indicadores (con sus desagregaciones), atributos, listas y elementos, reglas, metas, periodicidades personalizadas y catálogos (responsables/categorías).
+> **Batch X (X9)**: la tarjeta "Configuración portable" de Administración se retiró — duplicaba exactamente lo que ya ofrece "Respaldo e importación" (`docs/09-despliegue.md` §6), que además cubre resultados capturados y borrados lógicos. El mecanismo descrito en este documento (`/api/portable/exportar`/`/api/portable/importar`, `ConfigPortableService`) sigue existiendo en el servidor — solo dejó de tener una pantalla propia en la SPA.
+
+Toda la configuración se exporta e importa mediante **un único archivo JSON versionado**. Incluye: parámetros generales, indicadores (con sus desagregaciones), atributos, listas y elementos, reglas, metas, periodicidades personalizadas y catálogos (responsables/categorías).
 
 ## 1. Estructura del archivo (schemaVersion 2)
 
