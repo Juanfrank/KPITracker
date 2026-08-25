@@ -79,6 +79,41 @@ describe('Composition root — validación cruzada al guardar indicadores', () =
   });
 });
 
+describe('Composition root — auditoría de reglas de negocio muestra la condición legible, no JSON crudo (Batch X, X15)', () => {
+  it('crear una regla ValidacionCruzada audita "Crear" con explicarCondicion(...) como valorNuevo', async () => {
+    await app.manejadores['reglas:guardar'](
+      reglaValidacionCruzada({
+        nombre: 'Línea base bajo meta',
+        condicion: { op: 'lt', args: [{ attr: 'LineaBase' }, { attr: 'MetaGlobal' }] }
+      })
+    );
+
+    const registros = await app.manejadores['auditoria:consultar']({ entidad: 'ReglaNegocio' });
+    expect(registros).toHaveLength(1);
+    expect(registros[0]!.accion).toBe('Crear');
+    expect(registros[0]!.campo).toBe('condicion');
+    expect(registros[0]!.valorAnterior).toBeNull();
+    expect(registros[0]!.valorNuevo).toBe('LineaBase es menor que MetaGlobal');
+    expect(registros[0]!.valorNuevo).not.toContain('{');
+  });
+
+  it('editar una regla existente audita "Modificar" con la condición anterior Y la nueva, ambas legibles', async () => {
+    const creada = await app.manejadores['reglas:guardar'](
+      reglaValidacionCruzada({ condicion: { op: 'lt', args: [{ attr: 'LineaBase' }, { attr: 'MetaGlobal' }] } })
+    );
+    await app.manejadores['reglas:guardar']({
+      ...creada,
+      condicion: { op: 'gt', args: [{ attr: 'LineaBase' }, { attr: 'MetaGlobal' }] }
+    });
+
+    const registros = await app.manejadores['auditoria:consultar']({ entidad: 'ReglaNegocio' });
+    const edicion = registros.find((r) => r.accion === 'Modificar');
+    expect(edicion).toBeDefined();
+    expect(edicion!.valorAnterior).toBe('LineaBase es menor que MetaGlobal');
+    expect(edicion!.valorNuevo).toBe('LineaBase es mayor que MetaGlobal');
+  });
+});
+
 describe('Composition root — catálogos', () => {
   it('CRUD de periodicidades personalizadas vía IPC', async () => {
     const definicion: DefinicionPeriodicidad = {

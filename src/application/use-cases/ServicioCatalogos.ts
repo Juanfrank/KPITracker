@@ -4,7 +4,7 @@ import type {
 } from '@domain/index';
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
-  construirContextoIndicador, equipoEfectivo, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
+  construirContextoIndicador, equipoEfectivo, explicarCondicion, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
   puedeVerIndicador, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
@@ -557,6 +557,7 @@ export class ServicioReglas extends ServicioBase {
 
   async guardar(regla: ReglaNegocio): Promise<ReglaNegocio> {
     if (!regla.nombre.trim()) throw new ValidacionError('El nombre de la regla es obligatorio.');
+    const anterior = regla.id ? await this.repo.obtener(regla.id) : null;
     const ahora = this.ctx.reloj.ahoraIso();
     const guardada: ReglaNegocio = {
       ...regla,
@@ -565,7 +566,12 @@ export class ServicioReglas extends ServicioBase {
       actualizadoEn: ahora
     };
     await this.repo.guardar(guardada);
-    await this.auditar('Modificar', 'ReglaNegocio', guardada.id, null, null, JSON.stringify(guardada.condicion));
+    // `explicarCondicion` (texto legible, el mismo que ya muestra ReglasPage), no JSON.stringify —
+    // Auditoría mostraba el objeto Condicion textualizado en "Valor nuevo" (Batch X, X15).
+    await this.auditar(
+      anterior ? 'Modificar' : 'Crear', 'ReglaNegocio', guardada.id, 'condicion',
+      anterior ? explicarCondicion(anterior.condicion) : null, explicarCondicion(guardada.condicion)
+    );
     return guardada;
   }
 
