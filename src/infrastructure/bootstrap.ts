@@ -111,7 +111,7 @@ export async function crearInfraestructura(
   const respaldoPerfil = new RespaldoPerfilService(
     {
       configuracion, indicadores, atributos, listas, metas, reglas, periodicidades, categorias, equipos, roles,
-      origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen
+      origenesAutomaticos, automatizaciones, aliasDesagregacionOrigen, resultados
     },
     opciones.appVersion ?? null
   );

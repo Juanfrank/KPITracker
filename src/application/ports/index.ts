@@ -137,6 +137,8 @@ export interface ResumenPeriodo {
 
 export interface IResultadoRepository {
   obtenerPorIndicadorPeriodo(indicadorId: string, periodoId: string): Promise<Resultado[]>;
+  /** Todos los resultados capturados, de todos los indicadores/períodos — usado por el respaldo (Batch X, X8). */
+  listarTodos(): Promise<Resultado[]>;
   guardar(resultado: Resultado): Promise<void>;
   obtenerLevantamiento(indicadorId: string, periodoId: string): Promise<Levantamiento | null>;
   listarLevantamientos(indicadorId?: string): Promise<Levantamiento[]>;

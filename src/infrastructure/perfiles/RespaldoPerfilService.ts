@@ -1,7 +1,7 @@
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository,
   ICatalogoRepository, IConfiguracionRepository, IIndicadorRepository, IListaRepository, IMetaRepository,
-  IReglaRepository, IRolRepository
+  IReglaRepository, IResultadoRepository, IRolRepository
 } from '@application/ports/index';
 import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico } from '@domain/index';
 import { ValidacionError } from '@domain/index';
@@ -25,6 +25,7 @@ export interface ReposRespaldoPerfil {
   origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>;
   automatizaciones: IAutomatizacionIndicadorRepository;
   aliasDesagregacionOrigen: IAliasDesagregacionOrigenRepository;
+  resultados: IResultadoRepository;
 }
 
 /** Fila mínima con id — todas las categorías del respaldo la satisfacen. */
@@ -68,6 +69,7 @@ export class RespaldoPerfilService {
     const metas = (await Promise.all(indicadores.map((i) => this.repos.metas.listarPorIndicador(i.id)))).flat();
     const automatizaciones = await this.repos.automatizaciones.listarTodas();
     const aliasDesagregacion = await this.repos.aliasDesagregacionOrigen.listarTodos();
+    const resultados = await this.repos.resultados.listarTodos();
 
     const archivo: ArchivoRespaldo = {
       formato: RESPALDO_FORMATO,
@@ -87,7 +89,8 @@ export class RespaldoPerfilService {
       metas: metas as unknown as Record<string, unknown>[],
       reglas: reglas as unknown as Record<string, unknown>[],
       automatizaciones: automatizaciones as unknown as Record<string, unknown>[],
-      aliasDesagregacion: aliasDesagregacion as unknown as Record<string, unknown>[]
+      aliasDesagregacion: aliasDesagregacion as unknown as Record<string, unknown>[],
+      resultados: resultados as unknown as Record<string, unknown>[]
     };
     return JSON.stringify(archivo, null, 2);
   }
@@ -281,6 +284,17 @@ export class RespaldoPerfilService {
       importados.aliasDesagregacion++;
     }
 
+    for (const resultado of idsSeleccionados('resultados', archivo.resultados as FilaConId[])) {
+      const indicadorId = String(resultado.indicadorId ?? '');
+      if (!(await existe(this.repos.indicadores, indicadorId))) {
+        advertencias.push('Resultado omitido: su indicador no existe en el destino.');
+        omitidos.resultados++;
+        continue;
+      }
+      await this.repos.resultados.guardar(resultado as never);
+      importados.resultados++;
+    }
+
     return { advertencias, importados, omitidos };
   }
 }
@@ -342,6 +356,14 @@ function itemDe(
         id,
         nombre: String(fila.alias ?? id),
         detalle: `${ctx.nombreLista.get(listaId) ?? listaId} ← ${ctx.nombreOrigen.get(origenId) ?? origenId}`
+      };
+    }
+    case 'resultados': {
+      const indicadorId = String(fila.indicadorId ?? '');
+      return {
+        id,
+        nombre: ctx.nombreIndicador.get(indicadorId) ?? indicadorId,
+        detalle: `${String(fila.periodoId ?? '')} · ${String(fila.claveDesagregacion ?? 'GENERAL')}${fila.valor == null ? ' (sin valor)' : ` = ${String(fila.valor)}`}`
       };
     }
     default:

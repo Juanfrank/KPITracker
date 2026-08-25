@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { iniciarAppWeb, seleccionarBuscable } from './fixtures';
+import { iniciarAppWeb } from './fixtures';
 
 /**
  * Batch X — X12: los dropdowns de "Responsable / Equipo" y "Categoría" en

@@ -10,14 +10,16 @@ import { z } from 'zod';
  * real del perfil.
  */
 export const RESPALDO_FORMATO = 'kpitracker-respaldo-perfil';
-export const RESPALDO_SCHEMA_VERSION = 4;
+export const RESPALDO_SCHEMA_VERSION = 5;
 
 /**
  * Categorías seleccionables al importar. `elementos` (hijos de listas) NO
  * es una categoría propia: sigue a su lista — un elemento solo se importa
  * si su lista está seleccionada — evitando huérfanos. Batch U retiró
  * `responsables` (unificado con `Usuario`, que sigue sin viajar en el
- * respaldo — ver docstring de `ConfigPortableService`).
+ * respaldo — ver docstring de `ConfigPortableService`). Batch X (X8)
+ * agrega `resultados` (los valores capturados) — mismo trato que cualquier
+ * otra categoría (seleccionable/deseleccionable, granular por ítem).
  */
 export type CategoriaRespaldo =
   | 'configuracionGeneral'
@@ -32,16 +34,18 @@ export type CategoriaRespaldo =
   | 'metas'
   | 'reglas'
   | 'automatizaciones'
-  | 'aliasDesagregacion';
+  | 'aliasDesagregacion'
+  | 'resultados';
 
 /**
  * Orden de importación: primero lo que otras categorías referencian
  * (catálogos, listas, atributos, orígenes) y al final lo que depende de
- * varias de ellas (metas, automatizaciones, alias).
+ * varias de ellas (metas, automatizaciones, alias, resultados).
  */
 export const ORDEN_IMPORTACION: CategoriaRespaldo[] = [
   'configuracionGeneral', 'periodicidades', 'roles', 'equipos', 'categorias',
-  'listas', 'atributos', 'origenes', 'indicadores', 'metas', 'reglas', 'automatizaciones', 'aliasDesagregacion'
+  'listas', 'atributos', 'origenes', 'indicadores', 'metas', 'reglas', 'automatizaciones', 'aliasDesagregacion',
+  'resultados'
 ];
 
 export const ETIQUETAS_CATEGORIA: Record<CategoriaRespaldo, string> = {
@@ -57,7 +61,8 @@ export const ETIQUETAS_CATEGORIA: Record<CategoriaRespaldo, string> = {
   metas: 'Metas',
   reglas: 'Reglas de negocio',
   automatizaciones: 'Automatizaciones de indicador',
-  aliasDesagregacion: 'Alias de desagregación por origen'
+  aliasDesagregacion: 'Alias de desagregación por origen',
+  resultados: 'Resultados capturados'
 };
 
 export const esquemaRespaldo = z.object({
@@ -79,7 +84,8 @@ export const esquemaRespaldo = z.object({
   metas: z.array(z.record(z.unknown())).default([]),
   reglas: z.array(z.record(z.unknown())).default([]),
   automatizaciones: z.array(z.record(z.unknown())).default([]),
-  aliasDesagregacion: z.array(z.record(z.unknown())).default([])
+  aliasDesagregacion: z.array(z.record(z.unknown())).default([]),
+  resultados: z.array(z.record(z.unknown())).default([])
 });
 
 export type ArchivoRespaldo = z.infer<typeof esquemaRespaldo>;
@@ -94,11 +100,14 @@ export type ArchivoRespaldo = z.infer<typeof esquemaRespaldo>;
  * v3 -> v4 (Batch U): se retira la categoría `responsables` (unificada con
  * `Usuario`, ver docstring de `CategoriaRespaldo`); Zod ya la descarta sola
  * al no estar declarada en el esquema, el paso solo avanza la versión.
+ * v4 -> v5 (Batch X, X8): se agrega la categoría `resultados` — mismo caso,
+ * el `.default([])` ya completa el arreglo en un respaldo más viejo.
  */
 export const migracionesRespaldo: Record<number, (archivo: ArchivoRespaldo) => ArchivoRespaldo> = {
   1: (archivo) => ({ ...archivo, schemaVersion: 2 }),
   2: (archivo) => ({ ...archivo, schemaVersion: 3 }),
-  3: (archivo) => ({ ...archivo, schemaVersion: 4 })
+  3: (archivo) => ({ ...archivo, schemaVersion: 4 }),
+  4: (archivo) => ({ ...archivo, schemaVersion: 5 })
 };
 
 /**

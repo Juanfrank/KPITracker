@@ -94,7 +94,7 @@ afterEach(async () => {
   rmSync(dataDirB, { recursive: true, force: true });
 });
 
-/** Puebla el perfil A con al menos un ítem de cada una de las 13 categorías. */
+/** Puebla el perfil A con al menos un ítem de cada una de las 14 categorías. */
 async function poblarPerfilA(): Promise<void> {
   const config = await appA.manejadores['config:obtener'](undefined);
   await appA.manejadores['config:guardar']({ ...config, nombreInstitucion: 'Institución A' });
@@ -131,18 +131,24 @@ async function poblarPerfilA(): Promise<void> {
     columnaValor: null, mapeoColumnas: [], desagregacionesOmitidas: [], creadoEn: '', actualizadoEn: ''
   });
   await appA.manejadores['listas:guardarAliasOrigen']({ id: '', listaId: l.id, origenAutomaticoId: or.id, alias: 'SEXO', creadoEn: '', actualizadoEn: '' });
+
+  // Resultado capturado (Batch X, X8) — requiere fecha de corte primero.
+  await appA.manejadores['recoleccion:fechaCorte']({ indicadorId: ind.id, periodoId: '2026-Trimestral-01', fechaCorte: '2026-03-31' });
+  await appA.manejadores['recoleccion:guardarCelda']({
+    indicadorId: ind.id, periodoId: '2026-Trimestral-01', claveDesagregacion: 'GENERAL', valorCrudo: '42', observacion: null
+  });
 }
 
 describe('RespaldoPerfilService — round-trip completo', () => {
-  it('exporta el perfil A poblado con las 13 categorías e importa "todos" en un perfil B vacío', async () => {
+  it('exporta el perfil A poblado con las 14 categorías e importa "todos" en un perfil B vacío', async () => {
     await poblarPerfilA();
     const json = await appA.infra.respaldoPerfil.exportar();
 
     const resumen = appB.infra.respaldoPerfil.leer(json);
-    expect(resumen.schemaVersion).toBe(4);
+    expect(resumen.schemaVersion).toBe(5);
     expect(resumen.categorias.map((c) => c.categoria).sort()).toEqual(
       ['aliasDesagregacion', 'atributos', 'automatizaciones', 'categorias', 'configuracionGeneral', 'equipos', 'indicadores',
-        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'roles'].sort()
+        'listas', 'metas', 'origenes', 'periodicidades', 'reglas', 'roles', 'resultados'].sort()
     );
     for (const c of resumen.categorias) {
       if (c.atomica) continue;
@@ -173,6 +179,9 @@ describe('RespaldoPerfilService — round-trip completo', () => {
     expect(await appB.manejadores['metas:listar']({ indicadorId: indicadorB!.id })).toHaveLength(1);
     expect(await appB.manejadores['automatizacion:obtener']({ indicadorId: indicadorB!.id })).not.toBeNull();
     expect(await appB.manejadores['listas:aliasOrigen']({ listaId: listaB!.id })).toHaveLength(1);
+
+    const capturaB = await appB.manejadores['recoleccion:captura']({ indicadorId: indicadorB!.id, periodoId: '2026-Trimestral-01' });
+    expect(capturaB.filas.find((f) => f.claveDesagregacion === 'GENERAL')?.valor).toBe(42);
 
     const configB = await appB.manejadores['config:obtener'](undefined);
     expect(configB.nombreInstitucion).toBe('Institución A');
@@ -268,6 +277,20 @@ describe('RespaldoPerfilService — dependencias rotas: advertencia y omisión, 
     const resultado = await appB.infra.respaldoPerfil.importar(json, { indicadores: 'todos', automatizaciones: 'todos' }); // sin orígenes
     expect(resultado.importados.indicadores).toBe(1);
     expect(resultado.omitidos.automatizaciones).toBe(1);
+  });
+
+  it('un resultado sin su indicador en el destino se omite con advertencia (Batch X, X8)', async () => {
+    const ind = await appA.manejadores['indicadores:guardar']({ indicador: indicador({ nombre: 'Con resultado' }), valores: [] });
+    await appA.manejadores['recoleccion:fechaCorte']({ indicadorId: ind.id, periodoId: '2026-Trimestral-01', fechaCorte: '2026-03-31' });
+    await appA.manejadores['recoleccion:guardarCelda']({
+      indicadorId: ind.id, periodoId: '2026-Trimestral-01', claveDesagregacion: 'GENERAL', valorCrudo: '10', observacion: null
+    });
+    const json = await appA.infra.respaldoPerfil.exportar();
+
+    const resultado = await appB.infra.respaldoPerfil.importar(json, { resultados: 'todos' }); // sin indicadores
+    expect(resultado.importados.resultados).toBe(0);
+    expect(resultado.omitidos.resultados).toBe(1);
+    expect(resultado.advertencias.length).toBeGreaterThan(0);
   });
 });
 

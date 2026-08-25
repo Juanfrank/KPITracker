@@ -204,6 +204,11 @@ export class ResultadoRepositoryKnex extends RepositorioBase implements IResulta
     return filas.map(aResultado);
   }
 
+  async listarTodos(): Promise<Resultado[]> {
+    const filas = await this.knex('resultados').orderBy(['indicador_id', 'periodo_id', 'clave_desagregacion']);
+    return filas.map(aResultado);
+  }
+
   async guardar(resultado: Resultado): Promise<void> {
     // Clave natural (indicador, período, desagregación) — sin UNIQUE de BD
     // (ver migración inicial), la unicidad la garantiza este upsert transaccional.
