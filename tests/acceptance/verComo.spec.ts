@@ -23,7 +23,7 @@ test.afterAll(async () => {
 
 test.describe.configure({ mode: 'serial' });
 
-test('el admin crea un usuario no-administrador', async () => {
+test('el admin crea un usuario no-administrador con acceso excepcional a Configuración', async () => {
   await pagina.getByTestId('nav-admin').click();
   await pagina.getByTestId('nuevo-usuario').click();
   await pagina.getByTestId('usuario-nombreUsuario').fill('ana');
@@ -31,6 +31,13 @@ test('el admin crea un usuario no-administrador', async () => {
   await pagina.getByTestId('usuario-password').fill('contrasenaSegura1');
   await pagina.getByTestId('guardar-usuario').click();
   await expect(pagina.getByTestId('usuario-ana')).toBeVisible();
+
+  // X1 oculta del nav los módulos sin permiso — se le concede acceso excepcional a
+  // "catalogos.administrar" para poder ejercitar el siguiente test (mutación rechazada
+  // en modo simulación) navegando a Listas, que de otro modo quedaría oculto para ella.
+  await pagina.getByTestId('usuario-ana').click();
+  await pagina.getByTestId('usuario-permiso-excepcional-catalogos.administrar').check();
+  await pagina.getByTestId('guardar-usuario-edicion').click();
 });
 
 test('"Ver como" activa la simulación: banner visible y navega a Seguimiento', async () => {

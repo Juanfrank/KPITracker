@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ConfiguracionGeneral } from '@domain/index';
-import { invocar, protectedProcedure, router } from '../trpc';
+import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
 
 /**
  * Traslado mecánico de `config:*` (ver `src/shared/ipc.ts`): cada
@@ -12,7 +12,13 @@ import { invocar, protectedProcedure, router } from '../trpc';
 export const configRouter = router({
   obtener: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['config:obtener']())),
 
-  guardar: protectedProcedure
+  /**
+   * `catalogosAdminProcedure`, no `protectedProcedure`: la pantalla "General"
+   * vive dentro de la sección "Configuración" del nav (gateada en el cliente
+   * por el mismo permiso, ver `permisosNav.ts`) — sin este gate del lado del
+   * servidor, ocultar el módulo en el sidebar habría sido solo cosmético.
+   */
+  guardar: catalogosAdminProcedure
     .input(z.any())
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['config:guardar'](input as ConfiguracionGeneral))),
 
