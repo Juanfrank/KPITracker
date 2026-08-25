@@ -20,16 +20,24 @@ function etiquetaCombinacion(combinacion: Combinacion, listasPorId: Map<string, 
  * Configuración de Metas: igual que Recolección elige un indicador y
  * muestra sus combinaciones de desagregación como filas, pero en vez de
  * capturar UN resultado a la vez, aquí se define el VALOR OBJETIVO de
- * cada período de la recurrencia elegida (mensual, trimestral...) — todos
- * a la vista en una sola grilla, con pegado estilo Excel. La primera
- * columna ("Recurrente", Batch X X11) edita el valor que aplica por
- * defecto a TODOS los períodos de esa periodicidad/año — antes solo se
- * podía definir desde la sección "Metas" del formulario de Indicadores,
- * retirada de ahí para que la gestión de metas viva únicamente en este
- * módulo. Un override puntual por período (columnas siguientes) tiene
- * prioridad sobre el recurrente (ver `metaVigenteParaPeriodo`); dejar la
- * celda vacía borra ese override puntual y el período vuelve a tomar el
- * valor recurrente (mostrado atenuado como referencia).
+ * cada período de la recurrencia elegida — todos a la vista en una sola
+ * grilla, con pegado estilo Excel. La primera columna ("Recurrente",
+ * Batch X X11) edita el valor que aplica por defecto a TODOS los períodos
+ * de esa periodicidad/año — antes solo se podía definir desde la sección
+ * "Metas" del formulario de Indicadores, retirada de ahí para que la
+ * gestión de metas viva únicamente en este módulo. Un override puntual
+ * por período (columnas siguientes) tiene prioridad sobre el recurrente
+ * (ver `metaVigenteParaPeriodo`); dejar la celda vacía borra ese override
+ * puntual y el período vuelve a tomar el valor recurrente (mostrado
+ * atenuado como referencia).
+ *
+ * Batch X (X10): la periodicidad ya NO se elige aquí — se ciñe siempre a
+ * la periodicidad configurada en el propio indicador (se muestra fija,
+ * deshabilitada, solo como referencia); antes se podía elegir cualquier
+ * periodicidad de forma independiente, permitiendo metas "Trimestral"
+ * sobre un indicador "Mensual" que nunca podían corresponder a un período
+ * real de captura. "Año" pasa de un input numérico libre a un dropdown,
+ * igual que ya lo era la periodicidad.
  */
 export function ConfiguracionMetasPage(): React.JSX.Element {
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
@@ -38,8 +46,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
   const [elementosPorLista, setElementosPorLista] = useState<Map<string, ElementoLista[]>>(new Map());
   const [periodicidades, setPeriodicidades] = useState<DefinicionPeriodicidad[]>([]);
   const [metas, setMetas] = useState<Meta[]>([]);
-  const [periodicidad, setPeriodicidad] = useState<Periodicidad>(Periodicidad.Mensual);
-  const [periodicidadPersonalizadaId, setPeriodicidadPersonalizadaId] = useState<string | null>(null);
+  const [anioInicialConfig, setAnioInicialConfig] = useState<number>(new Date().getFullYear());
   const [anio, setAnio] = useState<number>(new Date().getFullYear());
   const [metodoCalculo, setMetodoCalculo] = useState<Meta['metodoCalculo']>('Promedio');
   // Debounce por celda (misma disciplina que IndicadoresPage/ListasPage, Batch U8):
@@ -50,21 +57,31 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
     void invocar('indicadores:listar', undefined).then((todos) => setIndicadores(todos.filter((i) => i.estado === 'Activo' && !i.esCalculado)));
     void invocar('listas:listar', undefined).then(setListas);
     void invocar('periodicidades:listar', undefined).then(setPeriodicidades);
-    void invocar('config:obtener', undefined).then((c) => setAnio(c.anioInicial));
+    void invocar('config:obtener', undefined).then((c) => {
+      setAnioInicialConfig(c.anioInicial);
+      setAnio(c.anioInicial);
+    });
   }, []);
 
   const indicador = indicadores.find((i) => i.id === indicadorId) ?? null;
+  // Ceñido al indicador (X10): nunca es una elección independiente del usuario.
+  const periodicidad = indicador?.periodicidad ?? Periodicidad.Mensual;
+  const periodicidadPersonalizadaId = indicador?.periodicidadPersonalizadaId ?? null;
+
+  // Dropdown de años (X10): del inicio configurado (Configuración General)
+  // hasta el año siguiente al actual — mismo rango que ya usa la exportación
+  // analítica — más el año actualmente elegido, por si quedó fuera de ese
+  // rango (p. ej. una meta antigua de un año antes del `anioInicial` vigente).
+  const anioActual = new Date().getFullYear();
+  const anios = [...new Set(
+    Array.from({ length: Math.max(anioActual + 1 - anioInicialConfig + 1, 0) }, (_, i) => anioInicialConfig + i).concat(anio)
+  )].sort((a, b) => a - b);
 
   const seleccionarIndicador = async (id: string): Promise<void> => {
     setIndicadorId(id || null);
     if (!id) {
       setMetas([]);
       return;
-    }
-    const encontrado = indicadores.find((i) => i.id === id);
-    if (encontrado) {
-      setPeriodicidad(encontrado.periodicidad);
-      setPeriodicidadPersonalizadaId(encontrado.periodicidadPersonalizadaId);
     }
     setMetas(await invocar('metas:listar', { indicadorId: id }));
   };
@@ -87,7 +104,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
   let errorPeriodos: string | null = null;
   if (indicador) {
     if (periodicidad === Periodicidad.Personalizada && !definicionPersonalizada) {
-      errorPeriodos = 'Seleccione una definición de periodicidad personalizada para ver sus períodos.';
+      errorPeriodos = 'El indicador no tiene una definición de periodicidad personalizada válida configurada. Corríjala en Indicadores.';
     } else {
       periodos = generadorPeriodos.periodosDelAnio(anio, periodicidad, definicionPersonalizada);
     }
@@ -224,7 +241,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
     <>
       <Encabezado
         titulo="Configuración de Metas"
-        descripcion='Defina el valor objetivo de cada período según la recurrencia elegida (mensual, trimestral, semestral, anual...). Un valor puntual por período tiene prioridad sobre el recurrente ya definido en "Metas" del indicador; déjelo vacío para volver a ese valor recurrente.'
+        descripcion='Defina el valor objetivo de cada período, según la periodicidad configurada en el propio indicador. Un valor puntual por período tiene prioridad sobre el recurrente (columna "Recurrente"); déjelo vacío para volver a ese valor recurrente.'
       />
       <div className="tarjeta">
         <div className="fila-form c4">
@@ -236,28 +253,21 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Periodicidad (recurrencia)">
-            <select
-              value={periodicidad}
-              disabled={!indicador}
-              onChange={(e) => {
-                const nueva = e.target.value as Periodicidad;
-                setPeriodicidad(nueva);
-                if (nueva !== Periodicidad.Personalizada) setPeriodicidadPersonalizadaId(null);
-              }}
-              data-testid="configuracion-metas-periodicidad"
-            >
+          {/* Ceñida al indicador (X10): ya no es una elección — se muestra fija/deshabilitada, solo como referencia. */}
+          <Campo etiqueta="Periodicidad (del indicador)">
+            <select value={periodicidad} disabled data-testid="configuracion-metas-periodicidad">
               {PERIODICIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </Campo>
           <Campo etiqueta="Año">
-            <input
-              type="number"
+            <select
               value={anio}
               disabled={!indicador}
               onChange={(e) => setAnio(Number(e.target.value))}
               data-testid="configuracion-metas-anio"
-            />
+            >
+              {anios.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
           </Campo>
           <Campo etiqueta="Método (nuevas celdas)">
             <select
@@ -270,17 +280,10 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
             </select>
           </Campo>
         </div>
-        {periodicidad === Periodicidad.Personalizada && indicador && (
-          <Campo etiqueta="Definición de periodicidad personalizada">
-            <select
-              value={periodicidadPersonalizadaId ?? ''}
-              onChange={(e) => setPeriodicidadPersonalizadaId(e.target.value || null)}
-              data-testid="configuracion-metas-periodicidad-personalizada"
-            >
-              <option value="">— seleccionar —</option>
-              {periodicidades.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-            </select>
-          </Campo>
+        {periodicidad === Periodicidad.Personalizada && indicador && definicionPersonalizada && (
+          <p className="texto-suave" style={{ margin: '8px 0 0' }}>
+            Definición personalizada: <strong>{definicionPersonalizada.nombre}</strong> (configurada en el indicador).
+          </p>
         )}
       </div>
 

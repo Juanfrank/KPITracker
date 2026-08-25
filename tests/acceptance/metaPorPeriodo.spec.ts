@@ -49,7 +49,7 @@ test('preparación: indicador con meta global, un resultado capturado, y una Met
   await pagina.getByTestId('nav-configuracion-metas').click();
   await pagina.getByTestId('configuracion-metas-indicador').selectOption({ label: 'Tasa de vacunación anual' });
   await expect(pagina.getByTestId('configuracion-metas-periodicidad')).toHaveValue('Mensual');
-  await pagina.getByTestId('configuracion-metas-anio').fill('2026');
+  await pagina.getByTestId('configuracion-metas-anio').selectOption('2026');
   const recurrente = pagina.getByTestId('meta-recurrente-GENERAL');
   await recurrente.fill('95');
   await recurrente.blur();
