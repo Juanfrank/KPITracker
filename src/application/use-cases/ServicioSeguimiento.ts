@@ -65,6 +65,9 @@ export interface FilaHistorico {
   lineaBase: number | null;
   metaGlobal: number | null;
   unidadMedida: string | null;
+  /** X3 (Batch X): el histórico ganó el mismo par responsableId/responsable que ya trae `FilaTablero`. */
+  responsableId: string | null;
+  responsable: string | null;
   categoriaId: string | null;
   categoria: string | null;
   /** Equipo EFECTIVO (directo si está seteado, si no indirecto vía el responsable) — ver `equipoEfectivo`. */
@@ -308,6 +311,7 @@ export class ServicioSeguimiento extends ServicioBase {
     const hoy = this.ctx.reloj.hoyIso();
     const filas: FilaHistorico[] = [];
 
+    const nombreResponsable = new Map(usuarios.map((u) => [u.id, u.nombreCompleto]));
     const nombreCategoria = new Map(categorias.map((c) => [c.id, c.nombre]));
     const nombreEquipo = new Map(equipos.map((e) => [e.id, e.nombre]));
     const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
@@ -346,6 +350,8 @@ export class ServicioSeguimiento extends ServicioBase {
         lineaBase: indicador.lineaBase,
         metaGlobal: indicador.metaGlobal,
         unidadMedida: indicador.unidadMedida,
+        responsableId: indicador.responsable,
+        responsable: indicador.responsable == null ? null : (nombreResponsable.get(indicador.responsable) ?? indicador.responsable),
         ...this.clasificacionDe(indicador, nombreCategoria, nombreEquipo, usuariosPorId),
         puntos
       });

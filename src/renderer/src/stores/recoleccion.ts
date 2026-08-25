@@ -40,7 +40,15 @@ interface EstadoRecoleccion {
    * conciliación de un origen automático en Indicadores).
    */
   refrescar(): Promise<void>;
-  seleccionarIndicador(indicadorId: string): Promise<void>;
+  /**
+   * X2 (Batch X): `periodoId` opcional para un deep link desde Seguimiento >
+   * Estado que ya sabe a qué período concreto ir (un botón por fila del
+   * panel de detalle, en vez del genérico "ir a la captura" que siempre
+   * caía en el período pendiente). Si no viene, o no existe entre los
+   * períodos del indicador, se conserva el comportamiento de siempre
+   * (el último período cerrado).
+   */
+  seleccionarIndicador(indicadorId: string, periodoId?: string): Promise<void>;
   seleccionarPeriodo(periodoId: string): Promise<void>;
   guardarCelda(claveDesagregacion: string, valorCrudo: string, opciones?: { desdeHistorial?: boolean }): Promise<void>;
   deshacer(): Promise<void>;
@@ -104,7 +112,7 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     }
   },
 
-  async seleccionarIndicador(indicadorId) {
+  async seleccionarIndicador(indicadorId, periodoId) {
     const [periodos, automatizacion] = await Promise.all([
       invocar('recoleccion:periodos', { indicadorId }),
       invocar('automatizacion:obtener', { indicadorId })
@@ -113,7 +121,14 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
       indicadorId, periodos, periodoId: null, captura: null, pilaDeshacer: [], pilaRehacer: [],
       mensajeAutomatico: null, automatizacionConfigurada: automatizacion != null
     });
-    // Selecciona por defecto el último período cerrado (el más reciente a levantar).
+    // X2: un `periodoId` explícito (deep link desde el panel de detalle de Seguimiento) gana
+    // sobre el default, siempre que exista entre los períodos del indicador — si no, se cae
+    // al comportamiento de siempre: el último período cerrado (el más reciente a levantar).
+    const pedido = periodoId ? periodos.find((p) => p.id === periodoId) : undefined;
+    if (pedido) {
+      await get().seleccionarPeriodo(pedido.id);
+      return;
+    }
     const hoy = new Date().toISOString().slice(0, 10);
     const cerrados = periodos.filter((p) => p.fechaFin < hoy);
     const porDefecto = cerrados[cerrados.length - 1] ?? periodos[periodos.length - 1];

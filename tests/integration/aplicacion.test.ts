@@ -1294,6 +1294,20 @@ describe('Composition root — histórico de resultados en Seguimiento', () => {
     expect(fila?.equipoId).toBe(equipo.id);
     expect(fila?.equipo).toBe('Equipo Histórico');
   });
+
+  it('expone el responsable, igual que el tablero de Estado (X3, Batch X)', async () => {
+    const responsable = await app.usuarios.crear({
+      nombreUsuario: 'resp.historico', nombreCompleto: 'Responsable Histórico', password: 'contrasenaSegura1'
+    });
+    const guardado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ responsable: responsable.id }), valores: []
+    });
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === guardado.id);
+    expect(fila?.responsableId).toBe(responsable.id);
+    expect(fila?.responsable).toBe('Responsable Histórico');
+  });
 });
 
 describe('Composition root — atributos filtrables en Seguimiento', () => {

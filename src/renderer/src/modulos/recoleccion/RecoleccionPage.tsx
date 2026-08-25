@@ -114,9 +114,12 @@ export function RecoleccionPage(): React.JSX.Element {
     // p. ej.), se selecciona ese indicador de cero. Si no, se refresca la selección
     // que ya hubiera en el store (singleton de módulo: sobrevive a haber estado en
     // otra página) sin perderla — ver el docstring de `refrescar` en el store.
+    // X2: un `periodoId` opcional junto al indicadorId (botón por fila del panel de
+    // detalle de Seguimiento > Estado) va directo a ESE período, no al más reciente.
     const indicadorId = parametros.get('indicadorId');
+    const periodoId = parametros.get('periodoId');
     if (indicadorId) {
-      void vm.cargarIndicadores().then(() => void vm.seleccionarIndicador(indicadorId));
+      void vm.cargarIndicadores().then(() => void vm.seleccionarIndicador(indicadorId, periodoId ?? undefined));
     } else {
       void vm.refrescar();
     }

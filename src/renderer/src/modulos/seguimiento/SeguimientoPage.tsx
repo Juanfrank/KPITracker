@@ -350,6 +350,16 @@ export function SeguimientoPage(): React.JSX.Element {
         {nivel > 0 && <span className="conector-jerarquia">└</span>}
         <strong>{h.nombre}</strong>
       </td>
+      {/* X3: el histórico gana la misma columna Responsable (+equipo en segunda línea, U6) que ya tiene Estado. */}
+      <td className="texto-suave">
+        {h.responsable ?? '—'}
+        {h.responsable && h.equipo && (
+          <>
+            <br />
+            <span style={{ fontSize: '0.8em' }}>({h.equipo})</span>
+          </>
+        )}
+      </td>
       <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       {columnasHistorico.map((c) => {
@@ -562,6 +572,7 @@ export function SeguimientoPage(): React.JSX.Element {
                 />
               </th>
               <th>Indicador</th>
+              <th>Responsable</th>
               <th>Estado</th>
               <th>Periodicidad</th>
               <th>Responsable</th>
@@ -862,6 +873,7 @@ export function SeguimientoPage(): React.JSX.Element {
             <thead>
               <tr>
                 <th>Indicador</th>
+                <th>Responsable</th>
                 <th>Línea base</th>
                 <th>Meta</th>
                 {columnasHistorico.map((c) => (
@@ -871,13 +883,18 @@ export function SeguimientoPage(): React.JSX.Element {
             </thead>
             <tbody>
               {historicoVisible.map((h) => (
-                <tr key={h.indicadorId} data-testid={`historico-${h.nombre}`}>
+                <tr
+                  key={h.indicadorId}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => void invocar('seguimiento:detalle', { indicadorId: h.indicadorId }).then(setDetalle)}
+                  data-testid={`historico-${h.nombre}`}
+                >
                   {celdaHistorico(h)}
                 </tr>
               ))}
               {historicoVisible.length === 0 && (
                 <tr>
-                  <td colSpan={3 + columnasHistorico.length}>
+                  <td colSpan={4 + columnasHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -898,6 +915,7 @@ export function SeguimientoPage(): React.JSX.Element {
               <tr>
                 <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
                 <th>Categoría / Indicador</th>
+                <th>Responsable</th>
                 <th>Línea base</th>
                 <th>Meta</th>
                 {columnasHistorico.map((c) => (
@@ -925,7 +943,7 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      <td colSpan={2 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      <td colSpan={3 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                         {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -934,7 +952,12 @@ export function SeguimientoPage(): React.JSX.Element {
                   );
                 }
                 return (
-                  <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
+                  <tr
+                    key={`i-${nodo.id}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => void invocar('seguimiento:detalle', { indicadorId: nodo.fila.indicadorId }).then(setDetalle)}
+                    data-testid={`historico-${nodo.fila.nombre}`}
+                  >
                     <td className="celda-arbol" />
                     {celdaHistorico(nodo.fila, nodo.nivel)}
                   </tr>
@@ -942,7 +965,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={4 + columnasHistorico.length}>
+                  <td colSpan={5 + columnasHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -963,6 +986,7 @@ export function SeguimientoPage(): React.JSX.Element {
               <tr>
                 <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
                 <th>Equipo / Categoría / Indicador</th>
+                <th>Responsable</th>
                 <th>Línea base</th>
                 <th>Meta</th>
                 {columnasHistorico.map((c) => (
@@ -974,7 +998,12 @@ export function SeguimientoPage(): React.JSX.Element {
               {arbolEquipoHistorico.map((nodo) => {
                 if (nodo.tipo === 'indicador') {
                   return (
-                    <tr key={`i-${nodo.id}`} data-testid={`historico-${nodo.fila.nombre}`}>
+                    <tr
+                      key={`i-${nodo.id}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => void invocar('seguimiento:detalle', { indicadorId: nodo.fila.indicadorId }).then(setDetalle)}
+                      data-testid={`historico-${nodo.fila.nombre}`}
+                    >
                       <td className="celda-arbol" />
                       {celdaHistorico(nodo.fila, nodo.nivel)}
                     </tr>
@@ -997,7 +1026,7 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={2 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    <td colSpan={3 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1007,7 +1036,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolEquipoHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={4 + columnasHistorico.length}>
+                  <td colSpan={5 + columnasHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -1031,6 +1060,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   <th>Estado</th>
                   <th>Fecha límite</th>
                   <th>Avance</th>
+                  <th aria-label="Ir a recolección" />
                 </tr>
               </thead>
               <tbody>
@@ -1040,17 +1070,27 @@ export function SeguimientoPage(): React.JSX.Element {
                     <td><ChipEstado estado={e.estado} /></td>
                     <td>{e.fechaLimite}</td>
                     <td><BarraProgreso valor={e.combinacionesConValor} total={e.totalCombinaciones} /></td>
+                    <td>
+                      {/* X2: un botón por fila de período, en vez del genérico "ir a la captura" de
+                          antes — cada uno navega directo a ESE período, no al más reciente. */}
+                      <button
+                        className="boton sutil"
+                        title={`Ir a recolección — ${e.periodo.etiqueta}`}
+                        onClick={() =>
+                          navigate(
+                            `/recoleccion?indicadorId=${encodeURIComponent(detalle.indicadorId)}&periodoId=${encodeURIComponent(e.periodo.id)}`
+                          )
+                        }
+                        data-testid={`detalle-ir-recoleccion-${e.periodo.id}`}
+                      >
+                        <Icono nombre="captura" tamano={13} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <button
-            className="boton primario"
-            onClick={() => navigate(`/recoleccion?indicadorId=${encodeURIComponent(detalle.indicadorId)}`)}
-          >
-            Ir a la captura
-          </button>
         </PanelLateral>
       )}
     </>
