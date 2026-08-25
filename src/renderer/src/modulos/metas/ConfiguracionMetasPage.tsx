@@ -16,6 +16,30 @@ function etiquetaCombinacion(combinacion: Combinacion, listasPorId: Map<string, 
   return combinacion.etiquetas.map((e) => `${listasPorId.get(e.listaId)?.nombre ?? e.listaId}: ${e.descripcion}`).join(' / ');
 }
 
+/** Modo de generación de metas automáticas (Batch X, X14). */
+type ModoMetaAutomatica = 'constante' | 'incrementoAbsoluto' | 'decrementoAbsoluto' | 'incrementoPorcentual' | 'decrementoPorcentual';
+
+const ETIQUETAS_MODO_AUTO: Record<ModoMetaAutomatica, string> = {
+  constante: 'Mismo valor en todos los períodos',
+  incrementoAbsoluto: 'Subir N entre períodos',
+  decrementoAbsoluto: 'Bajar N entre períodos',
+  incrementoPorcentual: 'Subir N% entre períodos',
+  decrementoPorcentual: 'Bajar N% entre períodos'
+};
+
+/** Valor objetivo del `paso`-ésimo período (0 = el inicial) según el modo elegido, redondeado a 2 decimales. */
+function valorAutomatico(valorInicial: number, modo: ModoMetaAutomatica, incremento: number, paso: number): number {
+  let valor: number;
+  switch (modo) {
+    case 'incrementoAbsoluto': valor = valorInicial + incremento * paso; break;
+    case 'decrementoAbsoluto': valor = valorInicial - incremento * paso; break;
+    case 'incrementoPorcentual': valor = valorInicial * Math.pow(1 + incremento / 100, paso); break;
+    case 'decrementoPorcentual': valor = valorInicial * Math.pow(1 - incremento / 100, paso); break;
+    default: valor = valorInicial;
+  }
+  return Math.round(valor * 100) / 100;
+}
+
 /**
  * Configuración de Metas: igual que Recolección elige un indicador y
  * muestra sus combinaciones de desagregación como filas, pero en vez de
@@ -52,6 +76,14 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
   // Debounce por celda (misma disciplina que IndicadoresPage/ListasPage, Batch U8):
   // actualiza el estado local al instante, difiere la escritura de red.
   const temporizadores = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  // Establecer metas automáticamente (Batch X, X14).
+  const [autoDesagregacion, setAutoDesagregacion] = useState('GENERAL');
+  const [autoValor, setAutoValor] = useState('');
+  const [autoPeriodoInicialId, setAutoPeriodoInicialId] = useState('');
+  const [autoModo, setAutoModo] = useState<ModoMetaAutomatica>('constante');
+  const [autoIncremento, setAutoIncremento] = useState('');
+  const [autoMensaje, setAutoMensaje] = useState<string | null>(null);
 
   useEffect(() => {
     void invocar('indicadores:listar', undefined).then((todos) => setIndicadores(todos.filter((i) => i.estado === 'Activo' && !i.esCalculado)));
@@ -237,6 +269,46 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
     }
   };
 
+  // Valores efectivos del panel "Establecer metas automáticamente": si lo elegido dejó de ser
+  // válido (cambió de indicador, año o desagregaciones), cae a la primera opción disponible en
+  // vez de quedar apuntando a algo que ya no existe en esta grilla.
+  const autoDesagregacionEfectiva = combinaciones.some((c) => claveATexto(c.clave) === autoDesagregacion)
+    ? autoDesagregacion
+    : claveATexto(combinaciones[0]?.clave ?? { pares: [] });
+  const autoPeriodoInicialEfectivo = periodos.some((p) => p.id === autoPeriodoInicialId) ? autoPeriodoInicialId : (periodos[0]?.id ?? '');
+
+  /**
+   * Genera valores objetivo para el período elegido y todos los siguientes
+   * (dentro del año/periodicidad visibles) a partir de un valor inicial y un
+   * modo de variación — mismo valor, subir/bajar una cantidad fija, o
+   * subir/bajar un porcentaje, entre cada período consecutivo. Escribe cada
+   * celda como override puntual (mismo camino que editarla a mano).
+   */
+  const aplicarMetasAutomaticas = (): void => {
+    if (!indicador) return;
+    const valorInicial = Number(autoValor);
+    if (autoValor.trim() === '' || Number.isNaN(valorInicial)) {
+      setAutoMensaje('Ingrese un valor inicial válido.');
+      return;
+    }
+    const incremento = Number(autoIncremento || '0');
+    if (autoModo !== 'constante' && (autoIncremento.trim() === '' || Number.isNaN(incremento))) {
+      setAutoMensaje('Ingrese la cantidad o porcentaje entre períodos.');
+      return;
+    }
+    const indiceInicial = periodos.findIndex((p) => p.id === autoPeriodoInicialEfectivo);
+    if (indiceInicial === -1) {
+      setAutoMensaje('Seleccione un período inicial válido.');
+      return;
+    }
+    for (let i = indiceInicial; i < periodos.length; i++) {
+      const valor = valorAutomatico(valorInicial, autoModo, incremento, i - indiceInicial);
+      manejarCambioCelda(autoDesagregacionEfectiva, periodos[i]!, String(valor));
+    }
+    const cantidad = periodos.length - indiceInicial;
+    setAutoMensaje(`${cantidad} período(s) actualizado(s) desde "${periodos[indiceInicial]!.etiqueta}".`);
+  };
+
   return (
     <>
       <Encabezado
@@ -286,6 +358,76 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
           </p>
         )}
       </div>
+
+      {indicador && !errorPeriodos && (
+        <div className="tarjeta" data-testid="panel-metas-automaticas">
+          <h3 style={{ marginTop: 0 }}>Establecer metas automáticamente</h3>
+          <p className="texto-suave" style={{ marginTop: 0 }}>
+            Genera el valor objetivo de un período y todos los siguientes (del año/periodicidad visibles) a partir de un valor
+            inicial y una regla de variación entre períodos.
+          </p>
+          <div className="fila-form c4">
+            <Campo etiqueta="Desagregación">
+              <select
+                value={autoDesagregacionEfectiva}
+                onChange={(e) => setAutoDesagregacion(e.target.value)}
+                data-testid="metas-auto-desagregacion"
+              >
+                {combinaciones.map((c) => {
+                  const clave = claveATexto(c.clave);
+                  return <option key={clave} value={clave}>{etiquetaCombinacion(c, listasPorId)}</option>;
+                })}
+              </select>
+            </Campo>
+            <Campo etiqueta="Valor inicial">
+              <input
+                type="number"
+                value={autoValor}
+                onChange={(e) => setAutoValor(e.target.value)}
+                data-testid="metas-auto-valor"
+              />
+            </Campo>
+            <Campo etiqueta="Período inicial">
+              <select
+                value={autoPeriodoInicialEfectivo}
+                onChange={(e) => setAutoPeriodoInicialId(e.target.value)}
+                data-testid="metas-auto-periodo-inicial"
+              >
+                {periodos.map((p) => <option key={p.id} value={p.id}>{p.etiqueta}</option>)}
+              </select>
+            </Campo>
+            <Campo etiqueta="Modo">
+              <select
+                value={autoModo}
+                onChange={(e) => setAutoModo(e.target.value as ModoMetaAutomatica)}
+                data-testid="metas-auto-modo"
+              >
+                {(Object.keys(ETIQUETAS_MODO_AUTO) as ModoMetaAutomatica[]).map((m) => (
+                  <option key={m} value={m}>{ETIQUETAS_MODO_AUTO[m]}</option>
+                ))}
+              </select>
+            </Campo>
+          </div>
+          {autoModo !== 'constante' && (
+            <div className="fila-form c4">
+              <Campo etiqueta={autoModo.endsWith('Porcentual') ? 'Porcentaje entre períodos (%)' : 'Cantidad entre períodos'}>
+                <input
+                  type="number"
+                  value={autoIncremento}
+                  onChange={(e) => setAutoIncremento(e.target.value)}
+                  data-testid="metas-auto-incremento"
+                />
+              </Campo>
+            </div>
+          )}
+          <button className="boton primario" style={{ marginTop: 8 }} onClick={aplicarMetasAutomaticas} data-testid="aplicar-metas-auto">
+            Aplicar
+          </button>
+          {autoMensaje && (
+            <div className="aviso info" style={{ marginTop: 8 }} data-testid="aviso-metas-auto">{autoMensaje}</div>
+          )}
+        </div>
+      )}
 
       {!indicador ? (
         <Vacio icono="◎" mensaje="Seleccione un indicador" detalle="para configurar sus metas por período" />
