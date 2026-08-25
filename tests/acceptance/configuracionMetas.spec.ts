@@ -7,10 +7,13 @@ import { iniciarAppWeb } from './fixtures';
  * indicador; filas = combinaciones de desagregación) pero pivotado por
  * período según la recurrencia elegida — todos los períodos del año a la
  * vista como columnas, para definir un valor objetivo distinto por
- * período. Un override puntual (celda con valor) tiene prioridad sobre el
- * valor recurrente ya definido en "Metas" del indicador; vaciar la celda
- * borra el override y el período vuelve a mostrar el recurrente como
- * referencia (placeholder).
+ * período. La columna "Recurrente" (Batch X, X11) edita el valor que
+ * aplica por defecto a todos los períodos de esa periodicidad/año — antes
+ * solo se podía definir desde la sección "Metas" del formulario de
+ * Indicadores, retirada de ahí para que la gestión de metas viva
+ * únicamente en este módulo. Un override puntual (celda con valor) tiene
+ * prioridad sobre el recurrente; vaciar la celda borra el override y el
+ * período vuelve a mostrar el recurrente como referencia (placeholder).
  */
 
 let pagina: Page;
@@ -47,9 +50,9 @@ test('la grilla muestra el indicador con sus períodos como columnas, según la 
   await expect(pagina.getByTestId('configuracion-metas-periodicidad')).toHaveValue('Mensual');
   await expect(pagina.getByTestId('tabla-configuracion-metas')).toBeVisible();
 
-  // 12 columnas de período (Mensual) + 1 columna de etiqueta de fila.
+  // 12 columnas de período (Mensual) + 1 columna "Recurrente" + 1 columna de etiqueta de fila.
   const encabezados = pagina.getByTestId('tabla-configuracion-metas').locator('thead th');
-  await expect(encabezados).toHaveCount(13);
+  await expect(encabezados).toHaveCount(14);
   // 1 sola fila: "General" (el indicador no tiene desagregaciones).
   await expect(pagina.getByTestId('tabla-configuracion-metas').locator('tbody tr')).toHaveCount(1);
 });
@@ -74,21 +77,16 @@ test('escribir un valor en una celda de período lo persiste como override puntu
 test('cambiar la periodicidad a Trimestral revela el valor recurrente (300) como referencia atenuada en cada trimestre', async () => {
   const anio = new Date().getFullYear();
 
-  // Configura primero la meta recurrente Trimestral (300) desde el propio indicador. El
-  // indicador ya tiene 1 meta (el override de Marzo de la prueba anterior) en la fila 0 —
-  // "+ Meta" agrega la nueva en la fila 1, no la 0.
-  await pagina.getByTestId('nav-indicadores').click();
-  await pagina.getByTestId('indicador-Cobertura de vacunación').click();
-  await expect(pagina.getByTestId('tabla-metas').locator('tbody tr')).toHaveCount(1);
-  await pagina.getByTestId('agregar-meta').click();
-  await pagina.getByTestId('meta-valor-1').fill('300');
-  await pagina.getByTestId('meta-periodicidad-1').selectOption('Trimestral');
-  await pagina.waitForTimeout(700);
-  await pagina.getByTestId('cancelar-indicador').click();
-
+  // Configura la meta recurrente Trimestral (300) desde la propia columna "Recurrente"
+  // de Configuración de Metas (Batch X, X11) — ya no existe la sección "Metas" del
+  // formulario de Indicadores.
   await pagina.getByTestId('nav-configuracion-metas').click();
   await pagina.getByTestId('configuracion-metas-indicador').selectOption({ label: 'Cobertura de vacunación' });
   await pagina.getByTestId('configuracion-metas-periodicidad').selectOption('Trimestral');
+  const recurrente = pagina.getByTestId('meta-recurrente-GENERAL');
+  await recurrente.fill('300');
+  await recurrente.blur();
+  await pagina.waitForTimeout(700);
 
   const celdaT1 = pagina.getByTestId(`meta-celda-GENERAL-${anio}-Trimestral-01`);
   await expect(celdaT1).toHaveValue('');
@@ -109,4 +107,25 @@ test('vaciar una celda con override borra el registro y vuelve a mostrar la recu
   await pagina.getByTestId('configuracion-metas-indicador').selectOption('');
   await pagina.getByTestId('configuracion-metas-indicador').selectOption({ label: 'Cobertura de vacunación' });
   await expect(pagina.getByTestId(`meta-celda-GENERAL-${anio}-Mensual-03`)).toHaveValue('');
+});
+
+test('la columna "Recurrente" persiste el valor recurrente y vaciarla lo elimina (deja de aparecer como placeholder)', async () => {
+  await pagina.getByTestId('configuracion-metas-periodicidad').selectOption('Trimestral');
+  const recurrente = pagina.getByTestId('meta-recurrente-GENERAL');
+  await expect(recurrente).toHaveValue('300');
+
+  // Recarga (reselecciona el indicador) para confirmar que quedó persistido, no solo en memoria.
+  await pagina.getByTestId('configuracion-metas-indicador').selectOption('');
+  await pagina.getByTestId('configuracion-metas-indicador').selectOption({ label: 'Cobertura de vacunación' });
+  await pagina.getByTestId('configuracion-metas-periodicidad').selectOption('Trimestral');
+  await expect(pagina.getByTestId('meta-recurrente-GENERAL')).toHaveValue('300');
+
+  const anio = new Date().getFullYear();
+  const celdaT1 = pagina.getByTestId(`meta-celda-GENERAL-${anio}-Trimestral-01`);
+  await expect(celdaT1).toHaveAttribute('placeholder', '300');
+
+  await pagina.getByTestId('meta-recurrente-GENERAL').fill('');
+  await pagina.getByTestId('meta-recurrente-GENERAL').blur();
+  await pagina.waitForTimeout(300);
+  await expect(celdaT1).not.toHaveAttribute('placeholder', '300');
 });

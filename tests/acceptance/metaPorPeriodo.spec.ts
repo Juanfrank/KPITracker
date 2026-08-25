@@ -43,17 +43,17 @@ test('preparación: indicador con meta global, un resultado capturado, y una Met
   await pagina.waitForTimeout(1500);
 
   // Meta específica (95, distinta de la global 90) para el mismo año/periodicidad
-  // que cubre el período recién capturado (Junio 2026, Mensual).
-  await pagina.getByTestId('nav-indicadores').click();
-  await pagina.getByTestId('indicador-Tasa de vacunación anual').click();
-  await pagina.getByTestId('agregar-meta').click();
-  await pagina.getByTestId('meta-valor-0').fill('95');
-  await pagina.getByTestId('meta-anio-0').fill('2026');
-  await expect(pagina.getByTestId('meta-periodicidad-0')).toHaveValue('Mensual');
+  // que cubre el período recién capturado (Junio 2026, Mensual) — configurada desde
+  // la columna "Recurrente" de Configuración de Metas (Batch X, X11: ya no existe la
+  // sección "Metas" del formulario de Indicadores).
+  await pagina.getByTestId('nav-configuracion-metas').click();
+  await pagina.getByTestId('configuracion-metas-indicador').selectOption({ label: 'Tasa de vacunación anual' });
+  await expect(pagina.getByTestId('configuracion-metas-periodicidad')).toHaveValue('Mensual');
+  await pagina.getByTestId('configuracion-metas-anio').fill('2026');
+  const recurrente = pagina.getByTestId('meta-recurrente-GENERAL');
+  await recurrente.fill('95');
+  await recurrente.blur();
   await pagina.waitForTimeout(700);
-  // Cierra el panel del indicador (la Meta ya se guardó por su propio debounce) —
-  // dejarlo abierto deja el `.telon` de PanelLateral bloqueando clics en el resto de la app.
-  await pagina.getByTestId('cancelar-indicador').click();
 });
 
 test('el histórico muestra "Meta: 95" (la Meta configurada del período), no la meta global 90', async () => {

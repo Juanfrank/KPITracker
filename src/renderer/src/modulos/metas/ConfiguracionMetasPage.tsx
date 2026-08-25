@@ -21,11 +21,15 @@ function etiquetaCombinacion(combinacion: Combinacion, listasPorId: Map<string, 
  * muestra sus combinaciones de desagregación como filas, pero en vez de
  * capturar UN resultado a la vez, aquí se define el VALOR OBJETIVO de
  * cada período de la recurrencia elegida (mensual, trimestral...) — todos
- * a la vista en una sola grilla, con pegado estilo Excel. Un valor puntual
- * por período tiene prioridad sobre el valor recurrente ya definido en
- * Indicadores (ver `metaVigenteParaPeriodo`); dejar la celda vacía borra
- * ese override puntual y el período vuelve a tomar el valor recurrente
- * (mostrado atenuado como referencia).
+ * a la vista en una sola grilla, con pegado estilo Excel. La primera
+ * columna ("Recurrente", Batch X X11) edita el valor que aplica por
+ * defecto a TODOS los períodos de esa periodicidad/año — antes solo se
+ * podía definir desde la sección "Metas" del formulario de Indicadores,
+ * retirada de ahí para que la gestión de metas viva únicamente en este
+ * módulo. Un override puntual por período (columnas siguientes) tiene
+ * prioridad sobre el recurrente (ver `metaVigenteParaPeriodo`); dejar la
+ * celda vacía borra ese override puntual y el período vuelve a tomar el
+ * valor recurrente (mostrado atenuado como referencia).
  */
 export function ConfiguracionMetasPage(): React.JSX.Element {
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
@@ -175,6 +179,47 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
     }
   };
 
+  /** Vacío borra la meta recurrente (si existía); un número la crea o actualiza — aplica a TODOS los períodos de la periodicidad/año elegidos. */
+  const manejarCambioRecurrente = (clave: string, texto: string): void => {
+    if (!indicador) return;
+    const existente = obtenerRecurrente(clave);
+    const limpio = texto.trim();
+    if (limpio === '') {
+      if (existente) eliminarCeldaMeta(existente);
+      return;
+    }
+    const valor = Number(limpio);
+    if (Number.isNaN(valor)) return;
+    if (existente) {
+      guardarCeldaMeta({ ...existente, valor });
+    } else {
+      guardarCeldaMeta({
+        id: crypto.randomUUID(),
+        indicadorId: indicador.id,
+        claveDesagregacion: clave,
+        valor,
+        periodicidadMedicion: periodicidad,
+        periodicidadPersonalizadaId: periodicidad === Periodicidad.Personalizada ? periodicidadPersonalizadaId : null,
+        metodoCalculo,
+        anioVigencia: anio,
+        periodoId: null,
+        creadoEn: '',
+        actualizadoEn: ''
+      });
+    }
+  };
+
+  /** Pegado estilo Excel sobre la columna "Recurrente": una fila por combinación, desde la celda pegada hacia abajo. */
+  const pegarColumnaRecurrente = (indiceFilaInicio: number, texto: string): void => {
+    const lineas = texto.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '');
+    for (let f = 0; f < lineas.length; f++) {
+      const fila = combinaciones[indiceFilaInicio + f];
+      if (!fila) break;
+      const clave = claveATexto(fila.clave);
+      manejarCambioRecurrente(clave, (lineas[f] ?? '').split('\t')[0] ?? '');
+    }
+  };
+
   return (
     <>
       <Encabezado
@@ -249,6 +294,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
             <thead>
               <tr>
                 <th>Desagregación</th>
+                <th style={{ textAlign: 'right', minWidth: 110 }}>Recurrente</th>
                 {periodos.map((p) => <th key={p.id} style={{ textAlign: 'right', minWidth: 110 }}>{p.etiqueta}</th>)}
               </tr>
             </thead>
@@ -261,6 +307,14 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
                     <td style={{ paddingLeft: 8 + combinacion.nivel * 16 }}>
                       {combinacion.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiquetaCombinacion(combinacion, listasPorId)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <CeldaMetaPeriodo
+                        valorInicial={recurrente?.valor ?? null}
+                        alConfirmar={(texto) => manejarCambioRecurrente(clave, texto)}
+                        alPegar={(texto) => pegarColumnaRecurrente(indiceFila, texto)}
+                        testId={`meta-recurrente-${clave}`}
+                      />
                     </td>
                     {periodos.map((periodo, indiceCol) => {
                       const celda = obtenerCelda(clave, periodo.id);
