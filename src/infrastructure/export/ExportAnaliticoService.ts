@@ -81,7 +81,7 @@ export class ExportAnaliticoService implements IExportService {
     }, this.debounceMs);
   }
 
-  async regenerar(): Promise<void> {
+  async regenerar(forzarCsv = false): Promise<void> {
     if (this.temporizador) {
       clearTimeout(this.temporizador);
       this.temporizador = null;
@@ -90,7 +90,7 @@ export class ExportAnaliticoService implements IExportService {
       const db = await DuckDbAnalitico.crear();
       try {
         await this.generarDimensiones(db);
-        await this.generarTablaAnalitica(db);
+        await this.generarTablaAnalitica(db, forzarCsv);
       } finally {
         db.cerrar();
       }
@@ -202,7 +202,7 @@ export class ExportAnaliticoService implements IExportService {
     );
   }
 
-  private async generarTablaAnalitica(db: DuckDbAnalitico): Promise<void> {
+  private async generarTablaAnalitica(db: DuckDbAnalitico, forzarCsv = false): Promise<void> {
     const config = await this.configuracion.obtener();
 
     const listas = await this.knex('listas').select<{ id: string; nombre: string }[]>('id', 'nombre');
@@ -374,7 +374,7 @@ export class ExportAnaliticoService implements IExportService {
     const rutaCsv = join(this.rutas.exportacion, 'ResultadosAnalitico.csv');
 
     await escribirParquet(db, filasSalida, todasColumnas, rutaParquet);
-    if (config.exportarCsv) {
+    if (config.exportarCsv || forzarCsv) {
       await escribirCsv(db, filasSalida, todasColumnas, rutaCsv);
     }
   }

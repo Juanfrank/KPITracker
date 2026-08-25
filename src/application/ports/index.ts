@@ -165,8 +165,14 @@ export interface IAuditoriaRepository {
 }
 
 export interface IExportService {
-  /** Regenera la capa analítica desnormalizada (Parquet y CSV opcional). */
-  regenerar(): Promise<void>;
+  /**
+   * Regenera la capa analítica desnormalizada (Parquet y CSV opcional según
+   * configuración). `forzarCsv` (Batch X, X13) escribe el CSV igual aunque
+   * la configuración lo tenga desactivado — usado por la descarga directa
+   * desde el botón "Descargar los datos", que siempre necesita un archivo
+   * legible para el navegador, independientemente de esa preferencia.
+   */
+  regenerar(forzarCsv?: boolean): Promise<void>;
   /** Solicita regeneración diferida (debounce) tras una escritura. */
   solicitarRegeneracion(): void;
   /** Ruta del directorio de exportación, para mostrar en la UI. */

@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { invocar } from '../../api';
+import { descargar } from '../../rest';
 import { Encabezado } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
 
 /**
  * Exportación analítica: la capa desnormalizada se regenera automáticamente
- * con cada modificación; aquí puede forzarse y consultarse su ubicación
- * para conectarla a Power BI.
+ * con cada modificación, para conectarla a Power BI desde el archivo Parquet
+ * en disco. El botón (Batch X, X13) ya no solo regenera y muestra una ruta
+ * de servidor — regenera y descarga directo al navegador el CSV resultante,
+ * el formato que de verdad se puede abrir sin herramientas adicionales.
  */
 export function ExportacionPage(): React.JSX.Element {
   const [ruta, setRuta] = useState('');
@@ -16,11 +19,10 @@ export function ExportacionPage(): React.JSX.Element {
     void invocar('exportacion:ruta', undefined).then((r) => setRuta(r.ruta));
   }, []);
 
-  const regenerar = async (): Promise<void> => {
+  const descargarDatos = async (): Promise<void> => {
     setEstado('generando');
     try {
-      const r = await invocar('exportacion:regenerar', undefined);
-      setRuta(r.ruta);
+      await descargar('/api/exportacion/descargar', 'ResultadosAnalitico.csv');
       setEstado('listo');
     } catch {
       setEstado('error');
@@ -33,13 +35,18 @@ export function ExportacionPage(): React.JSX.Element {
         titulo="Exportación Analítica"
         descripcion="Capa desnormalizada para Power BI, Excel y otras herramientas. Cada fila es un resultado con los atributos del indicador y las desagregaciones expandidas como columnas."
         acciones={
-          <button className="boton primario" onClick={() => void regenerar()} disabled={estado === 'generando'} data-testid="regenerar-export">
-            <Icono nombre="exportar" /> {estado === 'generando' ? 'Generando…' : 'Regenerar ahora'}
+          <button
+            className="boton primario"
+            onClick={() => void descargarDatos()}
+            disabled={estado === 'generando'}
+            data-testid="descargar-export"
+          >
+            <Icono nombre="exportar" /> {estado === 'generando' ? 'Generando…' : 'Descargar los datos'}
           </button>
         }
       />
-      {estado === 'listo' && <div className="aviso exito">Exportación regenerada correctamente.</div>}
-      {estado === 'error' && <div className="aviso error">Ocurrió un error al regenerar la exportación.</div>}
+      {estado === 'listo' && <div className="aviso exito">Datos descargados correctamente (ResultadosAnalitico.csv).</div>}
+      {estado === 'error' && <div className="aviso error">Ocurrió un error al generar la descarga.</div>}
 
       <div className="tarjeta">
         <h3 style={{ marginTop: 0 }}>Ubicación de los archivos</h3>

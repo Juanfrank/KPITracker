@@ -11,6 +11,7 @@ import { crearRouterAdjuntos } from './rest/adjuntos';
 import { crearRouterImportacion } from './rest/importacion';
 import { crearRouterRespaldo } from './rest/respaldo';
 import { crearRouterPortable } from './rest/portable';
+import { crearRouterExportacion } from './rest/exportacion';
 
 /** `out/renderer` (build de `vite.config.ts`) relativo a este archivo — no a `process.cwd()`, para no depender de dónde se invoque el proceso. */
 const RUTA_SPA = fileURLToPath(new URL('../../out/renderer', import.meta.url));
@@ -51,6 +52,7 @@ export async function crearApp(opciones: OpcionesApp): Promise<AppConstruida> {
   app.use('/api/importacion', crearRouterImportacion(aplicacion));
   app.use('/api/respaldo', crearRouterRespaldo(aplicacion));
   app.use('/api/portable', crearRouterPortable(aplicacion));
+  app.use('/api/exportacion', crearRouterExportacion(aplicacion));
 
   // Bundle de la SPA (`npm run build`, ver plan Fase 4 §9.8) — montado
   // DESPUÉS de toda ruta /api/*, así nunca la intercepta. En dev, la SPA la
