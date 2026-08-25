@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { iniciarAppWeb } from './fixtures';
+import { iniciarAppWeb, seleccionarBuscable } from './fixtures';
 
 /**
  * Prueba de aceptación del módulo de Equipos (Batch R): equipos
@@ -59,7 +59,7 @@ test('un indicador con ese responsable queda vinculado indirectamente al equipo'
   await pagina.getByTestId('nuevo-indicador').click();
   await pagina.getByTestId('indicador-nombre').fill('Indicador vía responsable');
   await pagina.getByTestId('indicador-definicion').fill('Vínculo indirecto por responsable.');
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: 'Responsable de Estadísticas' });
+  await seleccionarBuscable(pagina, 'indicador-responsable', 'Responsable de Estadísticas', 'Responsable de Estadísticas');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Indicador vía responsable')).toBeVisible();
 
@@ -97,8 +97,7 @@ test('vincular un indicador directo desde el panel de Equipos lo muestra como "T
 
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('indicador-Indicador vínculo directo').click();
-  const seleccionado = pagina.locator('[data-testid="indicador-responsable"] option:checked');
-  await expect(seleccionado).toHaveText('— Todo el equipo —');
+  await expect(pagina.getByTestId('indicador-responsable')).toHaveValue('— Todo el equipo —');
   await pagina.getByRole('button', { name: 'Cancelar' }).click();
 });
 

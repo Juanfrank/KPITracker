@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { iniciarAppWeb } from './fixtures';
+import { iniciarAppWeb, seleccionarBuscable } from './fixtures';
 
 /**
  * Prueba de aceptación de la iteración 2: periodicidad personalizada de
@@ -57,7 +57,7 @@ test('crear un indicador con periodicidad personalizada y responsable asignado',
   await pagina.getByTestId('indicador-definicion').fill('Porcentaje de presupuesto ejecutado en el semestre.');
   await pagina.getByTestId('indicador-periodicidad').selectOption('Personalizada');
   await pagina.getByTestId('indicador-periodicidad-personalizada').selectOption({ label: 'Semestres personalizados' });
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: 'Ana Martínez' });
+  await seleccionarBuscable(pagina, 'indicador-responsable', 'Ana Martínez', 'Ana Martínez');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Ejecución presupuestaria')).toBeVisible();
 });

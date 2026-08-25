@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { iniciarAppWeb } from './fixtures';
+import { iniciarAppWeb, seleccionarBuscable } from './fixtures';
 
 /**
  * Prueba de aceptación del borrado lógico (Batch M): un usuario (responsable
@@ -38,7 +38,7 @@ test('un usuario asignado a un indicador como responsable no puede eliminarse; e
   await pagina.getByTestId('nuevo-indicador').click();
   await pagina.getByTestId('indicador-nombre').fill('Indicador con responsable');
   await pagina.getByTestId('indicador-definicion').fill('Indicador de prueba para borrado lógico.');
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: 'Usuario eliminable' });
+  await seleccionarBuscable(pagina, 'indicador-responsable', 'Usuario eliminable', 'Usuario eliminable');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Indicador con responsable')).toBeVisible();
 
@@ -57,7 +57,7 @@ test('desasignado, eliminar oculta al usuario; "Mostrar eliminados" lo revela y 
   // Batch T: Responsable/Equipo ahora es obligatorio (ya no hay "— sin asignar —") — se
   // "desasigna" reasignando al vínculo directo con el equipo "General" (el único equipo
   // que existe en este spec), en vez de una persona puntual.
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: '— Todo el equipo —' });
+  await seleccionarBuscable(pagina, 'indicador-responsable', 'Todo el equipo', '— Todo el equipo —');
   await pagina.getByTestId('guardar-indicador').click();
 
   await pagina.getByTestId('nav-admin').click();

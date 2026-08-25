@@ -528,6 +528,11 @@ table.tabla tbody tr.fila-eliminada:hover {
   margin-right: 6px;
 }
 
+/* Opciones del panel flotante de `SelectorBuscable` (Batch X, X12). */
+.selector-buscable-opcion:hover {
+  background: var(--superficie-2) !important;
+}
+
 .etiqueta-eliminado {
   display: inline-block;
   padding: 1px 8px;

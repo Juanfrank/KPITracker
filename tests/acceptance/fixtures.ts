@@ -7,6 +7,19 @@ import { chromium } from '@playwright/test';
 import type { Browser, Page } from '@playwright/test';
 import { crearApp } from '../../src/server/app';
 
+/**
+ * Elige una opción de un `SelectorBuscable` (Batch X, X12) — el combobox
+ * con buscador que reemplazó los `<select>` de Responsable/Equipo y
+ * Categoría en Indicadores: enfoca el input, escribe `texto` (filtra el
+ * panel) y hace clic en la opción cuyo texto exacto es `etiqueta`.
+ */
+export async function seleccionarBuscable(pagina: Page, testId: string, texto: string, etiqueta: string): Promise<void> {
+  const entrada = pagina.getByTestId(testId);
+  await entrada.click();
+  await entrada.fill(texto);
+  await pagina.getByTestId(`${testId}-opcion-${etiqueta}`).click();
+}
+
 export interface ServidorWebE2E {
   pagina: Page;
   baseUrl: string;

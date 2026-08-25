@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Browser, Locator, Page } from '@playwright/test';
-import { ADMIN_PASSWORD, ADMIN_USUARIO, abrirServidorWeb } from './fixtures';
+import { ADMIN_PASSWORD, ADMIN_USUARIO, abrirServidorWeb, seleccionarBuscable } from './fixtures';
 
 /**
  * Prueba de aceptación del sistema de roles/permisos configurable (Batch T):
@@ -90,7 +90,7 @@ test('admin crea un equipo, un responsable vinculado (usuario, Batch U) y dos in
   await admin.getByTestId('nuevo-indicador').click();
   await admin.getByTestId('indicador-nombre').fill('Indicador Ventas');
   await admin.getByTestId('indicador-definicion').fill('Indicador vinculado al Equipo Ventas vía su responsable.');
-  await admin.getByTestId('indicador-responsable').selectOption({ label: 'Responsable Ventas' });
+  await seleccionarBuscable(admin, 'indicador-responsable', 'Responsable Ventas', 'Responsable Ventas');
   await admin.getByTestId('guardar-indicador').click();
   await expect(admin.getByTestId('indicador-Indicador Ventas')).toBeVisible();
 

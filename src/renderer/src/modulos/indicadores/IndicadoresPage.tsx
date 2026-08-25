@@ -14,6 +14,9 @@ type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.que
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { CampoAtributo } from '../../componentes/CampoAtributo';
 import { Icono } from '../../componentes/Icono';
+import type { GrupoSelectorBuscable } from '../../componentes/SelectorBuscable';
+import { SelectorBuscable } from '../../componentes/SelectorBuscable';
+import { ordenarJerarquia } from '../../utils/jerarquia';
 import { ImportarExcelIndicadores } from './ImportarExcelIndicadores';
 import { ModalAutomatizacionIndicador } from './ModalAutomatizacionIndicador';
 
@@ -192,6 +195,36 @@ export function IndicadoresPage(): React.JSX.Element {
     i.nombre.toLowerCase().includes(filtro.toLowerCase()) || i.codigo.toLowerCase().includes(filtro.toLowerCase())
   );
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
+
+  // Grupos/opciones para el buscador de "Responsable / Equipo" (Batch X, X12).
+  const gruposResponsable: GrupoSelectorBuscable[] = [
+    ...equipos.map((eq) => ({
+      etiqueta: rutaEquipo(eq, equiposPorId),
+      opciones: [
+        { value: `equipo:${eq.id}`, etiqueta: '— Todo el equipo —' },
+        ...responsables.filter((r) => r.equipoId === eq.id).map((r) => ({ value: `responsable:${r.id}`, etiqueta: r.nombreCompleto }))
+      ]
+    })),
+    ...(responsables.some((r) => !r.equipoId)
+      ? [{
+          etiqueta: 'Sin equipo',
+          opciones: responsables.filter((r) => !r.equipoId).map((r) => ({ value: `responsable:${r.id}`, etiqueta: r.nombreCompleto }))
+        }]
+      : [])
+  ];
+
+  /** Texto mostrado en el buscador para el vínculo actualmente elegido. */
+  function etiquetaResponsableSeleccionado(ind: Pick<Indicador, 'equipo' | 'responsable'>): string {
+    if (ind.equipo) return '— Todo el equipo —';
+    if (ind.responsable) return responsables.find((r) => r.id === ind.responsable)?.nombreCompleto ?? '';
+    return '';
+  }
+
+  // Grupos/opciones para el buscador de "Categoría" (Batch X, X12) — jerarquía
+  // visual vía indentación por nivel, mismo criterio que ya usa AdminPage.
+  const gruposCategoria: GrupoSelectorBuscable[] = [
+    { etiqueta: null, opciones: ordenarJerarquia(categorias).map((c) => ({ value: c.id, etiqueta: c.nombre, nivel: c.nivel })) }
+  ];
 
   // Validación en vivo de atributos dinámicos: mismas reglas que evaluará el backend al guardar.
   const base = editando ?? indicadorVacio();
@@ -422,10 +455,12 @@ export function IndicadoresPage(): React.JSX.Element {
           )}
           <div className="fila-form c2">
             <Campo etiqueta="Responsable / Equipo" obligatorio>
-              <select
-                value={editando.equipo ? `equipo:${editando.equipo}` : editando.responsable ? `responsable:${editando.responsable}` : ''}
-                onChange={(e) => {
-                  const valor = e.target.value;
+              <SelectorBuscable
+                grupos={gruposResponsable}
+                valor={editando.equipo ? `equipo:${editando.equipo}` : editando.responsable ? `responsable:${editando.responsable}` : ''}
+                etiquetaSeleccionada={etiquetaResponsableSeleccionado(editando)}
+                placeholder="Buscar equipo o responsable…"
+                alSeleccionar={(valor) => {
                   if (valor.startsWith('equipo:')) {
                     setEditando({ ...editando, equipo: valor.slice('equipo:'.length), responsable: null });
                   } else if (valor.startsWith('responsable:')) {
@@ -434,36 +469,23 @@ export function IndicadoresPage(): React.JSX.Element {
                     setEditando({ ...editando, equipo: equipoGeneralId(equipos), responsable: null });
                   }
                 }}
-                data-testid="indicador-responsable"
-              >
-                {equipos.map((eq) => (
-                  <optgroup key={eq.id} label={rutaEquipo(eq, equiposPorId)}>
-                    <option value={`equipo:${eq.id}`}>— Todo el equipo —</option>
-                    {responsables.filter((r) => r.equipoId === eq.id).map((r) => (
-                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombreCompleto}</option>
-                    ))}
-                  </optgroup>
-                ))}
-                {responsables.some((r) => !r.equipoId) && (
-                  <optgroup label="Sin equipo">
-                    {responsables.filter((r) => !r.equipoId).map((r) => (
-                      <option key={r.id} value={`responsable:${r.id}`}>{r.nombreCompleto}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+                testId="indicador-responsable"
+              />
               <span className="texto-suave">
                 Elija un equipo completo (vínculo directo) o un responsable puntual (vínculo indirecto vía su equipo).
               </span>
             </Campo>
             <Campo etiqueta="Categoría" obligatorio>
-              <select
-                value={editando.categoria ?? categoriaGeneralId(categorias) ?? ''}
-                onChange={(e) => setEditando({ ...editando, categoria: e.target.value || null })}
-                data-testid="indicador-categoria"
-              >
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
+              <SelectorBuscable
+                grupos={gruposCategoria}
+                valor={editando.categoria ?? categoriaGeneralId(categorias) ?? ''}
+                etiquetaSeleccionada={
+                  categorias.find((c) => c.id === (editando.categoria ?? categoriaGeneralId(categorias)))?.nombre ?? ''
+                }
+                placeholder="Buscar categoría…"
+                alSeleccionar={(valor) => setEditando({ ...editando, categoria: valor || null })}
+                testId="indicador-categoria"
+              />
             </Campo>
           </div>
 

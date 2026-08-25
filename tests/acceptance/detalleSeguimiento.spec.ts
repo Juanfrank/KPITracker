@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { iniciarAppWeb } from './fixtures';
+import { iniciarAppWeb, seleccionarBuscable } from './fixtures';
 
 /**
  * Batch X — X2 (botón por fila del panel de detalle hacia Recolección de
@@ -38,7 +38,7 @@ test('preparación: usuario responsable, indicador mensual con un resultado capt
   await pagina.getByTestId('indicador-nombre').fill('Indicador con detalle');
   await pagina.getByTestId('indicador-definicion').fill('Para probar el panel de detalle de Seguimiento.');
   await pagina.getByTestId('indicador-periodicidad').selectOption('Mensual');
-  await pagina.getByTestId('indicador-responsable').selectOption({ label: 'Responsable Detalle' });
+  await seleccionarBuscable(pagina, 'indicador-responsable', 'Responsable Detalle', 'Responsable Detalle');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Indicador con detalle')).toBeVisible();
 
