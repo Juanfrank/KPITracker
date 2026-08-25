@@ -3,11 +3,12 @@ import type { Page } from '@playwright/test';
 import { iniciarAppWeb } from './fixtures';
 
 /**
- * Batch U10: rollback de TODAS las desagregaciones del período (no todo el
- * histórico del indicador) a un punto en el tiempo, vía
- * `ServicioRecoleccion.restaurarPeriodo`. La UI expone un botón "Restaurar
- * período a…" con un selector datetime-local — el usuario reutiliza el
- * timestamp de "Última modificación" de cualquier celda del período.
+ * Batch U10 (rollback de TODAS las desagregaciones del período) + Batch X
+ * X5 (reubicación + rediseño de la UI): "Restaurar período" vive ahora en
+ * la misma fila que Indicador/Período/Fecha de corte, y su interfaz es un
+ * ícono + panel flotante con puntos reales para elegir (mismo patrón que
+ * `HistorialCelda`, "restaurar versión anterior por punto de datos") en vez
+ * del `datetime-local` de antes.
  */
 
 let pagina: Page;
@@ -25,33 +26,13 @@ test.afterAll(async () => {
 
 test.describe.configure({ mode: 'serial' });
 
-/** "YYYY-MM-DDTHH:mm:ss" en hora LOCAL — mismo formato que espera un <input type="datetime-local" step={1}>. */
-function comoDatetimeLocal(fecha: Date): string {
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${fecha.getFullYear()}-${p(fecha.getMonth() + 1)}-${p(fecha.getDate())}T${p(fecha.getHours())}:${p(fecha.getMinutes())}:${p(fecha.getSeconds())}`;
-}
-
 const esperar = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Chromium/Playwright rechaza un segundo `.fill()` sobre el mismo
- * `<input type="datetime-local" step={1}>` con "Malformed value" (una
- * peculiaridad del propio input nativo, no un bug de la app) — se
- * setea el valor directo vía DOM y se dispara el evento `input` a mano.
- */
-async function llenarDatetimeLocal(pagina: Page, testid: string, valor: string): Promise<void> {
-  await pagina.getByTestId(testid).evaluate((el, v) => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-    setter.call(el, v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }, valor);
-}
 
 test('restaurar el período a un momento anterior revierte TODAS las celdas cambiadas desde entonces', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('nuevo-indicador').click();
   await pagina.getByTestId('indicador-nombre').fill('Indicador rollback período');
-  await pagina.getByTestId('indicador-definicion').fill('Prueba de restaurarPeriodo (Batch U10).');
+  await pagina.getByTestId('indicador-definicion').fill('Prueba de restaurarPeriodo (Batch U10 / X5).');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Indicador rollback período')).toBeVisible();
 
@@ -60,38 +41,49 @@ test('restaurar el período a un momento anterior revierte TODAS las celdas camb
   await expect(pagina.getByTestId('grilla-captura')).toBeVisible();
   await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
 
+  // El botón vive en la misma fila que Indicador/Período/Fecha de corte (X5).
+  await expect(pagina.getByTestId('recoleccion-fecha-corte').locator('xpath=ancestor::div[contains(@class,"fila-form")]'))
+    .toContainText('Restaurar período');
+
   await pagina.getByTestId('celda-GENERAL').fill('10');
   await pagina.getByTestId('celda-GENERAL').blur();
   await expect(pagina.getByTestId('celda-GENERAL')).toHaveValue('10');
+  await esperar(300); // margen para que "10" quede registrado como versión anterior antes de escribir "20".
 
-  // Margen amplio (>1s) antes y después de capturar t1: el <input datetime-local>
-  // solo tiene precisión de segundo, así que t1 debe caer holgadamente DESPUÉS
-  // del timestamp real de la escritura de "10" y ANTES del de "20" — nunca en
-  // el mismo segundo que cualquiera de las dos, o la comparación por igualdad
-  // de segundo podría incluir/excluir la escritura equivocada.
-  await esperar(1200);
-  const t1 = new Date();
-  await esperar(1200);
-
-  // Segundo estado: 20 — el que "Restaurar período a t1" debe revertir.
   await pagina.getByTestId('celda-GENERAL').fill('20');
   await pagina.getByTestId('celda-GENERAL').blur();
   await expect(pagina.getByTestId('celda-GENERAL')).toHaveValue('20');
 
+  // Abre el panel: en vez de escribir una fecha/hora a mano, se elige un punto real
+  // de la lista — el mismo "10" que quedó archivado en el historial de la celda al
+  // sobrescribirse con "20".
   await pagina.getByTestId('abrir-restaurar-periodo').click();
-  await llenarDatetimeLocal(pagina, 'restaurar-periodo-timestamp', comoDatetimeLocal(t1));
-  await pagina.getByTestId('confirmar-restaurar-periodo').click();
+  await expect(pagina.getByTestId('panel-restaurar-periodo')).toBeVisible();
+  const puntos = pagina.locator('[data-testid^="restaurar-periodo-"]');
+  await expect(puntos).toHaveCount(1); // una sola versión archivada (el "10" reemplazado por "20").
+  await puntos.first().click();
 
   await expect(pagina.getByTestId('aviso-restaurar-periodo')).toContainText('restaurada');
   await expect(pagina.getByTestId('celda-GENERAL')).toHaveValue('10');
 });
 
-test('restaurar a un momento anterior a cualquier valor no cambia nada y lo informa', async () => {
-  // Sigue con el mismo indicador/período de la prueba anterior (grilla ya en 10).
-  await pagina.getByTestId('abrir-restaurar-periodo').click();
-  await llenarDatetimeLocal(pagina, 'restaurar-periodo-timestamp', '1970-01-01T00:00:00');
-  await pagina.getByTestId('confirmar-restaurar-periodo').click();
+test('sin ninguna versión anterior archivada, el panel lo informa y no hay nada para restaurar', async () => {
+  await pagina.getByTestId('nav-indicadores').click();
+  await pagina.getByTestId('nuevo-indicador').click();
+  await pagina.getByTestId('indicador-nombre').fill('Indicador sin historial');
+  await pagina.getByTestId('indicador-definicion').fill('Nunca se sobrescribió ninguna celda.');
+  await pagina.getByTestId('guardar-indicador').click();
+  await expect(pagina.getByTestId('indicador-Indicador sin historial')).toBeVisible();
 
-  await expect(pagina.getByTestId('aviso-restaurar-periodo')).toContainText('Ninguna celda cambió');
-  await expect(pagina.getByTestId('celda-GENERAL')).toHaveValue('10');
+  await pagina.getByTestId('nav-recoleccion').click();
+  await pagina.getByTestId('recoleccion-indicador').selectOption({ label: 'Indicador sin historial' });
+  await expect(pagina.getByTestId('grilla-captura')).toBeVisible();
+  await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
+  await pagina.getByTestId('celda-GENERAL').fill('5');
+  await pagina.getByTestId('celda-GENERAL').blur();
+  await expect(pagina.getByTestId('celda-GENERAL')).toHaveValue('5');
+
+  await pagina.getByTestId('abrir-restaurar-periodo').click();
+  await expect(pagina.getByTestId('panel-restaurar-periodo')).toContainText('Sin puntos anteriores');
+  await expect(pagina.locator('[data-testid^="restaurar-periodo-"]')).toHaveCount(0);
 });
