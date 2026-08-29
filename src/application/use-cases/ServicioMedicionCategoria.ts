@@ -1,5 +1,5 @@
 import {
-  ValidacionError, agregar, crearPeriodo, equipoEfectivo, metaVigenteParaPeriodo, puedeVerIndicador,
+  ValidacionError, agregar, crearPeriodo, equipoEfectivo, metaVigenteParaPeriodo, puedeVerIndicador, redondear2,
   tipoAgregacionBaseValido
 } from '@domain/index';
 import type { Categoria, ConfiguracionMedicionCategoria, EntradaAgregable, Indicador, ResultadoMedicionCategoria } from '@domain/index';
@@ -131,7 +131,7 @@ export class ServicioMedicionCategoria extends ServicioBase {
       }
       if (meta == null || meta === 0) continue;
 
-      entradas.push({ valor: (valor / meta) * 100, tieneMeta: true, peso: tratamiento?.peso });
+      entradas.push({ valor: redondear2((valor / meta) * 100), tieneMeta: true, peso: tratamiento?.peso });
     }
 
     return {

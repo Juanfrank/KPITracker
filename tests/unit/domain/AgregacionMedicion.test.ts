@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agregar, tipoAgregacionBaseValido, tipoAgregacionValido } from '@domain/index';
+import { agregar, redondear2, tipoAgregacionBaseValido, tipoAgregacionValido } from '@domain/index';
 import type { EntradaAgregable } from '@domain/index';
 
 describe('AgregacionMedicion — agregar() (Batch Y)', () => {
@@ -77,6 +77,21 @@ describe('AgregacionMedicion — agregar() (Batch Y)', () => {
       const entradas: EntradaAgregable[] = [{ valor: 100, tieneMeta: false }, { valor: 200, tieneMeta: false }, { valor: 50, tieneMeta: false }];
       expect(agregar('primerValor', entradas)).toBe(100);
       expect(agregar('ultimoValor', entradas)).toBe(50);
+    });
+  });
+
+  describe('Batch AJ (pedido explícito del usuario) — redondeo matemático real a 2 decimales', () => {
+    it('redondear2() redondea el valor mismo, no solo su presentación', () => {
+      expect(redondear2(23.333333333333332)).toBe(23.33);
+      expect(redondear2(85.44999999999999)).toBe(85.45);
+      expect(redondear2(100)).toBe(100);
+      expect(redondear2(0.005)).toBe(0.01); // borde: redondeo hacia arriba en .5
+    });
+
+    it('agregar() devuelve el resultado ya redondeado, no solo formateado para mostrar', () => {
+      const entradas: EntradaAgregable[] = [{ valor: 5, tieneMeta: false }, { valor: 50, tieneMeta: false }, { valor: 15, tieneMeta: false }];
+      // (5+50+15)/3 = 23.333... — el propio número devuelto es 23.33, no 23.333...
+      expect(agregar('promedio', entradas)).toBe(23.33);
     });
   });
 });

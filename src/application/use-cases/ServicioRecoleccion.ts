@@ -2,7 +2,7 @@ import {
   CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
   ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, crearClave,
   equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, puedeSobreIndicador,
-  resolverParametrosGenerales, sustituirTokens
+  redondear2, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
   AccionResultado, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
@@ -255,7 +255,10 @@ export class ServicioRecoleccion extends ServicioBase {
     }
     const parseado = this.tipos.obtener(TipoDato.Decimal).parse(valorCrudo);
     if (!parseado.ok) throw new ValidacionError(parseado.error ?? 'Valor inválido.');
-    const valor = parseado.valor as number | null;
+    const valorParseado = parseado.valor as number | null;
+    // `persistirValorCelda` redondea internamente al guardar — se redondea también acá para
+    // que el valor devuelto al llamador coincida con lo realmente persistido.
+    const valor = valorParseado == null ? null : redondear2(valorParseado);
 
     await this.persistirValorCelda(indicadorId, periodoId, claveDesagregacion, valor, observacion);
     this.sincronizarExport();
@@ -393,14 +396,22 @@ export class ServicioRecoleccion extends ServicioBase {
     return periodo;
   }
 
-  /** Guarda el valor vigente de una celda, versionando el anterior si existía. Compartido por captura manual y automática. */
+  /**
+   * Guarda el valor vigente de una celda, versionando el anterior si
+   * existía. Compartido por captura manual y automática — único punto de
+   * escritura de `Resultado.valor`, por eso el redondeo matemático real a
+   * 2 decimales (pedido explícito del usuario) se aplica acá, no en cada
+   * llamador: cubre captura manual, pegado desde Excel y obtención
+   * automática por igual.
+   */
   private async persistirValorCelda(
     indicadorId: string,
     periodoId: string,
     claveDesagregacion: string,
-    valor: number | null,
+    valorCrudo: number | null,
     observacion: string | null
   ): Promise<void> {
+    const valor = valorCrudo == null ? null : redondear2(valorCrudo);
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
     const ahora = this.ctx.reloj.ahoraIso();

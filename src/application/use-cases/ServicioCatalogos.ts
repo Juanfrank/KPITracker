@@ -5,7 +5,7 @@ import type {
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
   construirContextoIndicador, equipoEfectivo, explicarCondicion, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
-  puedeVerIndicador, signosAgrupacionBalanceados, sinCiclo
+  puedeVerIndicador, redondear2, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
@@ -105,7 +105,11 @@ export class ServicioIndicadores extends ServicioBase {
     const indicador: Indicador = {
       ...input.indicador,
       categoria: input.indicador.categoria ?? this.defaults.categoriaGeneralId,
-      equipo: input.indicador.equipo || input.indicador.responsable ? input.indicador.equipo : this.defaults.equipoGeneralId
+      equipo: input.indicador.equipo || input.indicador.responsable ? input.indicador.equipo : this.defaults.equipoGeneralId,
+      // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — la meta
+      // global y la línea base son valores de referencia, mismo tratamiento que una Meta.
+      metaGlobal: input.indicador.metaGlobal == null ? null : redondear2(input.indicador.metaGlobal),
+      lineaBase: input.indicador.lineaBase == null ? null : redondear2(input.indicador.lineaBase)
     };
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
@@ -525,6 +529,8 @@ export class ServicioMetas extends ServicioBase {
     const ahora = this.ctx.reloj.ahoraIso();
     const guardada: Meta = {
       ...meta,
+      // Redondeo matemático real a 2 decimales (pedido explícito del usuario).
+      valor: redondear2(meta.valor),
       id: meta.id || this.ctx.ids.nuevoId(),
       creadoEn: meta.creadoEn || ahora,
       actualizadoEn: ahora

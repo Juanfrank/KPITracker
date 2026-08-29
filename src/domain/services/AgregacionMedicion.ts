@@ -86,6 +86,18 @@ export interface EntradaAgregable {
   peso?: number;
 }
 
+/**
+ * Redondeo matemático REAL a 2 decimales (pedido explícito del usuario: no
+ * es de presentación — cambia el valor mismo, no solo cómo se muestra).
+ * Aplica en cada punto de cálculo donde puede introducirse ruido de punto
+ * flotante o precisión arbitraria: metas y resultados al guardarse,
+ * `agregar()` acá mismo, el % de cumplimiento, y los cálculos intermedios
+ * de Cortes/Medición por categoría.
+ */
+export function redondear2(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
+
 function pesoEfectivo(entrada: EntradaAgregable, tipo: TipoAgregacion): number {
   const base = entrada.peso ?? 1;
   return tipo === 'promedioPonderado' ? base * (entrada.tieneMeta ? 1 : 0) : base;
@@ -107,30 +119,35 @@ export function agregar(tipo: TipoAgregacion, entradas: readonly EntradaAgregabl
   if (entradas.length === 0) return null;
   const valores = entradas.map((e) => e.valor);
 
-  switch (tipo) {
-    case 'maximo':
-    case 'mejorValor':
-      return Math.max(...valores);
-    case 'minimo':
-    case 'peorValor':
-      return Math.min(...valores);
-    case 'suma':
-      return valores.reduce((s, v) => s + v, 0);
-    case 'mediana':
-      return mediana(valores);
-    case 'primerValor':
-      return entradas[0]!.valor;
-    case 'ultimoValor':
-      return entradas[entradas.length - 1]!.valor;
-    case 'promedio':
-    case 'promedioPonderado':
-    default: {
-      const pares = entradas.map((e) => ({ valor: e.valor, peso: pesoEfectivo(e, tipo) }));
-      let sumaPesos = pares.reduce((s, p) => s + p.peso, 0);
-      const usarPesoUniforme = sumaPesos === 0;
-      if (usarPesoUniforme) sumaPesos = entradas.length;
-      const sumaPonderada = pares.reduce((s, p) => s + p.valor * (usarPesoUniforme ? 1 : p.peso), 0);
-      return sumaPonderada / sumaPesos;
+  const resultado = ((): number => {
+    switch (tipo) {
+      case 'maximo':
+      case 'mejorValor':
+        return Math.max(...valores);
+      case 'minimo':
+      case 'peorValor':
+        return Math.min(...valores);
+      case 'suma':
+        return valores.reduce((s, v) => s + v, 0);
+      case 'mediana':
+        return mediana(valores);
+      case 'primerValor':
+        return entradas[0]!.valor;
+      case 'ultimoValor':
+        return entradas[entradas.length - 1]!.valor;
+      case 'promedio':
+      case 'promedioPonderado':
+      default: {
+        const pares = entradas.map((e) => ({ valor: e.valor, peso: pesoEfectivo(e, tipo) }));
+        let sumaPesos = pares.reduce((s, p) => s + p.peso, 0);
+        const usarPesoUniforme = sumaPesos === 0;
+        if (usarPesoUniforme) sumaPesos = entradas.length;
+        const sumaPonderada = pares.reduce((s, p) => s + p.valor * (usarPesoUniforme ? 1 : p.peso), 0);
+        return sumaPonderada / sumaPesos;
+      }
     }
-  }
+  })();
+  // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — no solo para
+  // mostrar: el valor agregado mismo queda con esta precisión de acá en adelante.
+  return redondear2(resultado);
 }

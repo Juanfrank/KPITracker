@@ -1,6 +1,6 @@
 import {
   CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo,
-  metaVigenteParaPeriodo, puedeVerIndicador
+  metaVigenteParaPeriodo, puedeVerIndicador, redondear2
 } from '@domain/index';
 import type {
   Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
@@ -343,7 +343,9 @@ export class ServicioSeguimiento extends ServicioBase {
         const metaVigente = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones);
         const metaPeriodo = metaVigente?.valor ?? null;
         const meta = metaPeriodo ?? indicador.metaGlobal;
-        const cumplimientoPct = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
+        // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — no solo de
+        // presentación: el % de cumplimiento queda con esta precisión desde acá.
+        const cumplimientoPct = valor != null && meta != null && meta !== 0 ? redondear2((valor / meta) * 100) : null;
         return {
           periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, fechaFin: periodo.fechaFin,
           valor, metaPeriodo, cumplimientoPct
@@ -383,7 +385,10 @@ export class ServicioSeguimiento extends ServicioBase {
       valores.set(codigo, datos.find((d) => d.periodoId === periodoId)?.valor ?? null);
     }
     try {
-      return this.formulas.evaluar(formula, valores);
+      const resultado = this.formulas.evaluar(formula, valores);
+      // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — cálculo
+      // intermedio: el valor de un indicador calculado queda con esta precisión.
+      return resultado == null ? null : redondear2(resultado);
     } catch {
       return null;
     }

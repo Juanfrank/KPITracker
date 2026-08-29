@@ -94,7 +94,9 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     const q2 = filas.find((r) => r.periodoId === '2020-Trimestral-02');
     expect(q1?.valorAgregado).toBe(20); // (10+20+30)/3
     expect(q1?.periodosConsiderados).toBe(3);
-    expect(q2?.valorAgregado).toBeCloseTo((5 + 50 + 15) / 3, 6);
+    // (5+50+15)/3 = 23.333... — redondeo matemático real a 2 decimales (Batch AJ, pedido
+    // explícito del usuario): el propio valor agregado queda en 23.33, no solo su presentación.
+    expect(q2?.valorAgregado).toBe(23.33);
     expect(q2?.periodosConsiderados).toBe(3);
   });
 

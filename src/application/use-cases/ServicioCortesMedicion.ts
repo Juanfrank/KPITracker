@@ -1,6 +1,6 @@
 import {
   EntidadNoEncontradaError, GeneradorPeriodos, Periodicidad, ValidacionError, agregar, equipoEfectivo,
-  metaVigenteParaPeriodo, periodicidadCorteValida, puedeVerIndicador, tipoAgregacionValido
+  metaVigenteParaPeriodo, periodicidadCorteValida, puedeVerIndicador, redondear2, tipoAgregacionValido
 } from '@domain/index';
 import type { CorteMedicion, DefinicionPeriodicidad, EntradaAgregable, ResultadoCorteMedicion } from '@domain/index';
 import type {
@@ -151,7 +151,7 @@ export class ServicioCortesMedicion extends ServicioBase {
           const meta = metaVigente?.valor ?? indicador.metaGlobal;
           const tieneMeta = meta != null;
           if (!tieneMeta || meta === 0) continue;
-          entradas.push({ valor: (valor / meta) * 100, tieneMeta });
+          entradas.push({ valor: redondear2((valor / meta) * 100), tieneMeta });
         }
         if (entradas.length === 0) continue;
 
