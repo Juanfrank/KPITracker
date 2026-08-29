@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Categoria, Equipo } from '@domain/index';
-import { etiquetaConPrefijo } from '@domain/index';
+import type { Categoria, CorteMedicion, Equipo } from '@domain/index';
+import { GeneradorPeriodos, etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
@@ -258,12 +258,14 @@ const VALOR_COLUMNA_HISTORICO: Record<string, (h: FilaHistorico) => string | num
 
 /** Encabezado clickeable: ciclo asc → desc → orden por defecto (`alternarOrden`), con una flecha indicando el estado activo. */
 function EncabezadoOrdenable({
-  columna, etiqueta, orden, alClic
+  columna, etiqueta, orden, alClic, rowSpan
 }: {
   columna: string;
   etiqueta: string;
   orden: OrdenColumna;
   alClic: (columna: string) => void;
+  /** Batch AA: cuando el encabezado de Histórico pasa a dos filas (columnas de corte agrupadas), estas columnas fijas ocupan ambas. */
+  rowSpan?: number;
 }): React.JSX.Element {
   const activa = orden.columna === columna;
   return (
@@ -271,12 +273,92 @@ function EncabezadoOrdenable({
       onClick={() => alClic(columna)}
       style={{ cursor: 'pointer', userSelect: 'none' }}
       title="Ordenar"
+      rowSpan={rowSpan}
       data-testid={`orden-${columna}`}
     >
       {etiqueta}
       {activa && <span style={{ marginLeft: 4 }}>{orden.direccion === 'asc' ? '▲' : '▼'}</span>}
     </th>
   );
+}
+
+const generadorPeriodosHistorico = new GeneradorPeriodos();
+
+/** Una columna de período de Histórico ya agrupada bajo un bucket de corte (o suelta, sin grupo). */
+interface GrupoCorteHistorico {
+  /** Id del período-bucket (p. ej. "2026-Trimestral-01") — único, sirve también como clave de expandido/colapsado. */
+  id: string;
+  etiqueta: string;
+  periodoIds: string[];
+}
+
+type ColumnaGrillaHistorico =
+  | { tipo: 'periodo'; columna: { periodoId: string; etiqueta: string }; grupo?: GrupoCorteHistorico }
+  | { tipo: 'corte'; grupo: GrupoCorteHistorico };
+
+/**
+ * Buckets de la periodicidad de `corte` que contienen al menos una de
+ * `columnas` — una fila por cada período de esa periodicidad ("T1 2026",
+ * "T2 2026"...) cuya ventana [fechaInicio, fechaFin] engloba por completo la
+ * de una o más columnas. Misma regla de encaje que
+ * `ServicioCortesMedicion.calcular` (`p.fechaInicio >= bucket.fechaInicio &&
+ * p.fechaFin <= bucket.fechaFin`), para que el agrupamiento visual
+ * corresponda exactamente a lo que el corte agregaría.
+ */
+function bucketsDeCorte(
+  corte: CorteMedicion, columnas: { periodoId: string; etiqueta: string; fechaInicio: string; fechaFin: string }[]
+): GrupoCorteHistorico[] {
+  const anios = [...new Set(columnas.map((c) => Number(c.fechaInicio.slice(0, 4))))];
+  const buckets: GrupoCorteHistorico[] = [];
+  for (const anio of anios) {
+    for (const bucket of generadorPeriodosHistorico.periodosDelAnio(anio, corte.periodicidad)) {
+      const periodoIds = columnas
+        .filter((c) => c.fechaInicio >= bucket.fechaInicio && c.fechaFin <= bucket.fechaFin)
+        .map((c) => c.periodoId);
+      if (periodoIds.length > 0) buckets.push({ id: bucket.id, etiqueta: bucket.etiqueta, periodoIds });
+    }
+  }
+  return buckets;
+}
+
+/** Encabezados de columna de período — agrupados por corte (fila 1: grupos con toggle, o columnas sueltas) o planos (sin grupos activos). */
+function encabezadosGrupoCorte(columnas: ColumnaGrillaHistorico[], alternar: (id: string) => void): (React.JSX.Element | null)[] {
+  const grupoEmitido = new Set<string>();
+  return columnas.map((col) => {
+    if (col.tipo === 'corte') {
+      return (
+        <th key={`c-${col.grupo.id}`} rowSpan={2} className="columna-corte-colapsada" data-testid={`grupo-corte-${col.grupo.etiqueta}`}>
+          <button type="button" className="boton-arbol" onClick={() => alternar(col.grupo.id)} title="Expandir" data-testid={`toggle-grupo-corte-${col.grupo.etiqueta}`}>
+            <Icono nombre="flecha" />
+          </button>
+          {col.grupo.etiqueta}
+        </th>
+      );
+    }
+    const grupo = col.grupo;
+    if (!grupo) return <th key={col.columna.periodoId} rowSpan={2} title={col.columna.periodoId}>{col.columna.etiqueta}</th>;
+    if (grupoEmitido.has(grupo.id)) return null;
+    grupoEmitido.add(grupo.id);
+    return (
+      <th key={`g-${grupo.id}`} colSpan={grupo.periodoIds.length} className="encabezado-grupo-corte" data-testid={`grupo-corte-${grupo.etiqueta}`}>
+        <button type="button" className="boton-arbol expandido" onClick={() => alternar(grupo.id)} title="Colapsar" data-testid={`toggle-grupo-corte-${grupo.etiqueta}`}>
+          <Icono nombre="flecha" />
+        </button>
+        {grupo.etiqueta}
+      </th>
+    );
+  });
+}
+
+/** Fila 2 del encabezado agrupado: solo las columnas individuales de los grupos EXPANDIDOS (las colapsadas ya emitieron su única `<th>` en la fila 1). */
+function encabezadosMiembroCorte(columnas: ColumnaGrillaHistorico[]): React.JSX.Element[] {
+  const miembros: React.JSX.Element[] = [];
+  for (const col of columnas) {
+    if (col.tipo === 'periodo' && col.grupo) {
+      miembros.push(<th key={col.columna.periodoId} className="columna-corte-miembro" title={col.columna.periodoId}>{col.columna.etiqueta}</th>);
+    }
+  }
+  return miembros;
 }
 
 /**
@@ -313,6 +395,12 @@ export function SeguimientoPage(): React.JSX.Element {
   const [equiposCatalogo, setEquiposCatalogo] = useState<Equipo[]>([]);
   const [reasignando, setReasignando] = useState(false);
   const [avisoDescartado, setAvisoDescartado] = useState(false);
+  // Columnas de corte agrupadas en Histórico (Batch AA — antes vivía en Configuración de Metas,
+  // reubicado acá porque un corte agrega RESULTADOS capturados, y es Histórico quien los muestra).
+  const [cortes, setCortes] = useState<CorteMedicion[]>([]);
+  const [cortesActivosHistorico, setCortesActivosHistorico] = useState<string[]>([]);
+  // Expandido (true) por defecto — colapsar oculta las columnas del bucket y deja solo la suya.
+  const [expandidosCorteHistorico, setExpandidosCorteHistorico] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
 
   /**
@@ -335,12 +423,21 @@ export function SeguimientoPage(): React.JSX.Element {
       .finally(() => setCargando(false));
   };
 
+  const cargarCortes = useCallback(async (): Promise<void> => {
+    setCortes(await trpcClient.cortesMedicion.listar.query());
+  }, []);
+
   useEffect(() => {
     cargarTablero();
     void trpcClient.usuarios.listar.query().then(setResponsablesCatalogo);
     void invocar('categorias:listar', undefined).then(setCategoriasCatalogo);
     void invocar('equipos:listar', undefined).then(setEquiposCatalogo);
-  }, []);
+    void cargarCortes();
+  }, [cargarCortes]);
+
+  const alternarGrupoCorteHistorico = (bucketId: string): void => {
+    setExpandidosCorteHistorico((previo) => ({ ...previo, [bucketId]: !(previo[bucketId] ?? true) }));
+  };
 
   useEffect(() => {
     if (pestana === 'historico' && historico === null) {
@@ -403,13 +500,50 @@ export function SeguimientoPage(): React.JSX.Element {
     .map(([periodoId, v]) => ({ periodoId, ...v }))
     .sort((a, b) => a.fechaFin.localeCompare(b.fechaFin) || b.fechaInicio.localeCompare(a.fechaInicio));
 
+  // Columnas de corte agrupadas (Batch AA): un corte activo genera un bucket por cada período de
+  // su periodicidad ("T1 2026", "T2 2026"...) que contenga alguna columna visible. Dos cortes
+  // seleccionados con la MISMA periodicidad producen buckets con el mismo id (idéntica ventana
+  // calendario) — se deduplican; si sus periodicidades difieren y una columna cae en ambos, el
+  // corte elegido más tarde en `cortesActivosHistorico` gana (mismo criterio que Batch Z).
+  const cortesActivosObjs = cortesActivosHistorico.map((id) => cortes.find((c) => c.id === id)).filter((c): c is CorteMedicion => c != null);
+  const bucketsVistos = new Set<string>();
+  const gruposActivosHistorico: GrupoCorteHistorico[] = cortesActivosObjs
+    .flatMap((corte) => bucketsDeCorte(corte, columnasHistorico))
+    .filter((g) => {
+      if (bucketsVistos.has(g.id)) return false;
+      bucketsVistos.add(g.id);
+      return true;
+    });
+  const grupoPorPeriodoId = new Map<string, GrupoCorteHistorico>();
+  for (const g of gruposActivosHistorico) for (const pid of g.periodoIds) grupoPorPeriodoId.set(pid, g);
+
+  const columnasGrillaHistorico: ColumnaGrillaHistorico[] = [];
+  const corteColapsadoEmitidoHistorico = new Set<string>();
+  for (const columna of columnasHistorico) {
+    const grupo = grupoPorPeriodoId.get(columna.periodoId);
+    if (!grupo) {
+      columnasGrillaHistorico.push({ tipo: 'periodo', columna });
+      continue;
+    }
+    if (expandidosCorteHistorico[grupo.id] ?? true) {
+      columnasGrillaHistorico.push({ tipo: 'periodo', columna, grupo });
+    } else if (!corteColapsadoEmitidoHistorico.has(grupo.id)) {
+      columnasGrillaHistorico.push({ tipo: 'corte', grupo });
+      corteColapsadoEmitidoHistorico.add(grupo.id);
+    }
+  }
+  const hayGruposHistorico = gruposActivosHistorico.length > 0;
+
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
 
   /**
    * Celdas de una fila de Histórico (nombre + línea base + meta + un valor
    * por período) — compartidas entre Lista y ambos árboles (U5b). `nivel`
    * indenta el nombre bajo su categoría/equipo (0 en la vista Lista, donde
-   * no aplica).
+   * no aplica). Recorre `columnasGrillaHistorico` (no `columnasHistorico`
+   * directo, Batch AA) para que un grupo de corte colapsado deje una sola
+   * celda — puramente visual, un corte agrega RESULTADOS ya capturados, no
+   * se recalcula un valor agregado acá (ver `ServicioCortesMedicion` para eso).
    */
   const celdaHistorico = (h: FilaHistorico, nivel = 0): React.JSX.Element => (
     <>
@@ -429,10 +563,14 @@ export function SeguimientoPage(): React.JSX.Element {
       </td>
       <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
-      {columnasHistorico.map((c) => {
+      {columnasGrillaHistorico.map((col) => {
+        if (col.tipo === 'corte') {
+          return <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada">—</td>;
+        }
+        const c = col.columna;
         const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
         return (
-          <td key={c.periodoId} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
+          <td key={c.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
             {punto?.valor == null ? <span className="texto-suave">—</span> : punto.valor}
             {/* Meta configurada VIGENTE para este período específico (no el escalar Meta global) — Batch de mejora "grid de metas". */}
             {punto?.metaPeriodo != null && (
@@ -933,19 +1071,48 @@ export function SeguimientoPage(): React.JSX.Element {
         </div>
       )}
 
+      {pestana === 'historico' && cortes.length > 0 && (
+        <div className="filtros-chips" style={{ alignItems: 'flex-start' }}>
+          <span className="texto-suave" style={{ alignSelf: 'center' }}>Cortes de medición (agrupar columnas):</span>
+          <select
+            multiple
+            value={cortesActivosHistorico}
+            onChange={(e) => setCortesActivosHistorico(Array.from(e.target.selectedOptions, (o) => o.value))}
+            style={{ minHeight: 60, width: 260 }}
+            data-testid="historico-filtro-cortes"
+          >
+            {cortes.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.periodicidad})</option>)}
+          </select>
+          <span className="texto-suave">Ctrl/Cmd+clic para elegir varios.</span>
+        </div>
+      )}
+
       {pestana === 'historico' && vistaHistorico === 'lista' && (
-        <div className="tabla-envoltura">
+        <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
           <table className="tabla" data-testid="tabla-historico">
             <thead>
+              {hayGruposHistorico && (
+                <tr data-testid="fila-grupos-corte-historico">
+                  <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
+                </tr>
+              )}
               <tr>
-                <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                {!hayGruposHistorico && (
+                  <>
+                    <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                    <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                    <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                    <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                  </>
+                )}
                 {/* Las columnas de período (dinámicas, una por período) no se ordenan — ver docstring de VALOR_COLUMNA_HISTORICO. */}
-                {columnasHistorico.map((c) => (
-                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
-                ))}
+                {hayGruposHistorico
+                  ? encabezadosMiembroCorte(columnasGrillaHistorico)
+                  : columnasHistorico.map((c) => <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -961,7 +1128,7 @@ export function SeguimientoPage(): React.JSX.Element {
               ))}
               {historicoVisible.length === 0 && (
                 <tr>
-                  <td colSpan={4 + columnasHistorico.length}>
+                  <td colSpan={4 + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -976,18 +1143,32 @@ export function SeguimientoPage(): React.JSX.Element {
       )}
 
       {pestana === 'historico' && vistaHistorico === 'arbol' && (
-        <div className="tabla-envoltura">
+        <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
           <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-arbol">
             <thead>
+              {hayGruposHistorico && (
+                <tr>
+                  <th rowSpan={2} style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                  <th rowSpan={2}>Categoría / Indicador</th>
+                  <th rowSpan={2}>Responsable</th>
+                  <th rowSpan={2}>Línea base</th>
+                  <th rowSpan={2}>Meta</th>
+                  {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
+                </tr>
+              )}
               <tr>
-                <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                <th>Categoría / Indicador</th>
-                <th>Responsable</th>
-                <th>Línea base</th>
-                <th>Meta</th>
-                {columnasHistorico.map((c) => (
-                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
-                ))}
+                {!hayGruposHistorico && (
+                  <>
+                    <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                    <th>Categoría / Indicador</th>
+                    <th>Responsable</th>
+                    <th>Línea base</th>
+                    <th>Meta</th>
+                  </>
+                )}
+                {hayGruposHistorico
+                  ? encabezadosMiembroCorte(columnasGrillaHistorico)
+                  : columnasHistorico.map((c) => <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -1010,7 +1191,7 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      <td colSpan={3 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      <td colSpan={3 + columnasGrillaHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                         {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1032,7 +1213,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={5 + columnasHistorico.length}>
+                  <td colSpan={5 + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -1047,18 +1228,32 @@ export function SeguimientoPage(): React.JSX.Element {
       )}
 
       {pestana === 'historico' && vistaHistorico === 'equipo' && (
-        <div className="tabla-envoltura">
+        <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
           <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-equipo">
             <thead>
+              {hayGruposHistorico && (
+                <tr>
+                  <th rowSpan={2} style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                  <th rowSpan={2}>Equipo / Categoría / Indicador</th>
+                  <th rowSpan={2}>Responsable</th>
+                  <th rowSpan={2}>Línea base</th>
+                  <th rowSpan={2}>Meta</th>
+                  {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
+                </tr>
+              )}
               <tr>
-                <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                <th>Equipo / Categoría / Indicador</th>
-                <th>Responsable</th>
-                <th>Línea base</th>
-                <th>Meta</th>
-                {columnasHistorico.map((c) => (
-                  <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>
-                ))}
+                {!hayGruposHistorico && (
+                  <>
+                    <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
+                    <th>Equipo / Categoría / Indicador</th>
+                    <th>Responsable</th>
+                    <th>Línea base</th>
+                    <th>Meta</th>
+                  </>
+                )}
+                {hayGruposHistorico
+                  ? encabezadosMiembroCorte(columnasGrillaHistorico)
+                  : columnasHistorico.map((c) => <th key={c.periodoId} title={c.periodoId}>{c.etiqueta}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -1093,7 +1288,7 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={3 + columnasHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    <td colSpan={3 + columnasGrillaHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1103,7 +1298,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolEquipoHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={5 + columnasHistorico.length}>
+                  <td colSpan={5 + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (

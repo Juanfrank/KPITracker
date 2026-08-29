@@ -420,16 +420,20 @@ export const deRol = (r: Rol): Fila => ({
 export const aCorteMedicion = (f: Fila): CorteMedicion => ({
   id: s(f.id),
   nombre: s(f.nombre),
-  fecha: s(f.fecha),
+  periodicidad: s(f.periodicidad) as CorteMedicion['periodicidad'],
   reglaGeneral: s(f.regla_general) as CorteMedicion['reglaGeneral'],
   reglasPorIndicador: json<Record<string, CorteMedicion['reglaGeneral']>>(f.reglas_por_indicador, {}),
+  omitirPeriodosSinMeta: b(f.omitir_periodos_sin_meta),
+  acotarAl100: b(f.acotar_al_100),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deCorteMedicion = (c: CorteMedicion): Fila => ({
-  id: c.id, nombre: c.nombre, fecha: c.fecha, regla_general: c.reglaGeneral,
-  reglas_por_indicador: JSON.stringify(c.reglasPorIndicador), creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
+  id: c.id, nombre: c.nombre, periodicidad: c.periodicidad, regla_general: c.reglaGeneral,
+  reglas_por_indicador: JSON.stringify(c.reglasPorIndicador),
+  omitir_periodos_sin_meta: c.omitirPeriodosSinMeta, acotar_al_100: c.acotarAl100,
+  creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
 });
 
 export const aMedicionCategoria = (f: Fila): ConfiguracionMedicionCategoria => ({

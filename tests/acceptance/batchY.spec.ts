@@ -5,8 +5,9 @@ import { iniciarAppWeb } from './fixtures';
 /**
  * Batch Y (pedido explícito del usuario): orden de los roles de equipo,
  * nuevo rol general "Administrador", y las dos pantallas nuevas de
- * medición (Cortes de medición en Configuración de Metas; medición por
- * categoría en Administración → Categorías).
+ * medición (Cortes de medición — módulo propio del sidebar desde Batch AA,
+ * antes vivía en Configuración de Metas; medición por categoría en
+ * Administración → Categorías).
  */
 
 let pagina: Page;
@@ -42,13 +43,13 @@ test('Y3: existe el rol general "Administrador" y no se puede eliminar (rol del 
   await pagina.getByRole('button', { name: 'Cancelar' }).click();
 });
 
-test('Y6: Cortes de medición — crear uno y calcularlo', async () => {
-  await pagina.getByTestId('nav-configuracion-metas').click();
-  await expect(pagina.getByTestId('panel-cortes-medicion')).toBeVisible();
+test('Y6: Cortes de medición — crear uno y calcularlo (Batch AA: módulo propio, periodicidad en vez de fecha)', async () => {
+  await pagina.getByTestId('nav-cortes-medicion').click();
+  await expect(pagina.getByTestId('tabla-cortes-medicion')).toBeVisible();
 
   await pagina.getByTestId('nuevo-corte-medicion').click();
   await pagina.getByTestId('corte-nombre').fill('Corte de prueba');
-  await pagina.getByTestId('corte-fecha').fill('2026-06-30');
+  await pagina.getByTestId('corte-periodicidad').selectOption('Trimestral');
   await pagina.getByTestId('corte-regla-general').selectOption('maximo');
   await pagina.getByTestId('guardar-corte-medicion').click();
   await expect(pagina.getByTestId('corte-medicion-Corte de prueba')).toBeVisible();

@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CorteMedicion, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo, ResultadoCorteMedicion, TipoAgregacion } from '@domain/index';
-import { ETIQUETAS_AGREGACION, GeneradorPeriodos, OPCIONES_AGREGACION_CORTES, Periodicidad, ProductoCartesiano, claveATexto } from '@domain/index';
+import { useEffect, useRef, useState } from 'react';
+import type { DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo } from '@domain/index';
+import { GeneradorPeriodos, Periodicidad, ProductoCartesiano, claveATexto } from '@domain/index';
 import { invocar } from '../../api';
-import { trpcClient } from '../../trpc';
-import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
-import { Icono } from '../../componentes/Icono';
+import { Campo, Encabezado, Vacio } from '../../componentes/basicos';
 
 const generadorPeriodos = new GeneradorPeriodos();
 const productoCartesiano = new ProductoCartesiano();
@@ -16,32 +14,6 @@ type Combinacion = ReturnType<typeof productoCartesiano.generar>[number];
 function etiquetaCombinacion(combinacion: Combinacion, listasPorId: Map<string, { nombre: string }>): string {
   if (combinacion.etiquetas.length === 0) return 'General (total del indicador)';
   return combinacion.etiquetas.map((e) => `${listasPorId.get(e.listaId)?.nombre ?? e.listaId}: ${e.descripcion}`).join(' / ');
-}
-
-/** Un corte de medición activo, con los períodos (de los que muestra la grilla) que agruparía. */
-interface GrupoCorte {
-  corte: CorteMedicion;
-  periodos: Periodo[];
-}
-
-/** Una columna a renderizar en la grilla de metas: un período suelto, un período agrupado (expandido), o la columna única de un grupo colapsado. */
-type ColumnaGrilla =
-  | { tipo: 'periodo'; periodo: Periodo; grupo?: GrupoCorte }
-  | { tipo: 'corte'; grupo: GrupoCorte };
-
-/**
- * Períodos que un corte agregaría dentro de `periodos` — misma ventana que
- * `ServicioCortesMedicion.calcular` (desde el corte cronológicamente
- * anterior, exclusivo, hasta este, inclusive), para que el agrupamiento
- * visual coincida exactamente con lo que el corte realmente calcula.
- */
-function periodosDeCorte(periodos: Periodo[], corte: CorteMedicion, todosCortes: CorteMedicion[]): Periodo[] {
-  const anterior = todosCortes
-    .filter((c) => c.fecha < corte.fecha)
-    .map((c) => c.fecha)
-    .sort()
-    .at(-1) ?? null;
-  return periodos.filter((p) => p.fechaFin <= corte.fecha && (anterior == null || p.fechaFin > anterior));
 }
 
 /** Modo de generación de metas automáticas (Batch X, X14). */
@@ -113,19 +85,6 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
   const [autoIncremento, setAutoIncremento] = useState('');
   const [autoMensaje, setAutoMensaje] = useState<string | null>(null);
 
-  // Cortes de medición (Batch Y/Z): elevado aquí (no solo dentro de `SeccionCortesMedicion`) para
-  // que la grilla de metas pueda agrupar sus columnas por corte con los mismos datos.
-  const [cortes, setCortes] = useState<CorteMedicion[]>([]);
-  // Cortes activos como columnas agrupadas en la grilla (Batch Z) — multi-select, vacío por defecto
-  // (la grilla se ve exactamente igual que antes hasta que el usuario elige alguno).
-  const [cortesActivos, setCortesActivos] = useState<string[]>([]);
-  // Expandido (true) por defecto — colapsar oculta los períodos del grupo y deja solo su columna.
-  const [expandidosCorte, setExpandidosCorte] = useState<Record<string, boolean>>({});
-
-  const cargarCortes = useCallback(async (): Promise<void> => {
-    setCortes(await trpcClient.cortesMedicion.listar.query());
-  }, []);
-
   useEffect(() => {
     void invocar('indicadores:listar', undefined).then((todos) => setIndicadores(todos.filter((i) => i.estado === 'Activo' && !i.esCalculado)));
     void invocar('listas:listar', undefined).then(setListas);
@@ -134,12 +93,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
       setAnioInicialConfig(c.anioInicial);
       setAnio(c.anioInicial);
     });
-    void cargarCortes();
-  }, [cargarCortes]);
-
-  const alternarGrupoCorte = (corteId: string): void => {
-    setExpandidosCorte((previo) => ({ ...previo, [corteId]: !(previo[corteId] ?? true) }));
-  };
+  }, []);
 
   const indicador = indicadores.find((i) => i.id === indicadorId) ?? null;
   // Ceñido al indicador (X10): nunca es una elección independiente del usuario.
@@ -187,39 +141,6 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
       periodos = generadorPeriodos.periodosDelAnio(anio, periodicidad, definicionPersonalizada);
     }
   }
-
-  // Cortes de medición como columnas agrupadas (Batch Z): un corte activo agrupa los períodos que
-  // agregaría (misma ventana que `ServicioCortesMedicion.calcular` — desde el corte cronológicamente
-  // anterior, exclusivo, hasta este, inclusive), visibles arriba de esta grilla de METAS puramente
-  // como organización visual (no se muestra ningún valor agregado acá: los cortes agregan
-  // RESULTADOS capturados, no objetivos).
-  const gruposActivos: GrupoCorte[] = cortesActivos
-    .map((id) => cortes.find((c) => c.id === id))
-    .filter((c): c is CorteMedicion => c != null)
-    .map((corte) => ({ corte, periodos: periodosDeCorte(periodos, corte, cortes) }))
-    .filter((g) => g.periodos.length > 0);
-  const grupoPorPeriodoId = new Map<string, GrupoCorte>();
-  for (const g of gruposActivos) for (const p of g.periodos) grupoPorPeriodoId.set(p.id, g);
-
-  const columnasGrilla: ColumnaGrilla[] = [];
-  const corteColapsadoEmitido = new Set<string>();
-  for (const periodo of periodos) {
-    const grupo = grupoPorPeriodoId.get(periodo.id);
-    if (!grupo) {
-      columnasGrilla.push({ tipo: 'periodo', periodo });
-      continue;
-    }
-    if (expandidosCorte[grupo.corte.id] ?? true) {
-      columnasGrilla.push({ tipo: 'periodo', periodo, grupo });
-    } else if (!corteColapsadoEmitido.has(grupo.corte.id)) {
-      columnasGrilla.push({ tipo: 'corte', grupo });
-      corteColapsadoEmitido.add(grupo.corte.id);
-    }
-  }
-  const hayGrupos = gruposActivos.length > 0;
-  // Pegado (Excel-like): siempre alinea contra el índice REAL en `periodos`, nunca contra la
-  // posición en `columnasGrilla` — un grupo colapsado no debe correr los períodos que siguen.
-  const indicePeriodo = new Map(periodos.map((p, i) => [p.id, i]));
 
   const combinaciones = indicador ? productoCartesiano.generar(indicador.desagregaciones, elementosPorLista) : [];
   const listasPorId = new Map(listas.map((l) => [l.id, l]));
@@ -436,27 +357,7 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
             Definición personalizada: <strong>{definicionPersonalizada.nombre}</strong> (configurada en el indicador).
           </p>
         )}
-        {cortes.length > 0 && (
-          <div className="fila-form c4" style={{ marginTop: 12 }}>
-            <Campo etiqueta="Cortes de medición (agrupar columnas)">
-              <select
-                multiple
-                value={cortesActivos}
-                onChange={(e) => setCortesActivos(Array.from(e.target.selectedOptions, (o) => o.value))}
-                style={{ minHeight: 76 }}
-                data-testid="metas-filtro-cortes"
-              >
-                {cortes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre} ({c.fecha})</option>
-                ))}
-              </select>
-              <span className="texto-suave">Ctrl/Cmd+clic para elegir varios. Agrupa visualmente los períodos que cada corte agregaría.</span>
-            </Campo>
-          </div>
-        )}
       </div>
-
-      <SeccionCortesMedicion indicadores={indicadores} cortes={cortes} alCambiar={cargarCortes} />
 
       {indicador && !errorPeriodos && (
         <div className="tarjeta" data-testid="panel-metas-automaticas">
@@ -533,73 +434,13 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
       ) : errorPeriodos ? (
         <div className="aviso info">{errorPeriodos}</div>
       ) : (
-        <div className={hayGrupos ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
+        <div className="tabla-envoltura">
           <table className="tabla" data-testid="tabla-configuracion-metas">
             <thead>
-              {hayGrupos && (
-                <tr data-testid="fila-grupos-corte">
-                  <th rowSpan={2}>Desagregación</th>
-                  <th rowSpan={2} style={{ textAlign: 'right', minWidth: 110 }}>Recurrente</th>
-                  {(() => {
-                    const grupoEmitido = new Set<string>();
-                    return columnasGrilla.map((col) => {
-                      if (col.tipo === 'corte') {
-                        const { corte } = col.grupo;
-                        return (
-                          <th key={`c-${corte.id}`} rowSpan={2} className="columna-corte-colapsada" data-testid={`grupo-corte-${corte.nombre}`}>
-                            <button
-                              type="button"
-                              className="boton-arbol"
-                              onClick={() => alternarGrupoCorte(corte.id)}
-                              title="Expandir"
-                              data-testid={`toggle-grupo-corte-${corte.nombre}`}
-                            >
-                              <Icono nombre="flecha" />
-                            </button>
-                            {corte.nombre}
-                          </th>
-                        );
-                      }
-                      const grupo = col.grupo;
-                      if (!grupo) return <th key={col.periodo.id} rowSpan={2} style={{ textAlign: 'right', minWidth: 110 }}>{col.periodo.etiqueta}</th>;
-                      if (grupoEmitido.has(grupo.corte.id)) return null;
-                      grupoEmitido.add(grupo.corte.id);
-                      return (
-                        <th key={`g-${grupo.corte.id}`} colSpan={grupo.periodos.length} className="encabezado-grupo-corte" data-testid={`grupo-corte-${grupo.corte.nombre}`}>
-                          <button
-                            type="button"
-                            className="boton-arbol expandido"
-                            onClick={() => alternarGrupoCorte(grupo.corte.id)}
-                            title="Colapsar"
-                            data-testid={`toggle-grupo-corte-${grupo.corte.nombre}`}
-                          >
-                            <Icono nombre="flecha" />
-                          </button>
-                          {grupo.corte.nombre}
-                        </th>
-                      );
-                    });
-                  })()}
-                </tr>
-              )}
               <tr>
-                {!hayGrupos && (
-                  <>
-                    <th>Desagregación</th>
-                    <th style={{ textAlign: 'right', minWidth: 110 }}>Recurrente</th>
-                  </>
-                )}
-                {columnasGrilla.map((col) =>
-                  col.tipo === 'periodo' ? (
-                    col.grupo ? (
-                      <th key={col.periodo.id} className="columna-corte-miembro" style={{ textAlign: 'right', minWidth: 110 }}>
-                        {col.periodo.etiqueta}
-                      </th>
-                    ) : hayGrupos ? null : (
-                      <th key={col.periodo.id} style={{ textAlign: 'right', minWidth: 110 }}>{col.periodo.etiqueta}</th>
-                    )
-                  ) : null
-                )}
+                <th>Desagregación</th>
+                <th style={{ textAlign: 'right', minWidth: 110 }}>Recurrente</th>
+                {periodos.map((p) => <th key={p.id} style={{ textAlign: 'right', minWidth: 110 }}>{p.etiqueta}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -620,21 +461,15 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
                         testId={`meta-recurrente-${clave}`}
                       />
                     </td>
-                    {columnasGrilla.map((col) => {
-                      if (col.tipo === 'corte') {
-                        return (
-                          <td key={`c-${col.grupo.corte.id}`} className="columna-corte-colapsada">—</td>
-                        );
-                      }
-                      const periodo = col.periodo;
+                    {periodos.map((periodo, indiceCol) => {
                       const celda = obtenerCelda(clave, periodo.id);
                       return (
-                        <td key={periodo.id} className={col.grupo ? 'columna-corte-miembro' : undefined} style={{ textAlign: 'right' }}>
+                        <td key={periodo.id} style={{ textAlign: 'right' }}>
                           <CeldaMetaPeriodo
                             valorInicial={celda?.valor ?? null}
                             placeholder={celda == null && recurrente ? String(recurrente.valor) : undefined}
                             alConfirmar={(texto) => manejarCambioCelda(clave, periodo, texto)}
-                            alPegar={(texto) => pegarBloque(indiceFila, indicePeriodo.get(periodo.id) ?? 0, texto)}
+                            alPegar={(texto) => pegarBloque(indiceFila, indiceCol, texto)}
                             testId={`meta-celda-${clave}-${periodo.id}`}
                           />
                         </td>
@@ -648,205 +483,6 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
         </div>
       )}
     </>
-  );
-}
-
-function corteVacio(): CorteMedicion {
-  return { id: '', nombre: '', fecha: '', reglaGeneral: 'promedio', reglasPorIndicador: {}, creadoEn: '', actualizadoEn: '' };
-}
-
-/**
- * "Cortes de medición" (Batch Y, pedido explícito del usuario): momentos
- * globales de corte de datos para reportería, cada uno con una regla de
- * agregación general (promedio/promedio ponderado/máximo/mínimo) y
- * excepciones puntuales por indicador. Sección propia, independiente del
- * indicador elegido arriba (un corte agrega TODOS los indicadores visibles a
- * la vez) — por eso vive en su propio sub-componente con su propio estado.
- */
-function SeccionCortesMedicion({
-  indicadores, cortes, alCambiar
-}: {
-  indicadores: Indicador[];
-  /** Batch Z: elevado al padre (`ConfiguracionMetasPage`) para que la grilla de metas pueda agrupar columnas por corte con los mismos datos, sin un segundo fetch desincronizado. */
-  cortes: CorteMedicion[];
-  alCambiar: () => Promise<void>;
-}): React.JSX.Element {
-  const [editando, setEditando] = useState<CorteMedicion | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [verCalculo, setVerCalculo] = useState<CorteMedicion | null>(null);
-  const [resultados, setResultados] = useState<ResultadoCorteMedicion[] | null>(null);
-
-  const guardar = async (): Promise<void> => {
-    if (!editando) return;
-    setError(null);
-    try {
-      await trpcClient.cortesMedicion.guardar.mutate(editando);
-      setEditando(null);
-      await alCambiar();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo guardar el corte de medición.');
-    }
-  };
-
-  const eliminar = async (id: string): Promise<void> => {
-    setError(null);
-    try {
-      await trpcClient.cortesMedicion.eliminar.mutate({ id });
-      setEditando(null);
-      await alCambiar();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo eliminar el corte de medición.');
-    }
-  };
-
-  const calcular = async (corte: CorteMedicion): Promise<void> => {
-    setVerCalculo(corte);
-    setResultados(null);
-    setResultados(await trpcClient.cortesMedicion.calcular.query({ id: corte.id }));
-  };
-
-  const establecerReglaIndicador = (indicadorId: string, regla: string): void => {
-    if (!editando) return;
-    const reglasPorIndicador = { ...editando.reglasPorIndicador };
-    if (regla) reglasPorIndicador[indicadorId] = regla as TipoAgregacion;
-    else delete reglasPorIndicador[indicadorId];
-    setEditando({ ...editando, reglasPorIndicador });
-  };
-
-  return (
-    <div className="tarjeta" data-testid="panel-cortes-medicion">
-      <div className="toolbar">
-        <h3 style={{ margin: 0 }}>Cortes de medición</h3>
-        <span className="texto-suave">Momentos globales de corte de datos para reportería</span>
-        <div className="separador" />
-        <button className="boton primario" onClick={() => setEditando(corteVacio())} data-testid="nuevo-corte-medicion">
-          + Corte
-        </button>
-      </div>
-      <div className="tabla-envoltura">
-        <table className="tabla" data-testid="tabla-cortes-medicion">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Fecha de corte</th>
-              <th>Regla general</th>
-              <th style={{ width: 90 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {cortes.map((c) => (
-              <tr key={c.id} data-testid={`corte-medicion-${c.nombre}`}>
-                <td style={{ cursor: 'pointer' }} onClick={() => setEditando(c)}>{c.nombre}</td>
-                <td>{c.fecha}</td>
-                <td>{ETIQUETAS_AGREGACION[c.reglaGeneral]}</td>
-                <td>
-                  <button className="boton" onClick={() => void calcular(c)} data-testid={`calcular-corte-${c.nombre}`}>Calcular</button>
-                </td>
-              </tr>
-            ))}
-            {cortes.length === 0 && (
-              <tr><td colSpan={4}><Vacio mensaje="Sin cortes de medición" detalle="cree uno con “+ Corte”" /></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {verCalculo && (
-        <div style={{ marginTop: 12 }}>
-          <h4 style={{ margin: '0 0 8px' }}>Resultado — {verCalculo.nombre} ({verCalculo.fecha})</h4>
-          {resultados == null ? (
-            <p className="texto-suave">Calculando…</p>
-          ) : resultados.length === 0 ? (
-            <Vacio mensaje="Sin indicadores con datos en la ventana de este corte" />
-          ) : (
-            <div className="tabla-envoltura">
-              <table className="tabla" data-testid="tabla-resultado-corte">
-                <thead>
-                  <tr><th>Indicador</th><th>Regla aplicada</th><th style={{ textAlign: 'right' }}>Valor agregado</th><th style={{ textAlign: 'right' }}>Períodos</th></tr>
-                </thead>
-                <tbody>
-                  {resultados.map((r) => (
-                    <tr key={r.indicadorId}>
-                      <td>{r.nombre}</td>
-                      <td>{ETIQUETAS_AGREGACION[r.regla]}</td>
-                      <td style={{ textAlign: 'right' }}>{r.valorAgregado ?? '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{r.periodosConsiderados}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {editando && (
-        <PanelLateral
-          titulo={editando.id ? `Editar corte — ${editando.nombre}` : 'Nuevo corte de medición'}
-          alCerrar={() => { setEditando(null); setError(null); }}
-          pie={
-            <>
-              {editando.id && <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>}
-              <span style={{ flex: 1 }} />
-              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
-              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-corte-medicion">Guardar</button>
-            </>
-          }
-        >
-          {error && <div className="aviso error">{error}</div>}
-          <Campo etiqueta="Nombre" obligatorio>
-            <input
-              type="text"
-              value={editando.nombre}
-              onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
-              autoFocus
-              data-testid="corte-nombre"
-            />
-          </Campo>
-          <Campo etiqueta="Fecha de corte" obligatorio>
-            <input
-              type="date"
-              value={editando.fecha}
-              onChange={(e) => setEditando({ ...editando, fecha: e.target.value })}
-              data-testid="corte-fecha"
-            />
-          </Campo>
-          <Campo etiqueta="Regla general">
-            <select
-              value={editando.reglaGeneral}
-              onChange={(e) => setEditando({ ...editando, reglaGeneral: e.target.value as TipoAgregacion })}
-              data-testid="corte-regla-general"
-            >
-              {OPCIONES_AGREGACION_CORTES.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
-            </select>
-          </Campo>
-          <Campo etiqueta="Reglas específicas por indicador">
-            <div className="tabla-envoltura">
-              <table className="tabla">
-                <thead><tr><th>Indicador</th><th>Regla</th></tr></thead>
-                <tbody>
-                  {indicadores.map((i) => (
-                    <tr key={i.id}>
-                      <td>{i.nombre}</td>
-                      <td>
-                        <select
-                          value={editando.reglasPorIndicador[i.id] ?? ''}
-                          onChange={(e) => establecerReglaIndicador(i.id, e.target.value)}
-                          data-testid={`corte-regla-indicador-${i.nombre}`}
-                        >
-                          <option value="">— usar regla general —</option>
-                          {OPCIONES_AGREGACION_CORTES.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Campo>
-        </PanelLateral>
-      )}
-    </div>
   );
 }
 

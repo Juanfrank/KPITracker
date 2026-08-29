@@ -1,33 +1,59 @@
+import { Periodicidad } from '../value-objects/Periodicidad';
 import type { TipoAgregacion } from '../services/AgregacionMedicion';
 
 /**
- * Corte de medición (Batch Y, pedido explícito del usuario): "un momento
+ * Periodicidades válidas para un corte de medición (pedido explícito del
+ * usuario, Batch AA): siempre SUPERIOR al mes — nunca Mensual (sería
+ * redundante con los propios períodos del indicador) ni Personalizada (sin
+ * una ventana calendario fija que agrupar). Cada período de esta
+ * periodicidad ("T1 2026", "S1 2026"...) es un "bucket" que agrega los
+ * períodos más finos del indicador cuya ventana cae dentro de la suya.
+ */
+export const PERIODICIDADES_CORTE: readonly Periodicidad[] = [
+  Periodicidad.Bimestral, Periodicidad.Trimestral, Periodicidad.Cuatrimestral, Periodicidad.Semestral, Periodicidad.Anual
+];
+
+export function periodicidadCorteValida(p: string): p is Periodicidad {
+  return (PERIODICIDADES_CORTE as readonly string[]).includes(p);
+}
+
+/**
+ * Corte de medición (Batch Y, pedido explícito del usuario: "un momento
  * global donde se hace el corte de los datos para fines de reportería y
- * medición". Al calcularlo (`ServicioCortesMedicion.calcular`), cada
- * indicador visible agrega sus períodos cerrados desde el corte
- * cronológicamente anterior (o desde el inicio, si es el primero) hasta
- * `fecha`, usando `reglaGeneral` — salvo que tenga una entrada en
- * `reglasPorIndicador`, que la reemplaza para ESE indicador únicamente.
+ * medición"; rediseñado en Batch AA a pedido explícito del usuario: en vez
+ * de una fecha puntual, el corte es una PERIODICIDAD recurrente superior al
+ * mes — cada uno de sus períodos ("T1 2026", "T2 2026"...) es un bucket que
+ * agrega, con `reglaGeneral` (salvo excepción en `reglasPorIndicador`), los
+ * períodos más finos del indicador cuya ventana cae dentro de la suya. Ver
+ * `ServicioCortesMedicion.calcular`.
  */
 export interface CorteMedicion {
   readonly id: string;
   nombre: string;
-  /** Fecha del corte, ISO `yyyy-MM-dd` — se agregan los períodos con cierre hasta este día inclusive. */
-  fecha: string;
+  /** Siempre uno de `PERIODICIDADES_CORTE` (Bimestral..Anual). */
+  periodicidad: Periodicidad;
   reglaGeneral: TipoAgregacion;
   /** indicadorId → regla que reemplaza a `reglaGeneral` únicamente para ese indicador. */
   reglasPorIndicador: Record<string, TipoAgregacion>;
+  /** Si `true` (default), los períodos sin Meta configurada se EXCLUYEN por completo de la agregación (no solo se despesan, como ya hace `promedioPonderado`). */
+  omitirPeriodosSinMeta: boolean;
+  /** Si `true` (default), el valor agregado final de cada bucket se acota a un máximo de 100 (pensado para indicadores medidos como porcentaje). */
+  acotarAl100: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;
 }
 
-/** Un indicador ya agregado hasta un corte — lo que devuelve `ServicioCortesMedicion.calcular`. */
+/** Un indicador agregado dentro de UN bucket de un corte — lo que devuelve `ServicioCortesMedicion.calcular` (una fila por indicador × bucket con datos). */
 export interface ResultadoCorteMedicion {
   indicadorId: string;
   nombre: string;
   regla: TipoAgregacion;
-  /** `null` si el indicador no tiene ningún período con datos dentro de la ventana del corte. */
+  /** Id del período-bucket del corte (p. ej. "2026-Trimestral-01"). */
+  periodoId: string;
+  /** Etiqueta legible del bucket (p. ej. "T1 2026"). */
+  periodoEtiqueta: string;
+  /** `null` si, tras aplicar `omitirPeriodosSinMeta`, no quedó ningún período con valor dentro de este bucket. */
   valorAgregado: number | null;
-  /** Cantidad de períodos que entraron en la agregación (con o sin valor capturado). */
+  /** Cantidad de períodos que entraron en la agregación de este bucket (con valor, y con meta si `omitirPeriodosSinMeta`). */
   periodosConsiderados: number;
 }

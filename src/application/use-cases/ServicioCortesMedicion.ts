@@ -1,6 +1,6 @@
 import {
   EntidadNoEncontradaError, GeneradorPeriodos, Periodicidad, ValidacionError, agregar, equipoEfectivo,
-  metaVigenteParaPeriodo, puedeVerIndicador, tipoAgregacionValido
+  metaVigenteParaPeriodo, periodicidadCorteValida, puedeVerIndicador, tipoAgregacionValido
 } from '@domain/index';
 import type { CorteMedicion, DefinicionPeriodicidad, EntradaAgregable, ResultadoCorteMedicion } from '@domain/index';
 import type {
@@ -12,11 +12,14 @@ import type { ContextoAplicacion } from './base';
 import { permisosActuales } from './contextoUsuario';
 
 /**
- * "Cortes de medición" (Batch Y, pedido explícito del usuario): momentos
- * globales donde se agrega, indicador por indicador, todo lo capturado desde
- * el corte anterior hasta la fecha de este, con una regla de agregación
- * (general o específica por indicador). No modifica ningún resultado — es
- * puramente de LECTURA/reportería, calculado bajo demanda (`calcular`).
+ * "Cortes de medición" (Batch Y, pedido explícito del usuario): un corte es
+ * una PERIODICIDAD recurrente superior al mes (Bimestral..Anual, rediseño
+ * de Batch AA — antes era una fecha puntual). Cada período de esa
+ * periodicidad ("T1 2026", "T2 2026"...) es un "bucket": agrega, indicador
+ * por indicador, todos sus períodos más finos cuya ventana cae dentro de la
+ * suya, con una regla de agregación (general o específica por indicador).
+ * No modifica ningún resultado — es puramente de LECTURA/reportería,
+ * calculado bajo demanda (`calcular`).
  *
  * Limitación conocida (documentada, no silenciosa): los indicadores
  * calculados (`esCalculado`) se excluyen del cálculo — evaluarlos requeriría
@@ -46,7 +49,9 @@ export class ServicioCortesMedicion extends ServicioBase {
   async guardar(corte: CorteMedicion): Promise<CorteMedicion> {
     const errores: string[] = [];
     if (!corte.nombre.trim()) errores.push('El nombre es obligatorio.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(corte.fecha)) errores.push('La fecha de corte es obligatoria y debe ser válida.');
+    if (!periodicidadCorteValida(corte.periodicidad)) {
+      errores.push('La periodicidad del corte es obligatoria y debe ser superior al mes (Bimestral, Trimestral, Cuatrimestral, Semestral o Anual).');
+    }
     if (!tipoAgregacionValido(corte.reglaGeneral)) errores.push('La regla general de agregación no es válida.');
     for (const [indicadorId, regla] of Object.entries(corte.reglasPorIndicador)) {
       if (!tipoAgregacionValido(regla)) errores.push(`La regla específica del indicador "${indicadorId}" no es válida.`);
@@ -75,20 +80,17 @@ export class ServicioCortesMedicion extends ServicioBase {
   }
 
   /**
-   * Agrega, para cada indicador visible (no calculado), sus períodos
-   * cerrados entre el corte cronológicamente anterior (exclusivo) y este
-   * (inclusive) — el primer corte de todos agrega "desde siempre".
+   * Para cada indicador visible (no calculado) y cada bucket YA CERRADO de
+   * la periodicidad del corte, agrega los períodos más finos del indicador
+   * cuya ventana [fechaInicio, fechaFin] cae dentro de la del bucket —
+   * misma ventana calendario, nunca a caballo entre dos buckets. Un
+   * indicador con periodicidad igual o más gruesa que la del corte (p. ej.
+   * Semestral bajo un corte Trimestral) no tiene ningún período que quepa
+   * entero dentro de un bucket más fino: simplemente no produce filas.
    */
   async calcular(id: string): Promise<ResultadoCorteMedicion[]> {
     const corte = await this.repo.obtener(id);
     if (!corte) throw new EntidadNoEncontradaError('CorteMedicion', id);
-
-    const todos = await this.repo.listar();
-    const fechaDesde = todos
-      .filter((c) => c.fecha < corte.fecha)
-      .map((c) => c.fecha)
-      .sort()
-      .at(-1) ?? null;
 
     const [config, indicadores, usuarios, definicionesLista] = await Promise.all([
       this.configuracionRepo.obtener(), this.indicadoresRepo.listar(), this.usuariosRepo.listar(),
@@ -101,43 +103,57 @@ export class ServicioCortesMedicion extends ServicioBase {
       (i) => !i.esCalculado && puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 
+    const hoy = this.ctx.reloj.hoyIso();
+    const buckets = this.generadorPeriodos.periodosCerrados(config.anioInicial, corte.periodicidad, hoy);
+
     const resultados: ResultadoCorteMedicion[] = [];
     for (const indicador of visibles) {
       const definicion: DefinicionPeriodicidad | undefined =
         indicador.periodicidad === Periodicidad.Personalizada && indicador.periodicidadPersonalizadaId
           ? definiciones.get(indicador.periodicidadPersonalizadaId)
           : undefined;
-      let periodos;
+      let periodosIndicador;
       try {
-        periodos = this.generadorPeriodos.periodosDisponibles(config.anioInicial, indicador.periodicidad, corte.fecha, definicion);
+        periodosIndicador = this.generadorPeriodos.periodosCerrados(config.anioInicial, indicador.periodicidad, hoy, definicion);
       } catch {
         continue; // Personalizada sin definición resoluble.
       }
-      periodos = periodos.filter((p) => p.fechaFin <= corte.fecha && (fechaDesde == null || p.fechaFin > fechaDesde));
-      if (periodos.length === 0) continue;
+      if (periodosIndicador.length === 0) continue;
 
       const [valoresPorPeriodo, metasIndicador] = await Promise.all([
         this.resultadosRepo.resultadosGeneralPorIndicador(indicador.id),
         this.metasRepo.listarPorIndicador(indicador.id)
       ]);
       const valorPorPeriodoId = new Map(valoresPorPeriodo.map((v) => [v.periodoId, v.valor]));
-
-      const entradas: EntradaAgregable[] = [];
-      for (const periodo of periodos) {
-        const valor = valorPorPeriodoId.get(periodo.id);
-        if (valor == null) continue;
-        const tieneMeta = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones) != null;
-        entradas.push({ valor, tieneMeta });
-      }
-
       const regla = corte.reglasPorIndicador[indicador.id] ?? corte.reglaGeneral;
-      resultados.push({
-        indicadorId: indicador.id,
-        nombre: indicador.nombre,
-        regla,
-        valorAgregado: agregar(regla, entradas),
-        periodosConsiderados: periodos.length
-      });
+
+      for (const bucket of buckets) {
+        const periodosDelBucket = periodosIndicador.filter((p) => p.fechaInicio >= bucket.fechaInicio && p.fechaFin <= bucket.fechaFin);
+        if (periodosDelBucket.length === 0) continue;
+
+        const entradas: EntradaAgregable[] = [];
+        for (const periodo of periodosDelBucket) {
+          const valor = valorPorPeriodoId.get(periodo.id);
+          if (valor == null) continue;
+          const tieneMeta = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones) != null;
+          if (corte.omitirPeriodosSinMeta && !tieneMeta) continue;
+          entradas.push({ valor, tieneMeta });
+        }
+        if (entradas.length === 0) continue;
+
+        let valorAgregado = agregar(regla, entradas);
+        if (corte.acotarAl100 && valorAgregado != null) valorAgregado = Math.min(valorAgregado, 100);
+
+        resultados.push({
+          indicadorId: indicador.id,
+          nombre: indicador.nombre,
+          regla,
+          periodoId: bucket.id,
+          periodoEtiqueta: bucket.etiqueta,
+          valorAgregado,
+          periodosConsiderados: entradas.length
+        });
+      }
     }
     return resultados;
   }

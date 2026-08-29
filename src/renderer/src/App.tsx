@@ -6,6 +6,7 @@ import { SeguimientoPage } from './modulos/seguimiento/SeguimientoPage';
 import { RecoleccionPage } from './modulos/recoleccion/RecoleccionPage';
 import { IndicadoresPage } from './modulos/indicadores/IndicadoresPage';
 import { ConfiguracionMetasPage } from './modulos/metas/ConfiguracionMetasPage';
+import { CortesMedicionPage } from './modulos/cortes/CortesMedicionPage';
 import { AtributosPage } from './modulos/atributos/AtributosPage';
 import { ListasPage } from './modulos/listas/ListasPage';
 import { ReglasPage } from './modulos/reglas/ReglasPage';
@@ -45,6 +46,7 @@ const MODULOS: ModuloDef[] = [
   { id: 'recoleccion', etiqueta: 'Recolección', icono: 'captura', seccion: 'Operación', Componente: RecoleccionPage },
   { id: 'indicadores', etiqueta: 'Indicadores', icono: 'indicador', seccion: 'Configuración', Componente: IndicadoresPage, visible: puedeModificarIndicadores },
   { id: 'configuracion-metas', etiqueta: 'Metas', icono: 'meta', seccion: 'Configuración', Componente: ConfiguracionMetasPage, visible: puedeModificarMetas },
+  { id: 'cortes-medicion', etiqueta: 'Cortes de medición', icono: 'reloj', seccion: 'Configuración', Componente: CortesMedicionPage, visible: puedeModificarMetas },
   { id: 'atributos', etiqueta: 'Atributos', icono: 'atributo', seccion: 'Configuración', Componente: AtributosPage, visible: puedeModificarAtributos },
   { id: 'listas', etiqueta: 'Listas', icono: 'lista', seccion: 'Configuración', Componente: ListasPage, visible: puedeModificarListas },
   { id: 'reglas', etiqueta: 'Reglas', icono: 'regla', seccion: 'Configuración', Componente: ReglasPage, visible: puedeModificarReglas },

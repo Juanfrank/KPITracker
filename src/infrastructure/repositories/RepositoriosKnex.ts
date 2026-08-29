@@ -484,7 +484,7 @@ export class RolRepositoryKnex extends RepositorioBase implements IRolRepository
 
 export class CorteMedicionRepositoryKnex extends RepositorioBase implements ICorteMedicionRepository {
   async listar(): Promise<CorteMedicion[]> {
-    return (await this.knex('cortes_medicion').select('*').orderBy('fecha')).map(aCorteMedicion);
+    return (await this.knex('cortes_medicion').select('*').orderBy('nombre')).map(aCorteMedicion);
   }
 
   async obtener(id: string): Promise<CorteMedicion | null> {
