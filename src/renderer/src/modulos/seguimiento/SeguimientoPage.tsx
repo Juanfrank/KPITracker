@@ -401,6 +401,11 @@ export function SeguimientoPage(): React.JSX.Element {
   const [cortesActivosHistorico, setCortesActivosHistorico] = useState<string[]>([]);
   // Expandido (true) por defecto — colapsar oculta las columnas del bucket y deja solo la suya.
   const [expandidosCorteHistorico, setExpandidosCorteHistorico] = useState<Record<string, boolean>>({});
+  // Valor agregado de cada corte activo, por indicador × bucket (Batch AB, pedido explícito del
+  // usuario: un corte no se "calcula" bajo demanda — es dinámico, función de los resultados
+  // capturados — así que se recalcula en vivo cada vez que un corte se activa en el filtro,
+  // sin ningún botón. Clave `${indicadorId}:${bucketId}`, coincide con `grupo.id` de abajo.
+  const [resultadosCorte, setResultadosCorte] = useState<Map<string, number | null>>(new Map());
   const navigate = useNavigate();
 
   /**
@@ -438,6 +443,27 @@ export function SeguimientoPage(): React.JSX.Element {
   const alternarGrupoCorteHistorico = (bucketId: string): void => {
     setExpandidosCorteHistorico((previo) => ({ ...previo, [bucketId]: !(previo[bucketId] ?? true) }));
   };
+
+  // Recalcula en vivo el valor agregado de cada corte activo (Batch AB) — corre automáticamente
+  // al activar/desactivar un corte en el filtro, nunca por una acción manual del usuario.
+  useEffect(() => {
+    if (cortesActivosHistorico.length === 0) {
+      setResultadosCorte(new Map());
+      return;
+    }
+    let cancelado = false;
+    void Promise.all(cortesActivosHistorico.map((id) => trpcClient.cortesMedicion.calcular.query({ id }))).then((porCorte) => {
+      if (cancelado) return;
+      const mapa = new Map<string, number | null>();
+      for (const resultados of porCorte) {
+        for (const r of resultados) mapa.set(`${r.indicadorId}:${r.periodoId}`, r.valorAgregado);
+      }
+      setResultadosCorte(mapa);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [cortesActivosHistorico]);
 
   useEffect(() => {
     if (pestana === 'historico' && historico === null) {
@@ -542,8 +568,9 @@ export function SeguimientoPage(): React.JSX.Element {
    * indenta el nombre bajo su categoría/equipo (0 en la vista Lista, donde
    * no aplica). Recorre `columnasGrillaHistorico` (no `columnasHistorico`
    * directo, Batch AA) para que un grupo de corte colapsado deje una sola
-   * celda — puramente visual, un corte agrega RESULTADOS ya capturados, no
-   * se recalcula un valor agregado acá (ver `ServicioCortesMedicion` para eso).
+   * celda — con el valor agregado REAL del corte para ese bucket (Batch
+   * AB, `resultadosCorte`, recalculado en vivo — no es un valor "calculado"
+   * bajo demanda, ver docstring del componente).
    */
   const celdaHistorico = (h: FilaHistorico, nivel = 0): React.JSX.Element => (
     <>
@@ -565,7 +592,12 @@ export function SeguimientoPage(): React.JSX.Element {
       <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       {columnasGrillaHistorico.map((col) => {
         if (col.tipo === 'corte') {
-          return <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada">—</td>;
+          const valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`);
+          return (
+            <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada" title={`Valor agregado del corte para ${col.grupo.etiqueta}`}>
+              {valor == null ? <span className="texto-suave">—</span> : valor}
+            </td>
+          );
         }
         const c = col.columna;
         const punto = h.puntos.find((p) => p.periodoId === c.periodoId);

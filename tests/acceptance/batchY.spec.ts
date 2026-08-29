@@ -43,7 +43,7 @@ test('Y3: existe el rol general "Administrador" y no se puede eliminar (rol del 
   await pagina.getByRole('button', { name: 'Cancelar' }).click();
 });
 
-test('Y6: Cortes de medición — crear uno y calcularlo (Batch AA: módulo propio, periodicidad en vez de fecha)', async () => {
+test('Y6: Cortes de medición — crear uno (Batch AA: módulo propio, periodicidad en vez de fecha; Batch AB: sin botón "Calcular", el valor es dinámico y se ve en Seguimiento > Histórico)', async () => {
   await pagina.getByTestId('nav-cortes-medicion').click();
   await expect(pagina.getByTestId('tabla-cortes-medicion')).toBeVisible();
 
@@ -53,9 +53,6 @@ test('Y6: Cortes de medición — crear uno y calcularlo (Batch AA: módulo prop
   await pagina.getByTestId('corte-regla-general').selectOption('maximo');
   await pagina.getByTestId('guardar-corte-medicion').click();
   await expect(pagina.getByTestId('corte-medicion-Corte de prueba')).toBeVisible();
-
-  await pagina.getByTestId('calcular-corte-Corte de prueba').click();
-  await expect(pagina.getByText('Resultado — Corte de prueba')).toBeVisible();
 });
 
 test('Y7: medición por categoría — configurar la regla general de una categoría', async () => {

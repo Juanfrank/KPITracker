@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { CorteMedicion, Indicador, ResultadoCorteMedicion, TipoAgregacion } from '@domain/index';
+import type { CorteMedicion, Indicador, TipoAgregacion } from '@domain/index';
 import { ETIQUETAS_AGREGACION, OPCIONES_AGREGACION_CORTES, PERIODICIDADES_CORTE } from '@domain/index';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
@@ -29,14 +29,19 @@ function corteVacio(): CorteMedicion {
  *
  * (Nota, Batch AA: agrupar/colapsar columnas por corte en una grilla vive
  * en Seguimiento → Histórico, no acá — ver `SeguimientoPage.tsx`.)
+ *
+ * (Nota, Batch AB, pedido explícito del usuario: un corte NO se "calcula"
+ * bajo demanda — es un valor dinámico, función de los resultados
+ * capturados en cada momento. Por eso esta página es pura configuración
+ * (CRUD); el valor agregado de cada corte se ve donde tiene sentido verlo
+ * en contexto — la celda colapsada de un grupo de corte en Seguimiento →
+ * Histórico, calculada en vivo cada vez que se muestra.)
  */
 export function CortesMedicionPage(): React.JSX.Element {
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
   const [cortes, setCortes] = useState<CorteMedicion[]>([]);
   const [editando, setEditando] = useState<CorteMedicion | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [verCalculo, setVerCalculo] = useState<CorteMedicion | null>(null);
-  const [resultados, setResultados] = useState<ResultadoCorteMedicion[] | null>(null);
 
   const cargarCortes = useCallback(async (): Promise<void> => {
     setCortes(await trpcClient.cortesMedicion.listar.query());
@@ -70,12 +75,6 @@ export function CortesMedicionPage(): React.JSX.Element {
     }
   };
 
-  const calcular = async (corte: CorteMedicion): Promise<void> => {
-    setVerCalculo(corte);
-    setResultados(null);
-    setResultados(await trpcClient.cortesMedicion.calcular.query({ id: corte.id }));
-  };
-
   const establecerReglaIndicador = (indicadorId: string, regla: string): void => {
     if (!editando) return;
     const reglasPorIndicador = { ...editando.reglasPorIndicador };
@@ -105,59 +104,26 @@ export function CortesMedicionPage(): React.JSX.Element {
                 <th>Nombre</th>
                 <th>Periodicidad</th>
                 <th>Regla general</th>
-                <th style={{ width: 90 }} />
               </tr>
             </thead>
             <tbody>
               {cortes.map((c) => (
-                <tr key={c.id} data-testid={`corte-medicion-${c.nombre}`}>
-                  <td style={{ cursor: 'pointer' }} onClick={() => setEditando(c)}>{c.nombre}</td>
+                <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setEditando(c)} data-testid={`corte-medicion-${c.nombre}`}>
+                  <td>{c.nombre}</td>
                   <td>{c.periodicidad}</td>
                   <td>{ETIQUETAS_AGREGACION[c.reglaGeneral]}</td>
-                  <td>
-                    <button className="boton" onClick={() => void calcular(c)} data-testid={`calcular-corte-${c.nombre}`}>Calcular</button>
-                  </td>
                 </tr>
               ))}
               {cortes.length === 0 && (
-                <tr><td colSpan={4}><Vacio mensaje="Sin cortes de medición" detalle="cree uno con “+ Corte”" /></td></tr>
+                <tr><td colSpan={3}><Vacio mensaje="Sin cortes de medición" detalle="cree uno con “+ Corte”" /></td></tr>
               )}
             </tbody>
           </table>
         </div>
-
-        {verCalculo && (
-          <div style={{ marginTop: 12 }}>
-            <h4 style={{ margin: '0 0 8px' }}>Resultado — {verCalculo.nombre} ({verCalculo.periodicidad})</h4>
-            {resultados == null ? (
-              <p className="texto-suave">Calculando…</p>
-            ) : resultados.length === 0 ? (
-              <Vacio mensaje="Sin indicadores con datos en ningún bucket cerrado de este corte" />
-            ) : (
-              <div className="tabla-envoltura">
-                <table className="tabla" data-testid="tabla-resultado-corte">
-                  <thead>
-                    <tr>
-                      <th>Indicador</th><th>Período</th><th>Regla aplicada</th>
-                      <th style={{ textAlign: 'right' }}>Valor agregado</th><th style={{ textAlign: 'right' }}>Períodos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultados.map((r) => (
-                      <tr key={`${r.indicadorId}-${r.periodoId}`}>
-                        <td>{r.nombre}</td>
-                        <td>{r.periodoEtiqueta}</td>
-                        <td>{ETIQUETAS_AGREGACION[r.regla]}</td>
-                        <td style={{ textAlign: 'right' }}>{r.valorAgregado ?? '—'}</td>
-                        <td style={{ textAlign: 'right' }}>{r.periodosConsiderados}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        <p className="texto-suave" style={{ margin: '8px 0 0' }}>
+          El valor agregado de cada corte es dinámico — se calcula en vivo a partir de los resultados capturados. Se ve en
+          contexto en Seguimiento → Histórico, activando el corte en el filtro "Cortes de medición" y colapsando su grupo.
+        </p>
       </div>
 
       {editando && (
