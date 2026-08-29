@@ -53,6 +53,8 @@ export interface PuntoHistorico {
   periodoId: string;
   etiqueta: string;
   fechaInicio: string;
+  /** Fin/cierre del período — Batch Y: es la fecha correcta para ORDENAR columnas cuando conviven periodicidades distintas (ver `SeguimientoPage.columnasHistorico`), no `fechaInicio`. */
+  fechaFin: string;
   valor: number | null;
   /** Meta configurada vigente para este período específico (Meta.valor), de existir — ver `metaVigenteParaPeriodo`. `null` si no hay ninguna. */
   metaPeriodo: number | null;
@@ -342,7 +344,10 @@ export class ServicioSeguimiento extends ServicioBase {
         const metaPeriodo = metaVigente?.valor ?? null;
         const meta = metaPeriodo ?? indicador.metaGlobal;
         const cumplimientoPct = valor != null && meta != null && meta !== 0 ? (valor / meta) * 100 : null;
-        return { periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, valor, metaPeriodo, cumplimientoPct };
+        return {
+          periodoId: periodo.id, etiqueta: periodo.etiqueta, fechaInicio: periodo.fechaInicio, fechaFin: periodo.fechaFin,
+          valor, metaPeriodo, cumplimientoPct
+        };
       });
       filas.push({
         indicadorId: indicador.id,

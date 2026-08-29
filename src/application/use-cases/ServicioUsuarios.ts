@@ -1,6 +1,6 @@
 import { puedeAdministrarCatalogos, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
 import type { Usuario } from '@domain/index';
-import { NOMBRE_ROL_USUARIO_ESTANDAR, permisoValido } from '@domain/index';
+import { ID_ROL_ADMINISTRADOR, NOMBRE_ROL_USUARIO_ESTANDAR, permisoValido } from '@domain/index';
 import type {
   ICredencialGeneradaRepository, IEquipoRepository, IIndicadorRepository, IPasswordHasher,
   IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository
@@ -96,7 +96,9 @@ export class ServicioUsuarios {
       throw new ValidacionError(`Ya existe un usuario con el nombre "${limpio}".`);
     }
     const esAdministrador = datos.esAdministrador ?? false;
-    const rolGeneralId = esAdministrador ? null : (datos.rolGeneralId ?? (await this.rolGeneralPorDefecto()));
+    // Batch Y: un usuario esAdministrador siempre porta el rol "Administrador" (asignable/
+    // quitable como cualquier otro salvo a él — ver `establecerRolGeneral`).
+    const rolGeneralId = esAdministrador ? ID_ROL_ADMINISTRADOR : (datos.rolGeneralId ?? (await this.rolGeneralPorDefecto()));
     const ahora = this.reloj.ahoraIso();
     const usuario: Usuario = {
       id: this.ids.nuevoId(),
@@ -142,7 +144,14 @@ export class ServicioUsuarios {
   async establecerAdministrador(id: string, esAdministrador: boolean): Promise<void> {
     const usuario = await this.obtenerOFallar(id);
     await this.verificarQuedaAlMenosUnAdmin(id, esAdministrador && usuario.activo);
-    const rolGeneralId = esAdministrador ? null : (usuario.rolGeneralId ?? (await this.rolGeneralPorDefecto()));
+    // Batch Y: al volverse administrador, siempre porta el rol "Administrador" — al dejar de
+    // serlo, recupera el rol general que tenía (si no era justamente "Administrador", que ya no
+    // le corresponde) o cae al default de "Usuario estándar".
+    const rolGeneralId = esAdministrador
+      ? ID_ROL_ADMINISTRADOR
+      : (usuario.rolGeneralId && usuario.rolGeneralId !== ID_ROL_ADMINISTRADOR
+        ? usuario.rolGeneralId
+        : await this.rolGeneralPorDefecto());
     await this.repo.guardar({ ...usuario, esAdministrador, rolGeneralId, actualizadoEn: this.reloj.ahoraIso() });
   }
 
@@ -154,6 +163,12 @@ export class ServicioUsuarios {
 
   async establecerRolGeneral(id: string, rolGeneralId: string): Promise<void> {
     const usuario = await this.obtenerOFallar(id);
+    // Batch Y, pedido explícito: "al usuario admin no se le puede quitar este rol" — reforzado
+    // aquí (además de en `crear`/`establecerAdministrador`) para que ningún llamador, presente o
+    // futuro, pueda dejar a un usuario esAdministrador con un rol general distinto.
+    if (usuario.esAdministrador && rolGeneralId !== ID_ROL_ADMINISTRADOR) {
+      throw new ValidacionError('No se puede quitar el rol "Administrador" a un usuario administrador.');
+    }
     const rol = await this.rolesRepo.obtener(rolGeneralId);
     if (!rol) throw new ValidacionError('El rol seleccionado no existe.');
     if (rol.ambito !== 'general') throw new ValidacionError('El rol seleccionado no es de ámbito general.');

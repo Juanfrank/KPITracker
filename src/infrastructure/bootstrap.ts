@@ -5,9 +5,9 @@ import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
 import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
-  AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex,
-  CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MetaRepositoryKnex,
-  PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex,
+  AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex, CorteMedicionRepositoryKnex,
+  CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MedicionCategoriaRepositoryKnex,
+  MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex,
   SesionRepositoryKnex, UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
@@ -44,6 +44,8 @@ export interface Infraestructura {
   usuarios: UsuarioRepositoryKnex;
   sesiones: SesionRepositoryKnex;
   roles: RolRepositoryKnex;
+  cortesMedicion: CorteMedicionRepositoryKnex;
+  medicionCategoria: MedicionCategoriaRepositoryKnex;
   permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
   credencialesGeneradas: CredencialGeneradaRepositoryKnex;
   exportacion: ExportAnaliticoService;
@@ -102,6 +104,8 @@ export async function crearInfraestructura(
   const usuarios = new UsuarioRepositoryKnex(knex);
   const sesiones = new SesionRepositoryKnex(knex);
   const roles = new RolRepositoryKnex(knex);
+  const cortesMedicion = new CorteMedicionRepositoryKnex(knex);
+  const medicionCategoria = new MedicionCategoriaRepositoryKnex(knex);
   const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
   const credencialesGeneradas = new CredencialGeneradaRepositoryKnex(knex);
   const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, usuarios, categorias);
@@ -141,6 +145,8 @@ export async function crearInfraestructura(
     usuarios,
     sesiones,
     roles,
+    cortesMedicion,
+    medicionCategoria,
     permisosExcepcionales,
     credencialesGeneradas,
     exportacion,

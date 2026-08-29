@@ -1,24 +1,26 @@
 import type { Knex } from 'knex';
 import { randomUUID } from 'node:crypto';
+import { compararRoles } from '@domain/index';
 import type {
-  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, DefinicionPeriodicidad, ElementoLista,
-  EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio,
-  Resultado, ResultadoHistorial, Rol, Sesion, Usuario
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, ConfiguracionMedicionCategoria,
+  CorteMedicion, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista,
+  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Rol, Sesion, Usuario
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
-  IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICredencialGeneradaRepository,
-  IIndicadorRepository, IListaRepository, IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository,
-  IResultadoRepository, IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
+  IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICorteMedicionRepository,
+  ICredencialGeneradaRepository, IIndicadorRepository, IListaRepository, IMedicionCategoriaRepository,
+  IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository, IRolRepository,
+  ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
-  aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aDefinicionPeriodicidad,
-  aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMeta, aOrigenAutomatico, aRegla, aResultado,
-  aResultadoHistorial, aRol, aSesion, aUsuario,
-  deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deDefinicionPeriodicidad,
-  deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMeta, deOrigenAutomatico, deRegla, deResultado,
-  deResultadoHistorial, deRol, deSesion, deUsuario
+  aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aCorteMedicion,
+  aDefinicionPeriodicidad, aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMedicionCategoria, aMeta,
+  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, aRol, aSesion, aUsuario,
+  deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deCorteMedicion,
+  deDefinicionPeriodicidad, deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMedicionCategoria, deMeta,
+  deOrigenAutomatico, deRegla, deResultado, deResultadoHistorial, deRol, deSesion, deUsuario
 } from './mapeos';
 
 /**
@@ -460,7 +462,10 @@ export class CredencialGeneradaRepositoryKnex extends RepositorioBase implements
 
 export class RolRepositoryKnex extends RepositorioBase implements IRolRepository {
   async listar(): Promise<Rol[]> {
-    return (await this.knex('roles').select('*').orderBy(['ambito', 'nombre'])).map(aRol);
+    // Orden por ámbito, luego `compararRoles` (Batch Y: orden fijo de los roles semilla,
+    // no alfabético — un ORDER BY de SQL no puede expresar ese orden explícito).
+    const filas = (await this.knex('roles').select('*').orderBy('ambito')).map(aRol);
+    return filas.sort((a, b) => (a.ambito === b.ambito ? compararRoles(a, b) : a.ambito.localeCompare(b.ambito)));
   }
 
   async obtener(id: string): Promise<Rol | null> {
@@ -474,6 +479,40 @@ export class RolRepositoryKnex extends RepositorioBase implements IRolRepository
 
   async eliminar(id: string): Promise<void> {
     await this.knex('roles').where({ id }).delete();
+  }
+}
+
+export class CorteMedicionRepositoryKnex extends RepositorioBase implements ICorteMedicionRepository {
+  async listar(): Promise<CorteMedicion[]> {
+    return (await this.knex('cortes_medicion').select('*').orderBy('fecha')).map(aCorteMedicion);
+  }
+
+  async obtener(id: string): Promise<CorteMedicion | null> {
+    const fila = await this.knex('cortes_medicion').where({ id }).first();
+    return fila ? aCorteMedicion(fila) : null;
+  }
+
+  async guardar(corte: CorteMedicion): Promise<void> {
+    await upsert(this.knex, 'cortes_medicion', { id: corte.id }, deCorteMedicion(corte));
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.knex('cortes_medicion').where({ id }).delete();
+  }
+}
+
+export class MedicionCategoriaRepositoryKnex extends RepositorioBase implements IMedicionCategoriaRepository {
+  async obtener(categoriaId: string): Promise<ConfiguracionMedicionCategoria | null> {
+    const fila = await this.knex('configuracion_medicion_categoria').where({ categoria_id: categoriaId }).first();
+    return fila ? aMedicionCategoria(fila) : null;
+  }
+
+  async listar(): Promise<ConfiguracionMedicionCategoria[]> {
+    return (await this.knex('configuracion_medicion_categoria').select('*')).map(aMedicionCategoria);
+  }
+
+  async guardar(config: ConfiguracionMedicionCategoria): Promise<void> {
+    await upsert(this.knex, 'configuracion_medicion_categoria', { categoria_id: config.categoriaId }, deMedicionCategoria(config));
   }
 }
 

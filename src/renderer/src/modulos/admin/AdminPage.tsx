@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
-  AmbitoPermiso, Categoria, Equipo, FuenteParametroGeneral, Indicador, OrigenAutomatico, ParametroGeneral,
-  Rol, TipoOrigenAutomatico
+  AmbitoPermiso, Categoria, ConfiguracionMedicionCategoria, Equipo, FuenteParametroGeneral, Indicador,
+  OrigenAutomatico, ParametroGeneral, Rol, TipoAgregacion, TipoOrigenAutomatico, TratamientoIndicadorMedicion
 } from '@domain/index';
-import { agruparPermisosParaGrid, ejemploParaFuente, equipoEfectivo, sinCiclo } from '@domain/index';
+import { ETIQUETAS_AGREGACION, OPCIONES_AGREGACION, agruparPermisosParaGrid, ejemploParaFuente, equipoEfectivo, sinCiclo } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
@@ -254,6 +254,14 @@ function SeccionCategorias(): React.JSX.Element {
   const [editando, setEditando] = useState<Categoria | null>(null);
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [errores, setErrores] = useState<string[]>([]);
+  // Medición por categoría (Batch Y): solo tiene sentido para una categoría ya creada
+  // (necesita su id) — se carga al abrir el editor de una fila existente.
+  const [medicion, setMedicion] = useState<ConfiguracionMedicionCategoria | null>(null);
+
+  useEffect(() => {
+    if (!editando?.id) { setMedicion(null); return; }
+    void trpcClient.medicionCategoria.obtener.query({ categoriaId: editando.id }).then(setMedicion);
+  }, [editando?.id]);
 
   const cargar = useCallback(async (): Promise<void> => {
     const [categorias, listaIndicadores] = await Promise.all([
@@ -270,7 +278,8 @@ function SeccionCategorias(): React.JSX.Element {
 
   const guardar = async (): Promise<void> => {
     if (!editando) return;
-    await invocar('categorias:guardar', editando);
+    const guardada = await invocar('categorias:guardar', editando);
+    if (medicion) await trpcClient.medicionCategoria.guardar.mutate({ ...medicion, categoriaId: guardada.id });
     setEditando(null);
     await cargar();
   };
@@ -290,6 +299,20 @@ function SeccionCategorias(): React.JSX.Element {
   const restaurar = async (id: string): Promise<void> => {
     await invocar('categorias:restaurar', { id });
     await cargar();
+  };
+
+  const establecerTratamiento = (indicadorId: string, cambios: Partial<TratamientoIndicadorMedicion>): void => {
+    if (!medicion) return;
+    const actual = medicion.tratamientoIndicadores[indicadorId] ?? {};
+    const nuevo: TratamientoIndicadorMedicion = { ...actual, ...cambios };
+    const limpio: TratamientoIndicadorMedicion = {};
+    if (nuevo.excluir) limpio.excluir = true;
+    if (nuevo.peso != null && nuevo.peso !== 1) limpio.peso = nuevo.peso;
+    if (nuevo.agregacionPropia) limpio.agregacionPropia = nuevo.agregacionPropia;
+    const tratamientoIndicadores = { ...medicion.tratamientoIndicadores };
+    if (Object.keys(limpio).length === 0) delete tratamientoIndicadores[indicadorId];
+    else tratamientoIndicadores[indicadorId] = limpio;
+    setMedicion({ ...medicion, tratamientoIndicadores });
   };
 
   const filas = ordenarJerarquia(items);
@@ -429,6 +452,71 @@ function SeccionCategorias(): React.JSX.Element {
             <input type="checkbox" style={{ width: 'auto' }} checked={editando.activo} onChange={(e) => setEditando({ ...editando, activo: e.target.checked })} />
             Activa
           </label>
+
+          {editando.id && medicion && (
+            <Campo etiqueta="Medición — ¿cómo se calcula el resultado del período de esta categoría?">
+              <select
+                value={medicion.reglaGeneral}
+                onChange={(e) => setMedicion({ ...medicion, reglaGeneral: e.target.value as TipoAgregacion })}
+                data-testid="categoria-medicion-regla-general"
+              >
+                {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+              </select>
+              <span className="texto-suave">
+                Combina el valor de todos los indicadores DIRECTOS de esta categoría en un solo resultado.
+                Las subcategorías se calculan aparte, con su propia configuración.
+              </span>
+              {indicadores.filter((i) => i.categoria === editando.id).length > 0 && (
+                <div className="tabla-envoltura" style={{ marginTop: 8 }}>
+                  <table className="tabla">
+                    <thead>
+                      <tr><th>Indicador</th><th>Excluir</th><th>Peso</th><th>Agregación propia</th></tr>
+                    </thead>
+                    <tbody>
+                      {indicadores.filter((i) => i.categoria === editando.id).map((i) => {
+                        const t = medicion.tratamientoIndicadores[i.id] ?? {};
+                        return (
+                          <tr key={i.id}>
+                            <td>{i.nombre}</td>
+                            <td>
+                              <input
+                                type="checkbox"
+                                style={{ width: 'auto' }}
+                                checked={t.excluir ?? false}
+                                onChange={(e) => establecerTratamiento(i.id, { excluir: e.target.checked })}
+                                data-testid={`categoria-medicion-excluir-${i.nombre}`}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                style={{ width: 70 }}
+                                value={t.peso ?? 1}
+                                onChange={(e) => establecerTratamiento(i.id, { peso: Number(e.target.value) })}
+                                data-testid={`categoria-medicion-peso-${i.nombre}`}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={t.agregacionPropia ?? ''}
+                                onChange={(e) => establecerTratamiento(i.id, { agregacionPropia: (e.target.value || undefined) as TipoAgregacion | undefined })}
+                                data-testid={`categoria-medicion-propia-${i.nombre}`}
+                              >
+                                <option value="">— valor general —</option>
+                                {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Campo>
+          )}
         </PanelLateral>
       )}
     </div>
@@ -1648,7 +1736,14 @@ function SeccionUsuarios(): React.JSX.Element {
               type="checkbox"
               style={{ width: 'auto' }}
               checked={editando.esAdministrador}
-              onChange={(e) => setEditando({ ...editando, esAdministrador: e.target.checked })}
+              onChange={(e) => {
+                const esAdministrador = e.target.checked;
+                // Batch Y: al desmarcar, se limpia el rol general local (que hasta ahora era
+                // "Administrador", forzado por el servidor) — si no, `guardarEdicion` volvería a
+                // asignarlo con el valor viejo justo después de que `establecerAdministrador` ya
+                // lo hubiera reemplazado por el default, dejando al usuario administrador de facto.
+                setEditando({ ...editando, esAdministrador, rolGeneralId: esAdministrador ? editando.rolGeneralId : null });
+              }}
               data-testid="usuario-editar-es-administrador"
             />
             Administrador (acceso total)

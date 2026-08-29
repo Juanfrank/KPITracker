@@ -1,8 +1,8 @@
 import type {
-  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, CortePeriodicidad,
-  DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico,
-  ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial,
-  Rol, Sesion, Usuario
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, ConfiguracionMedicionCategoria,
+  CorteMedicion, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista,
+  MapeoColumna, Meta, OrigenAutomatico, ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio,
+  Resultado, ResultadoHistorial, Rol, Sesion, TratamientoIndicadorMedicion, Usuario
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -415,6 +415,33 @@ export const aRol = (f: Fila): Rol => ({
 export const deRol = (r: Rol): Fila => ({
   id: r.id, nombre: r.nombre, ambito: r.ambito, permisos: JSON.stringify(r.permisos), es_sistema: r.esSistema,
   creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
+});
+
+export const aCorteMedicion = (f: Fila): CorteMedicion => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  fecha: s(f.fecha),
+  reglaGeneral: s(f.regla_general) as CorteMedicion['reglaGeneral'],
+  reglasPorIndicador: json<Record<string, CorteMedicion['reglaGeneral']>>(f.reglas_por_indicador, {}),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deCorteMedicion = (c: CorteMedicion): Fila => ({
+  id: c.id, nombre: c.nombre, fecha: c.fecha, regla_general: c.reglaGeneral,
+  reglas_por_indicador: JSON.stringify(c.reglasPorIndicador), creado_en: c.creadoEn, actualizado_en: c.actualizadoEn
+});
+
+export const aMedicionCategoria = (f: Fila): ConfiguracionMedicionCategoria => ({
+  categoriaId: s(f.categoria_id),
+  reglaGeneral: s(f.regla_general) as ConfiguracionMedicionCategoria['reglaGeneral'],
+  tratamientoIndicadores: json<Record<string, TratamientoIndicadorMedicion>>(f.tratamiento_indicadores, {}),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deMedicionCategoria = (c: ConfiguracionMedicionCategoria): Fila => ({
+  categoria_id: c.categoriaId, regla_general: c.reglaGeneral,
+  tratamiento_indicadores: JSON.stringify(c.tratamientoIndicadores), actualizado_en: c.actualizadoEn
 });
 
 export const aSesion = (f: Fila): Sesion => ({

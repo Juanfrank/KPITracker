@@ -16,6 +16,8 @@ import { ServicioAdjuntos } from '@application/use-cases/ServicioAdjuntos';
 import { ServicioAuditoria } from '@application/use-cases/ServicioAuditoria';
 import { ServicioAutomatizacionIndicador } from '@application/use-cases/ServicioAutomatizacionIndicador';
 import { ServicioRoles } from '@application/use-cases/ServicioRoles';
+import { ServicioCortesMedicion } from '@application/use-cases/ServicioCortesMedicion';
+import { ServicioMedicionCategoria } from '@application/use-cases/ServicioMedicionCategoria';
 import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
 
 /**
@@ -93,6 +95,12 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     infra.listas, infra.periodicidades, infra.conectorOrigen
   );
   const roles = new ServicioRoles(ctx, infra.roles, { usuarios: infra.usuarios });
+  const cortesMedicion = new ServicioCortesMedicion(
+    ctx, infra.cortesMedicion, infra.indicadores, infra.resultados, infra.metas, infra.periodicidades, infra.configuracion, infra.usuarios
+  );
+  const medicionCategoria = new ServicioMedicionCategoria(
+    ctx, infra.medicionCategoria, infra.categorias, infra.indicadores, infra.resultados, infra.metas, infra.periodicidades, infra.usuarios
+  );
   const auditoria = new ServicioAuditoria(infra.auditoria, infra.indicadores, infra.usuarios);
 
   const manejadores: Aplicacion['manejadores'] = {
@@ -212,6 +220,15 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     'roles:listar': () => roles.listar(),
     'roles:guardar': (rol) => roles.guardar(rol),
     'roles:eliminar': ({ id }) => roles.eliminar(id),
+
+    'cortesMedicion:listar': () => cortesMedicion.listar(),
+    'cortesMedicion:guardar': (corte) => cortesMedicion.guardar(corte),
+    'cortesMedicion:eliminar': ({ id }) => cortesMedicion.eliminar(id),
+    'cortesMedicion:calcular': ({ id }) => cortesMedicion.calcular(id),
+
+    'medicionCategoria:obtener': ({ categoriaId }) => medicionCategoria.obtener(categoriaId),
+    'medicionCategoria:guardar': (config) => medicionCategoria.guardar(config),
+    'medicionCategoria:calcular': ({ categoriaId, periodoId }) => medicionCategoria.calcular(categoriaId, periodoId),
 
     'portable:exportar': async () => ({ json: await infra.configPortable.exportar() }),
     'portable:importar': ({ json }) => infra.configPortable.importar(json),

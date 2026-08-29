@@ -5,6 +5,8 @@ import type {
   AutomatizacionIndicador,
   Categoria,
   ConfiguracionGeneral,
+  ConfiguracionMedicionCategoria,
+  CorteMedicion,
   DefinicionPeriodicidad,
   ElementoLista,
   EntidadAdjunto,
@@ -241,6 +243,21 @@ export interface IRolRepository {
   obtener(id: string): Promise<Rol | null>;
   guardar(rol: Rol): Promise<void>;
   eliminar(id: string): Promise<void>;
+}
+
+/** Catálogo de "Cortes de medición" (Batch Y) — sin borrado lógico, catálogo pequeño de configuración. */
+export interface ICorteMedicionRepository {
+  listar(): Promise<CorteMedicion[]>;
+  obtener(id: string): Promise<CorteMedicion | null>;
+  guardar(corte: CorteMedicion): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Configuración de medición por categoría (Batch Y) — 1:1 con `Categoria.id`, `null` = "sin configurar" (defaults). */
+export interface IMedicionCategoriaRepository {
+  obtener(categoriaId: string): Promise<ConfiguracionMedicionCategoria | null>;
+  listar(): Promise<ConfiguracionMedicionCategoria[]>;
+  guardar(config: ConfiguracionMedicionCategoria): Promise<void>;
 }
 
 /** Un permiso concedido individualmente a un usuario, fuera de su rol nativo — ver docstring de `Usuario`. */

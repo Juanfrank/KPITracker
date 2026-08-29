@@ -20,6 +20,8 @@ import { sistemaRouter } from './routers/sistema';
 import { authRouter } from './routers/auth';
 import { usuariosRouter } from './routers/usuarios';
 import { rolesRouter } from './routers/roles';
+import { cortesMedicionRouter } from './routers/cortesMedicion';
+import { medicionCategoriaRouter } from './routers/medicionCategoria';
 import { simulacionRouter } from './routers/simulacion';
 
 /**
@@ -50,6 +52,8 @@ export const appRouter = router({
   auth: authRouter,
   usuarios: usuariosRouter,
   roles: rolesRouter,
+  cortesMedicion: cortesMedicionRouter,
+  medicionCategoria: medicionCategoriaRouter,
   simulacion: simulacionRouter
 });
 

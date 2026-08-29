@@ -6,13 +6,19 @@
  *
  * Batch T reemplaza el `rol: 'admin'|'usuario'` binario original por un
  * sistema de roles/permisos configurable (`Rol`, `CATALOGO_PERMISOS`):
- * - `esAdministrador` es el único flag que sigue siendo fijo en código (no
- *   una fila de `Rol`) — acceso total, incluidas las pantallas de Usuarios y
- *   Roles. Debe existir siempre al menos un usuario activo con este flag
- *   (`ServicioUsuarios` lo garantiza). El resto de los campos de abajo se
- *   ignoran cuando `esAdministrador` es `true`.
+ * - `esAdministrador` es un flag fijo en código (no una fila de `Rol`) —
+ *   acceso total, incluidas las pantallas de Usuarios y Roles (siguen
+ *   exigiendo este flag CRUDO, `adminProcedure`, nunca solo el rol de abajo).
+ *   Debe existir siempre al menos un usuario activo con este flag
+ *   (`ServicioUsuarios` lo garantiza).
  * - `rolGeneralId` es el rol de ámbito `'general'` del usuario (exactamente
- *   uno) — por defecto el rol semilla "Usuario estándar" (sin permisos).
+ *   uno) — por defecto el rol semilla "Usuario estándar". Cuando
+ *   `esAdministrador` es `true`, `ServicioUsuarios` FUERZA este campo al rol
+ *   semilla "Administrador" (Batch Y, `ID_ROL_ADMINISTRADOR`) y nunca deja
+ *   que se le quite — no es un flag redundante: `ServicioPermisos.resolver`
+ *   trata a CUALQUIER usuario con este rol (con o sin el flag) como
+ *   `esAdministrador` a efectos de `PoliticaPermisos`, así que el rol por sí
+ *   solo alcanza para delegar acceso total sin tocar el flag reservado.
  * - `equipoId`/`rolEquipoId` son la pertenencia + rol de ámbito `'equipo'`
  *   del usuario.
  *
@@ -34,7 +40,7 @@ export interface Usuario {
   /** Hash bcrypt; nunca se expone el texto plano ni se serializa hacia el cliente. */
   passwordHash: string;
   esAdministrador: boolean;
-  /** Rol de ámbito general (`Rol.ambito === 'general'`); ignorado si `esAdministrador`. */
+  /** Rol de ámbito general (`Rol.ambito === 'general'`); forzado a "Administrador" si `esAdministrador` (ver docstring de arriba). */
   rolGeneralId: string | null;
   /** Equipo al que pertenece (RBAC) y, a la vez, el equipo "responsable" indirecto de sus indicadores asignados. */
   equipoId: string | null;

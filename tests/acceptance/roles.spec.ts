@@ -144,8 +144,10 @@ test('un usuario con solo "resultados.registrar.equipo" (heredado de "ver") regi
   colaborador = await iniciarSesionComo('colaborador.ventas', PASSWORD);
 
   await colaborador.getByTestId('nav-recoleccion').click();
-  // Filtrado por permisos (T4): solo ve el indicador de su equipo, nunca "Indicador General".
-  await expect(colaborador.getByTestId('recoleccion-indicador').locator('option')).toHaveCount(2);
+  // Ver es global por defecto desde Batch Y ("Usuario estándar" trae indicadores.ver.todos/
+  // resultados.ver.todos) — el dropdown lista TODOS los indicadores, incluido "Indicador
+  // General"; lo que sigue acotado por equipo es poder REGISTRAR, verificado más abajo.
+  await expect(colaborador.getByTestId('recoleccion-indicador').locator('option')).toHaveCount(3);
   await colaborador.getByTestId('recoleccion-indicador').selectOption({ label: 'Indicador Ventas' });
   await colaborador.getByTestId('recoleccion-periodo').selectOption({ index: 1 });
   await expect(colaborador.getByTestId('grilla-captura')).toBeVisible();
@@ -157,14 +159,14 @@ test('un usuario con solo "resultados.registrar.equipo" (heredado de "ver") regi
   await expect(colaborador.getByTestId('validacion-GENERAL')).toHaveText('Pendiente');
 });
 
-test('un usuario con solo "resultados.ver.equipo" ve el indicador de su equipo (y solo ese) pero no puede registrar ni validar', async () => {
+test('un usuario con solo "resultados.ver.equipo" ve TODOS los indicadores (ver es global, Batch Y) pero no puede registrar ni validar fuera de su equipo', async () => {
   visor = await iniciarSesionComo('visor.ventas', PASSWORD);
 
   await expect(visor.getByTestId('seguimiento-Indicador Ventas')).toBeVisible();
-  await expect(visor.getByTestId('seguimiento-Indicador General')).toHaveCount(0);
+  await expect(visor.getByTestId('seguimiento-Indicador General')).toBeVisible();
 
   await visor.getByTestId('nav-recoleccion').click();
-  await expect(visor.getByTestId('recoleccion-indicador').locator('option')).toHaveCount(2);
+  await expect(visor.getByTestId('recoleccion-indicador').locator('option')).toHaveCount(3);
   await visor.getByTestId('recoleccion-indicador').selectOption({ label: 'Indicador Ventas' });
   await visor.getByTestId('recoleccion-periodo').selectOption({ index: 1 });
   // La fecha de corte ya la estableció el colaborador — la celda queda habilitada para escribir,

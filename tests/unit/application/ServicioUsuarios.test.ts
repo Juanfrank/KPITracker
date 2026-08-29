@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ValidacionError } from '@domain/index';
+import { ID_ROL_ADMINISTRADOR, ValidacionError } from '@domain/index';
 import type { Equipo, Indicador, Rol, Usuario } from '@domain/index';
 import type {
   ICatalogoRepository, ICredencialGeneradaRepository, IIndicadorRepository, IPermisoExcepcionalRepository,
@@ -105,11 +105,11 @@ describe('ServicioUsuarios', () => {
     expect((creado as unknown as { passwordHash?: string }).passwordHash).toBeUndefined();
   });
 
-  it('crea un usuario administrador cuando se especifica', async () => {
+  it('crea un usuario administrador cuando se especifica, y siempre porta el rol "Administrador" (Batch Y)', async () => {
     const { servicio } = construir();
     const creado = await servicio.crear({ nombreUsuario: 'admin1', nombreCompleto: 'Admin Uno', password: 'contrasenaSegura1', esAdministrador: true });
     expect(creado.esAdministrador).toBe(true);
-    expect(creado.rolGeneralId).toBeNull();
+    expect(creado.rolGeneralId).toBe(ID_ROL_ADMINISTRADOR);
   });
 
   it('rechaza un nombre de usuario duplicado', async () => {

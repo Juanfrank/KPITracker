@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import type { DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo } from '@domain/index';
-import { GeneradorPeriodos, Periodicidad, ProductoCartesiano, claveATexto } from '@domain/index';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CorteMedicion, DefinicionPeriodicidad, ElementoLista, Indicador, Meta, Periodo, ResultadoCorteMedicion, TipoAgregacion } from '@domain/index';
+import { ETIQUETAS_AGREGACION, GeneradorPeriodos, OPCIONES_AGREGACION, Periodicidad, ProductoCartesiano, claveATexto } from '@domain/index';
 import { invocar } from '../../api';
-import { Campo, Encabezado, Vacio } from '../../componentes/basicos';
+import { trpcClient } from '../../trpc';
+import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 
 const generadorPeriodos = new GeneradorPeriodos();
 const productoCartesiano = new ProductoCartesiano();
@@ -359,6 +360,8 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
         )}
       </div>
 
+      <SeccionCortesMedicion indicadores={indicadores} />
+
       {indicador && !errorPeriodos && (
         <div className="tarjeta" data-testid="panel-metas-automaticas">
           <h3 style={{ marginTop: 0 }}>Establecer metas automáticamente</h3>
@@ -483,6 +486,207 @@ export function ConfiguracionMetasPage(): React.JSX.Element {
         </div>
       )}
     </>
+  );
+}
+
+function corteVacio(): CorteMedicion {
+  return { id: '', nombre: '', fecha: '', reglaGeneral: 'promedio', reglasPorIndicador: {}, creadoEn: '', actualizadoEn: '' };
+}
+
+/**
+ * "Cortes de medición" (Batch Y, pedido explícito del usuario): momentos
+ * globales de corte de datos para reportería, cada uno con una regla de
+ * agregación general (promedio/promedio ponderado/máximo/mínimo) y
+ * excepciones puntuales por indicador. Sección propia, independiente del
+ * indicador elegido arriba (un corte agrega TODOS los indicadores visibles a
+ * la vez) — por eso vive en su propio sub-componente con su propio estado.
+ */
+function SeccionCortesMedicion({ indicadores }: { indicadores: Indicador[] }): React.JSX.Element {
+  const [cortes, setCortes] = useState<CorteMedicion[]>([]);
+  const [editando, setEditando] = useState<CorteMedicion | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [verCalculo, setVerCalculo] = useState<CorteMedicion | null>(null);
+  const [resultados, setResultados] = useState<ResultadoCorteMedicion[] | null>(null);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setCortes(await trpcClient.cortesMedicion.listar.query());
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const guardar = async (): Promise<void> => {
+    if (!editando) return;
+    setError(null);
+    try {
+      await trpcClient.cortesMedicion.guardar.mutate(editando);
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el corte de medición.');
+    }
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    setError(null);
+    try {
+      await trpcClient.cortesMedicion.eliminar.mutate({ id });
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar el corte de medición.');
+    }
+  };
+
+  const calcular = async (corte: CorteMedicion): Promise<void> => {
+    setVerCalculo(corte);
+    setResultados(null);
+    setResultados(await trpcClient.cortesMedicion.calcular.query({ id: corte.id }));
+  };
+
+  const establecerReglaIndicador = (indicadorId: string, regla: string): void => {
+    if (!editando) return;
+    const reglasPorIndicador = { ...editando.reglasPorIndicador };
+    if (regla) reglasPorIndicador[indicadorId] = regla as TipoAgregacion;
+    else delete reglasPorIndicador[indicadorId];
+    setEditando({ ...editando, reglasPorIndicador });
+  };
+
+  return (
+    <div className="tarjeta" data-testid="panel-cortes-medicion">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Cortes de medición</h3>
+        <span className="texto-suave">Momentos globales de corte de datos para reportería</span>
+        <div className="separador" />
+        <button className="boton primario" onClick={() => setEditando(corteVacio())} data-testid="nuevo-corte-medicion">
+          + Corte
+        </button>
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla" data-testid="tabla-cortes-medicion">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Fecha de corte</th>
+              <th>Regla general</th>
+              <th style={{ width: 90 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {cortes.map((c) => (
+              <tr key={c.id} data-testid={`corte-medicion-${c.nombre}`}>
+                <td style={{ cursor: 'pointer' }} onClick={() => setEditando(c)}>{c.nombre}</td>
+                <td>{c.fecha}</td>
+                <td>{ETIQUETAS_AGREGACION[c.reglaGeneral]}</td>
+                <td>
+                  <button className="boton" onClick={() => void calcular(c)} data-testid={`calcular-corte-${c.nombre}`}>Calcular</button>
+                </td>
+              </tr>
+            ))}
+            {cortes.length === 0 && (
+              <tr><td colSpan={4}><Vacio mensaje="Sin cortes de medición" detalle="cree uno con “+ Corte”" /></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {verCalculo && (
+        <div style={{ marginTop: 12 }}>
+          <h4 style={{ margin: '0 0 8px' }}>Resultado — {verCalculo.nombre} ({verCalculo.fecha})</h4>
+          {resultados == null ? (
+            <p className="texto-suave">Calculando…</p>
+          ) : resultados.length === 0 ? (
+            <Vacio mensaje="Sin indicadores con datos en la ventana de este corte" />
+          ) : (
+            <div className="tabla-envoltura">
+              <table className="tabla" data-testid="tabla-resultado-corte">
+                <thead>
+                  <tr><th>Indicador</th><th>Regla aplicada</th><th style={{ textAlign: 'right' }}>Valor agregado</th><th style={{ textAlign: 'right' }}>Períodos</th></tr>
+                </thead>
+                <tbody>
+                  {resultados.map((r) => (
+                    <tr key={r.indicadorId}>
+                      <td>{r.nombre}</td>
+                      <td>{ETIQUETAS_AGREGACION[r.regla]}</td>
+                      <td style={{ textAlign: 'right' }}>{r.valorAgregado ?? '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{r.periodosConsiderados}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {editando && (
+        <PanelLateral
+          titulo={editando.id ? `Editar corte — ${editando.nombre}` : 'Nuevo corte de medición'}
+          alCerrar={() => { setEditando(null); setError(null); }}
+          pie={
+            <>
+              {editando.id && <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>}
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-corte-medicion">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Nombre" obligatorio>
+            <input
+              type="text"
+              value={editando.nombre}
+              onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
+              autoFocus
+              data-testid="corte-nombre"
+            />
+          </Campo>
+          <Campo etiqueta="Fecha de corte" obligatorio>
+            <input
+              type="date"
+              value={editando.fecha}
+              onChange={(e) => setEditando({ ...editando, fecha: e.target.value })}
+              data-testid="corte-fecha"
+            />
+          </Campo>
+          <Campo etiqueta="Regla general">
+            <select
+              value={editando.reglaGeneral}
+              onChange={(e) => setEditando({ ...editando, reglaGeneral: e.target.value as TipoAgregacion })}
+              data-testid="corte-regla-general"
+            >
+              {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+            </select>
+          </Campo>
+          <Campo etiqueta="Reglas específicas por indicador">
+            <div className="tabla-envoltura">
+              <table className="tabla">
+                <thead><tr><th>Indicador</th><th>Regla</th></tr></thead>
+                <tbody>
+                  {indicadores.map((i) => (
+                    <tr key={i.id}>
+                      <td>{i.nombre}</td>
+                      <td>
+                        <select
+                          value={editando.reglasPorIndicador[i.id] ?? ''}
+                          onChange={(e) => establecerReglaIndicador(i.id, e.target.value)}
+                          data-testid={`corte-regla-indicador-${i.nombre}`}
+                        >
+                          <option value="">— usar regla general —</option>
+                          {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Campo>
+        </PanelLateral>
+      )}
+    </div>
   );
 }
 

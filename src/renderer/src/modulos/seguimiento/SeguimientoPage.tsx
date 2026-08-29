@@ -389,13 +389,19 @@ export function SeguimientoPage(): React.JSX.Element {
   const arbolEquipoHistorico = nodosVisibles(
     construirArbolEquipoSeguimiento(historicoVisible, equiposCatalogo, categoriasCatalogo), colapsadasEquipo
   );
-  const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string }>();
+  const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string; fechaFin: string }>();
   for (const fila of historicoVisible) {
-    for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio });
+    for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio, fechaFin: p.fechaFin });
   }
+  // Batch Y (fix): ordenar por CIERRE del período (fechaFin), no por su inicio — con
+  // periodicidades distintas conviviendo (p. ej. mensual + semestral), dos períodos pueden
+  // arrancar el mismo día pero cerrar en fechas muy distintas ("S1 2026" empieza en enero como
+  // "Enero 2026", pero no cierra hasta junio: debe listarse después de junio, no al lado de
+  // enero). Empate en fechaFin (p. ej. "Diciembre 2026" y "2026" anual cerrando el mismo día):
+  // el período más corto/granular (que arrancó después) va primero.
   const columnasHistorico = [...columnasPorId.entries()]
     .map(([periodoId, v]) => ({ periodoId, ...v }))
-    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+    .sort((a, b) => a.fechaFin.localeCompare(b.fechaFin) || b.fechaInicio.localeCompare(a.fechaInicio));
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
 

@@ -1,7 +1,8 @@
 import type {
-  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, DefinicionPeriodicidad,
-  ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico,
-  Periodo, RegistroAuditoria, ReglaNegocio, ResultadoHistorial, Rol
+  Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, ConfiguracionMedicionCategoria,
+  CorteMedicion, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador,
+  Lista, Meta, OrigenAutomatico, ParametroDinamico, Periodo, RegistroAuditoria, ReglaNegocio, ResultadoCorteMedicion,
+  ResultadoHistorial, ResultadoMedicionCategoria, Rol
 } from '@domain/index';
 import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura, ResultadoObtencionAutomatica } from '@application/use-cases/ServicioRecoleccion';
@@ -173,6 +174,17 @@ export interface CanalesIpc {
   'roles:guardar': { req: Rol; res: Rol };
   /** Rechaza (bloqueado) si el rol es del sistema o algún usuario lo referencia. */
   'roles:eliminar': { req: { id: string }; res: void };
+
+  'cortesMedicion:listar': { req: void; res: CorteMedicion[] };
+  'cortesMedicion:guardar': { req: CorteMedicion; res: CorteMedicion };
+  'cortesMedicion:eliminar': { req: { id: string }; res: void };
+  /** Agrega, indicador por indicador, sus períodos cerrados desde el corte anterior hasta este. */
+  'cortesMedicion:calcular': { req: { id: string }; res: ResultadoCorteMedicion[] };
+
+  'medicionCategoria:obtener': { req: { categoriaId: string }; res: ConfiguracionMedicionCategoria | null };
+  'medicionCategoria:guardar': { req: ConfiguracionMedicionCategoria; res: ConfiguracionMedicionCategoria };
+  /** Agrega los valores de los indicadores DIRECTOS de la categoría para un período dado. */
+  'medicionCategoria:calcular': { req: { categoriaId: string; periodoId: string }; res: ResultadoMedicionCategoria };
 
   'portable:exportar': { req: void; res: { json: string } };
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };

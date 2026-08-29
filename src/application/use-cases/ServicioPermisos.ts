@@ -1,3 +1,4 @@
+import { ID_ROL_ADMINISTRADOR } from '@domain/index';
 import type { ContextoPermisos } from '@domain/index';
 import type { IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository } from '@application/ports/index';
 
@@ -9,6 +10,16 @@ import type { IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository 
  * repositorios para esto — todo lo demás (`trpc.ts`, los servicios que
  * filtran/gatean) solo llama a las funciones puras de dominio con el
  * resultado.
+ *
+ * Batch Y: el rol general "Administrador" (`ID_ROL_ADMINISTRADOR`) se
+ * resuelve como `esAdministrador: true` en el `ContextoPermisos` — hace que
+ * TODO chequeo de `PoliticaPermisos` (que siempre empieza por
+ * `ctx.esAdministrador ||`) le conceda acceso total, igual que al flag real
+ * `Usuario.esAdministrador`. La única diferencia entre ambos caminos es que
+ * `adminProcedure` (`trpc.ts`) y las pantallas más sensibles (gestión de
+ * Usuarios) siguen mirando el flag CRUDO de la sesión (`ctx.usuario.
+ * esAdministrador`), no este `ContextoPermisos` resuelto — ver el docstring
+ * de `Usuario`/`Rol`.
  */
 export class ServicioPermisos {
   constructor(
@@ -37,7 +48,7 @@ export class ServicioPermisos {
     ]);
 
     return {
-      esAdministrador: usuario.esAdministrador,
+      esAdministrador: usuario.esAdministrador || rolGeneral?.id === ID_ROL_ADMINISTRADOR,
       usuarioId: usuario.id,
       equipoId: usuario.equipoId,
       permisosGenerales: new Set(rolGeneral?.ambito === 'general' ? rolGeneral.permisos : []),
