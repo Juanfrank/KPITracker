@@ -2,10 +2,10 @@ import type { AmbitoPermiso } from './Permiso';
 
 /**
  * Rol configurable (Batch T): agrupa permisos de un mismo `ambito` bajo un
- * nombre. `esSistema` marca los roles semilla (Usuario estándar, Líder de
- * equipo, Validador, Colaborador, Visor, Técnico, Administrador) — su lista
- * de `permisos` sigue siendo editable por el administrador, pero no se
- * pueden borrar ni renombrar. `Administrador` (Batch Y) SÍ es una fila de
+ * nombre. `esSistema` marca los roles semilla (Visitante, Usuario estándar,
+ * Líder de equipo, Validador, Colaborador, Visor, Técnico, Administrador) —
+ * su lista de `permisos` sigue siendo editable por el administrador, pero no
+ * se pueden borrar ni renombrar. `Administrador` (Batch Y) SÍ es una fila de
  * esta tabla — a diferencia del flag `Usuario.esAdministrador` (que sigue
  * existiendo, reservado para las pantallas más sensibles, ver su
  * docstring), este rol es asignable/quitable como cualquier otro EXCEPTO al
@@ -23,8 +23,18 @@ export interface Rol {
   actualizadoEn: string;
 }
 
-/** Nombres reservados de los roles semilla — ver la migración `20260901000000_roles_permisos.ts` (los 4 originales), `20260930000000_roles_validador_tecnico.ts` (Batch X) y `20261010000000_rol_administrador.ts` (Batch Y). */
+/** Nombres reservados de los roles semilla — ver la migración `20260901000000_roles_permisos.ts` (los 4 originales), `20260930000000_roles_validador_tecnico.ts` (Batch X), `20261010000000_rol_administrador.ts` (Batch Y) y `20261020000000_rol_visitante.ts` (Batch Z). */
 export const NOMBRE_ROL_USUARIO_ESTANDAR = 'Usuario estándar';
+/**
+ * Rol general (Batch Z, pedido explícito del usuario): sin ningún permiso —
+ * "sin permisos para nada". Reemplaza a `NOMBRE_ROL_USUARIO_ESTANDAR` como el
+ * rol que `ServicioUsuarios.rolGeneralPorDefecto()` asigna a todo usuario
+ * nuevo sin rol explícito — un usuario recién creado ya no ve nada hasta que
+ * un administrador le asigne un rol o un permiso puntual. "Usuario estándar"
+ * (con sus permisos de ver, ver §Batch Y) sigue existiendo y sigue siendo
+ * asignable a mano, solo dejó de ser el default.
+ */
+export const NOMBRE_ROL_VISITANTE = 'Visitante';
 export const NOMBRE_ROL_LIDER_EQUIPO = 'Líder de equipo';
 export const NOMBRE_ROL_COLABORADOR = 'Colaborador';
 export const NOMBRE_ROL_VISOR = 'Visor';
@@ -48,6 +58,7 @@ export const ID_ROL_VISOR = 'rol-visor';
 export const ID_ROL_VALIDADOR = 'rol-validador';
 export const ID_ROL_TECNICO = 'rol-tecnico';
 export const ID_ROL_ADMINISTRADOR = 'rol-administrador';
+export const ID_ROL_VISITANTE = 'rol-visitante';
 
 /**
  * Orden de visualización explícito (Batch Y) para los roles semilla — el
@@ -58,8 +69,9 @@ export const ID_ROL_ADMINISTRADOR = 'rol-administrador';
  */
 const ORDEN_ROLES_SEMILLA: ReadonlyMap<string, number> = new Map([
   [ID_ROL_ADMINISTRADOR, 1],
-  [ID_ROL_USUARIO_ESTANDAR, 2],
-  [ID_ROL_TECNICO, 3],
+  [ID_ROL_VISITANTE, 2],
+  [ID_ROL_USUARIO_ESTANDAR, 3],
+  [ID_ROL_TECNICO, 4],
   [ID_ROL_LIDER_EQUIPO, 1],
   [ID_ROL_VALIDADOR, 2],
   [ID_ROL_COLABORADOR, 3],

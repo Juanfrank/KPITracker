@@ -495,6 +495,20 @@ table.tabla th {
   white-space: nowrap;
 }
 
+/*
+ * Batch Z (grupos de corte en Configuración de Metas): `.tabla-envoltura` vive dentro de
+ * `main.contenido`, un contenedor flex en columna. Un hijo flex con `overflow: auto` tiene
+ * "automatic minimum size" 0 (spec de flexbox) — si el contenido total de la página excede
+ * el alto disponible, Chromium lo encoge hasta casi 0px en vez de dejarlo desbordar (que es
+ * lo que `overflow:auto` del propio `main` ya maneja). El toolbar nuevo de esta página (filtro
+ * de cortes) empuja el contenido lo suficiente para gatillarlo. `flex-shrink: 0` fija su alto
+ * al de su contenido real, dejando que sea `main` quien scrollee — igual que en el resto de
+ * pantallas donde nunca hay suficiente contenido para disparar el encogimiento.
+ */
+.tabla-envoltura.evita-colapso-flex {
+  flex-shrink: 0;
+}
+
 table.tabla td {
   padding: 7px 12px;
   border-bottom: 1px solid var(--borde);
@@ -633,6 +647,28 @@ table.tabla tbody tr.fila-eliminada:hover {
 
 .boton-arbol.expandido svg {
   transform: rotate(90deg);
+}
+
+/* Columnas de Cortes de medición agrupadas en Configuración de Metas (Batch Z). */
+.encabezado-grupo-corte {
+  background: var(--info-suave);
+  color: var(--info);
+  border-bottom: 2px solid var(--info);
+}
+
+.encabezado-grupo-corte .boton-arbol {
+  color: var(--info);
+}
+
+.columna-corte-miembro {
+  background: color-mix(in srgb, var(--info-suave) 55%, transparent);
+}
+
+.columna-corte-colapsada {
+  background: var(--info-suave);
+  color: var(--info);
+  text-align: center;
+  min-width: 90px !important;
 }
 
 /* ============ Chips y estados ============ */

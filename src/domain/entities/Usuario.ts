@@ -12,7 +12,9 @@
  *   Debe existir siempre al menos un usuario activo con este flag
  *   (`ServicioUsuarios` lo garantiza).
  * - `rolGeneralId` es el rol de ámbito `'general'` del usuario (exactamente
- *   uno) — por defecto el rol semilla "Usuario estándar". Cuando
+ *   uno) — por defecto el rol semilla "Visitante" (Batch Z: sin ningún
+ *   permiso; "Usuario estándar" sigue existiendo, con permisos de ver, pero
+ *   ya no es el que se asigna automáticamente). Cuando
  *   `esAdministrador` es `true`, `ServicioUsuarios` FUERZA este campo al rol
  *   semilla "Administrador" (Batch Y, `ID_ROL_ADMINISTRADOR`) y nunca deja
  *   que se le quite — no es un flag redundante: `ServicioPermisos.resolver`

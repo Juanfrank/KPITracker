@@ -8,6 +8,7 @@ import * as metaPeriodoId from './20260925000000_meta_periodo_id';
 import * as rolesValidadorTecnico from './20260930000000_roles_validador_tecnico';
 import * as rolAdministrador from './20261010000000_rol_administrador';
 import * as medicion from './20261015000000_medicion';
+import * as rolVisitante from './20261020000000_rol_visitante';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -23,7 +24,8 @@ const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20260925000000_meta_periodo_id', modulo: metaPeriodoId },
   { nombre: '20260930000000_roles_validador_tecnico', modulo: rolesValidadorTecnico },
   { nombre: '20261010000000_rol_administrador', modulo: rolAdministrador },
-  { nombre: '20261015000000_medicion', modulo: medicion }
+  { nombre: '20261015000000_medicion', modulo: medicion },
+  { nombre: '20261020000000_rol_visitante', modulo: rolVisitante }
 ];
 
 /**

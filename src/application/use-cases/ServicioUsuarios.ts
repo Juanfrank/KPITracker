@@ -1,6 +1,6 @@
 import { puedeAdministrarCatalogos, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
 import type { Usuario } from '@domain/index';
-import { ID_ROL_ADMINISTRADOR, NOMBRE_ROL_USUARIO_ESTANDAR, permisoValido } from '@domain/index';
+import { ID_ROL_ADMINISTRADOR, NOMBRE_ROL_VISITANTE, permisoValido } from '@domain/index';
 import type {
   ICredencialGeneradaRepository, IEquipoRepository, IIndicadorRepository, IPasswordHasher,
   IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository
@@ -76,9 +76,10 @@ export class ServicioUsuarios {
     return usuario ? this.aPublico(usuario) : null;
   }
 
+  /** Batch Z, pedido explícito del usuario: "Visitante" (sin permisos) es el nuevo rol por defecto de todo usuario sin rol explícito. */
   private async rolGeneralPorDefecto(): Promise<string | null> {
     const roles = await this.rolesRepo.listar();
-    return roles.find((r) => r.esSistema && r.ambito === 'general' && r.nombre === NOMBRE_ROL_USUARIO_ESTANDAR)?.id ?? null;
+    return roles.find((r) => r.esSistema && r.ambito === 'general' && r.nombre === NOMBRE_ROL_VISITANTE)?.id ?? null;
   }
 
   async crear(datos: {
@@ -146,7 +147,7 @@ export class ServicioUsuarios {
     await this.verificarQuedaAlMenosUnAdmin(id, esAdministrador && usuario.activo);
     // Batch Y: al volverse administrador, siempre porta el rol "Administrador" — al dejar de
     // serlo, recupera el rol general que tenía (si no era justamente "Administrador", que ya no
-    // le corresponde) o cae al default de "Usuario estándar".
+    // le corresponde) o cae al default de "Visitante" (Batch Z).
     const rolGeneralId = esAdministrador
       ? ID_ROL_ADMINISTRADOR
       : (usuario.rolGeneralId && usuario.rolGeneralId !== ID_ROL_ADMINISTRADOR

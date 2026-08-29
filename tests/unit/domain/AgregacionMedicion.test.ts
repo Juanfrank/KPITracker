@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agregar, tipoAgregacionValido } from '@domain/index';
+import { agregar, tipoAgregacionBaseValido, tipoAgregacionValido } from '@domain/index';
 import type { EntradaAgregable } from '@domain/index';
 
 describe('AgregacionMedicion — agregar() (Batch Y)', () => {
@@ -38,11 +38,45 @@ describe('AgregacionMedicion — agregar() (Batch Y)', () => {
     expect(agregar('promedio', entradas)).toBe(32.5);
   });
 
-  it('tipoAgregacionValido() reconoce solo las 4 reglas del catálogo', () => {
-    expect(tipoAgregacionValido('promedio')).toBe(true);
-    expect(tipoAgregacionValido('promedioPonderado')).toBe(true);
-    expect(tipoAgregacionValido('maximo')).toBe(true);
-    expect(tipoAgregacionValido('minimo')).toBe(true);
+  it('tipoAgregacionValido() reconoce las 10 reglas (4 base + 6 de Batch Z, exclusivas de Cortes)', () => {
+    for (const op of ['promedio', 'promedioPonderado', 'maximo', 'minimo', 'mejorValor', 'peorValor', 'suma', 'mediana', 'primerValor', 'ultimoValor']) {
+      expect(tipoAgregacionValido(op)).toBe(true);
+    }
     expect(tipoAgregacionValido('otraCosa')).toBe(false);
+  });
+
+  it('tipoAgregacionBaseValido() solo reconoce las 4 reglas base (Medición por categoría)', () => {
+    expect(tipoAgregacionBaseValido('promedio')).toBe(true);
+    expect(tipoAgregacionBaseValido('maximo')).toBe(true);
+    expect(tipoAgregacionBaseValido('mediana')).toBe(false);
+    expect(tipoAgregacionBaseValido('suma')).toBe(false);
+  });
+
+  describe('Batch Z — nuevas reglas de agregación (Cortes de medición)', () => {
+    it('mejorValor/peorValor: igual que máximo/mínimo (sin campo de sentido en Indicador todavía)', () => {
+      const entradas: EntradaAgregable[] = [{ valor: 5, tieneMeta: false }, { valor: 30, tieneMeta: false }, { valor: 12, tieneMeta: false }];
+      expect(agregar('mejorValor', entradas)).toBe(30);
+      expect(agregar('peorValor', entradas)).toBe(5);
+    });
+
+    it('suma: total simple, sin ponderar', () => {
+      const entradas: EntradaAgregable[] = [{ valor: 10, tieneMeta: false }, { valor: 20, tieneMeta: false }, { valor: 5, tieneMeta: false }];
+      expect(agregar('suma', entradas)).toBe(35);
+    });
+
+    it('mediana: impar toma el del medio, par promedia los dos centrales', () => {
+      const impares: EntradaAgregable[] = [{ valor: 1, tieneMeta: false }, { valor: 9, tieneMeta: false }, { valor: 5, tieneMeta: false }];
+      expect(agregar('mediana', impares)).toBe(5);
+      const pares: EntradaAgregable[] = [
+        { valor: 1, tieneMeta: false }, { valor: 2, tieneMeta: false }, { valor: 3, tieneMeta: false }, { valor: 4, tieneMeta: false }
+      ];
+      expect(agregar('mediana', pares)).toBe(2.5);
+    });
+
+    it('primerValor/ultimoValor: respetan el ORDEN de las entradas tal como llegan (cronológico en Cortes)', () => {
+      const entradas: EntradaAgregable[] = [{ valor: 100, tieneMeta: false }, { valor: 200, tieneMeta: false }, { valor: 50, tieneMeta: false }];
+      expect(agregar('primerValor', entradas)).toBe(100);
+      expect(agregar('ultimoValor', entradas)).toBe(50);
+    });
   });
 });

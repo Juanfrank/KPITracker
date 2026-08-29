@@ -255,7 +255,7 @@ describe('Usuarios — invariante "al menos un administrador activo"', () => {
 });
 
 describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / validación)', () => {
-  it('un colaborador de un equipo ve todos los indicadores (Batch Y: "Usuario estándar" ve todo por defecto), pero solo registra/valida los de SU equipo', async () => {
+  it('un colaborador de un equipo solo ve/registra los indicadores de SU equipo, sin poder validar (Batch Z: "Visitante", sin permisos, es el default)', async () => {
     const admin = await clienteAdmin();
 
     const equipoA = await admin.equipos.guardar.mutate({
@@ -302,20 +302,16 @@ describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / valida
     const clienteColab = crearCliente(fetchConCookies());
     await clienteColab.auth.login.mutate({ nombreUsuario: 'colabA', password: 'contrasenaSegura1' });
 
-    // Seguimiento: ve AMBOS indicadores — el rol general por defecto ("Usuario estándar")
-    // trae `indicadores.ver.todos`/`resultados.ver.todos` desde Batch Y (pedido explícito del
-    // usuario), independiente del equipo. Lo que sigue acotado por equipo es REGISTRAR/VALIDAR.
+    // Seguimiento: solo ve el indicador de su equipo — el rol general por defecto es "Visitante"
+    // (Batch Z, sin ningún permiso), así que la única visibilidad que tiene viene de su rol de
+    // equipo (Colaborador: ver/registrar SOLO del propio equipo).
     const tablero = await clienteColab.seguimiento.tablero.query();
-    expect(new Set(tablero.map((f) => f.indicadorId))).toEqual(new Set([indicadorA.id, indicadorB.id]));
+    expect(tablero.map((f) => f.indicadorId)).toEqual([indicadorA.id]);
 
-    // Períodos disponibles: es una consulta de LECTURA (gateada por 'ver', ya global desde
-    // Batch Y) — ve los períodos de AMBOS indicadores. Lo que sigue vedado del equipo ajeno es
-    // REGISTRAR (fechaCorte/guardarCelda, gateados por 'registrar', que sigue acotado a su equipo).
+    // Períodos disponibles: propio equipo sí, el ajeno FORBIDDEN — sin permiso de "ver" alguno
+    // sobre el equipo B.
     await expect(clienteColab.recoleccion.periodos.query({ indicadorId: indicadorA.id })).resolves.not.toHaveLength(0);
-    const [periodoB] = await clienteColab.recoleccion.periodos.query({ indicadorId: indicadorB.id });
-    const codigoAjeno = await codigoError(
-      clienteColab.recoleccion.fechaCorte.mutate({ indicadorId: indicadorB.id, periodoId: periodoB!.id, fechaCorte: '2026-01-31' })
-    );
+    const codigoAjeno = await codigoError(clienteColab.recoleccion.periodos.query({ indicadorId: indicadorB.id }));
     expect(codigoAjeno).toBe('BAD_REQUEST');
 
     // Fecha de corte + captura en su propio equipo.

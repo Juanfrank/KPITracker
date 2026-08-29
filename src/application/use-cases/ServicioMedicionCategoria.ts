@@ -1,6 +1,6 @@
 import {
   ValidacionError, agregar, crearPeriodo, equipoEfectivo, metaVigenteParaPeriodo, puedeVerIndicador,
-  tipoAgregacionValido
+  tipoAgregacionBaseValido
 } from '@domain/index';
 import type { Categoria, ConfiguracionMedicionCategoria, EntradaAgregable, Indicador, ResultadoMedicionCategoria } from '@domain/index';
 import type {
@@ -50,9 +50,10 @@ export class ServicioMedicionCategoria extends ServicioBase {
   async guardar(config: ConfiguracionMedicionCategoria): Promise<ConfiguracionMedicionCategoria> {
     const errores: string[] = [];
     if (!(await this.categoriasRepo.obtener(config.categoriaId))) errores.push('La categoría no existe.');
-    if (!tipoAgregacionValido(config.reglaGeneral)) errores.push('La regla general de agregación no es válida.');
+    // Batch Z: solo las 4 reglas base — las 6 nuevas son exclusivas de Cortes de medición.
+    if (!tipoAgregacionBaseValido(config.reglaGeneral)) errores.push('La regla general de agregación no es válida.');
     for (const [indicadorId, tratamiento] of Object.entries(config.tratamientoIndicadores)) {
-      if (tratamiento.agregacionPropia && !tipoAgregacionValido(tratamiento.agregacionPropia)) {
+      if (tratamiento.agregacionPropia && !tipoAgregacionBaseValido(tratamiento.agregacionPropia)) {
         errores.push(`La agregación propia del indicador "${indicadorId}" no es válida.`);
       }
       if (tratamiento.peso != null && tratamiento.peso < 0) errores.push(`El peso del indicador "${indicadorId}" no puede ser negativo.`);
