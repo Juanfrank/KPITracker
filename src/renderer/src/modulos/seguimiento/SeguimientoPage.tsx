@@ -1340,7 +1340,10 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      <td colSpan={3} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      {/* colSpan=4: Categoría/Indicador + Responsable + Línea base + Meta — sin cubrir
+                          "Meta" también, el primer subtotal de columna quedaba bajo ese encabezado
+                          en vez del primer período (bug de desplazamiento, reportado por el usuario). */}
+                      <td colSpan={4} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                         {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1442,7 +1445,8 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={3} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    {/* colSpan=4 — mismo fix que el árbol de Categoría: cubrir también "Meta". */}
+                    <td colSpan={4} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
