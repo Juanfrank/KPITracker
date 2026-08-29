@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Categoria, ConfiguracionMedicionCategoria, CorteMedicion, EntradaAgregable, Equipo } from '@domain/index';
+import type { Adjunto, Categoria, ConfiguracionMedicionCategoria, CorteMedicion, EntradaAgregable, Equipo } from '@domain/index';
 import { GeneradorPeriodos, agregar, etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
+import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
@@ -609,6 +610,16 @@ function nodoVirtualTotalEquipo(hijos: NodoConHijos<FilaHistorico>[]): NodoConHi
 const TITULO_TOTALES = 'Total — agrega todos los indicadores visibles, recursivamente por categoría/equipo';
 
 /**
+ * Resuelve un id de usuario (`capturadoPor`/`validadoPor`) a un nombre legible (Batch AU) —
+ * `'local'` es el usuario ambiente fuera de una sesión real (tareas de arranque, app de
+ * escritorio histórica, ver `contextoUsuario.ts`), se muestra como tal en vez de un id crudo.
+ */
+function nombreUsuario(id: string, catalogo: UsuarioAsignable[]): string {
+  if (id === 'local') return 'Sistema (local)';
+  return catalogo.find((u) => u.id === id)?.nombreCompleto ?? id;
+}
+
+/**
  * Tablero de Seguimiento: estados calculados dinámicamente (fecha actual,
  * fecha límite, periodicidad, períodos registrados y fecha de corte) —
  * nunca a partir de banderas persistidas.
@@ -659,7 +670,21 @@ export function SeguimientoPage(): React.JSX.Element {
   // explícito del usuario) — un equipo nunca tiene una entrada acá (sin config propia, cae al
   // promedio simple por defecto de `celdasSubtotal`).
   const [medicionCategoriaPorId, setMedicionCategoriaPorId] = useState<Map<string, ConfiguracionMedicionCategoria>>(new Map());
+  // Batch AU (pedido explícito del usuario): clic en una celda de período de Histórico abre el
+  // detalle completo de ESE dato puntual (valor + desagregaciones, quién/cuándo lo capturó y lo
+  // validó, comentario y adjuntos), con un lápiz para ir a editarlo en Recolección.
+  const [celdaDetalle, setCeldaDetalle] = useState<{ indicadorId: string; periodoId: string; nombre: string; etiquetaPeriodo: string } | null>(null);
+  const [datosCeldaDetalle, setDatosCeldaDetalle] = useState<DatosCaptura | null>(null);
+  const [adjuntosCeldaDetalle, setAdjuntosCeldaDetalle] = useState<Adjunto[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!celdaDetalle) return;
+    setDatosCeldaDetalle(null);
+    setAdjuntosCeldaDetalle([]);
+    void trpcClient.recoleccion.captura.query({ indicadorId: celdaDetalle.indicadorId, periodoId: celdaDetalle.periodoId }).then(setDatosCeldaDetalle);
+    void invocar('adjuntos:listar', { entidad: 'Levantamiento', entidadId: `${celdaDetalle.indicadorId}:${celdaDetalle.periodoId}` }).then(setAdjuntosCeldaDetalle);
+  }, [celdaDetalle]);
 
   /**
    * Reemplazo mínimo (Fase 4 §9.1/§9.7) de la notificación proactiva
@@ -904,6 +929,12 @@ export function SeguimientoPage(): React.JSX.Element {
         return (
           <td
             key={c.periodoId} className={`celda-periodo-resultado${col.grupo ? ' columna-corte-miembro' : ''}`}
+            style={{ cursor: 'pointer' }}
+            title="Ver el detalle de este dato"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCeldaDetalle({ indicadorId: h.indicadorId, periodoId: c.periodoId, nombre: h.nombre, etiquetaPeriodo: c.etiqueta });
+            }}
             data-testid={`historico-${h.nombre}-${c.periodoId}`}
           >
             <div className="grilla-resultado-periodo">
@@ -1732,6 +1763,107 @@ export function SeguimientoPage(): React.JSX.Element {
                 ))}
               </tbody>
             </table>
+          </div>
+        </PanelLateral>
+      )}
+
+      {celdaDetalle && (
+        <PanelLateral
+          titulo={`${celdaDetalle.nombre} — ${celdaDetalle.etiquetaPeriodo}`}
+          alCerrar={() => {
+            setCeldaDetalle(null);
+            setDatosCeldaDetalle(null);
+            setAdjuntosCeldaDetalle([]);
+          }}
+        >
+          <div style={{ display: 'grid', gap: 14 }}>
+            <button
+              className="boton"
+              onClick={() =>
+                navigate(
+                  `/recoleccion?indicadorId=${encodeURIComponent(celdaDetalle.indicadorId)}&periodoId=${encodeURIComponent(celdaDetalle.periodoId)}`
+                )
+              }
+              data-testid="celda-detalle-editar"
+            >
+              <Icono nombre="lapiz" tamano={13} /> Editar en Recolección
+            </button>
+
+            {!datosCeldaDetalle ? (
+              <Vacio mensaje="Cargando…" />
+            ) : (
+              <>
+                <div className="tabla-envoltura">
+                  <table className="tabla" data-testid="celda-detalle-tabla">
+                    <thead>
+                      <tr>
+                        <th>Desagregación</th>
+                        <th>Valor</th>
+                        <th>Estado</th>
+                        <th>Capturado</th>
+                        <th>Validado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {datosCeldaDetalle.filas
+                        .filter((f) => f.valor != null || f.esGeneral)
+                        .map((f) => (
+                          <tr key={f.claveDesagregacion} data-testid={`celda-detalle-fila-${f.claveDesagregacion}`}>
+                            <td>{f.esGeneral ? 'General' : f.etiquetas.map((e) => `${e.listaNombre}: ${e.descripcion}`).join(', ')}</td>
+                            <td className="columna-valor">{f.valor ?? <span className="texto-suave">—</span>}</td>
+                            <td><span className={`chip ${f.estadoValidacion.toLowerCase()}`}>{f.estadoValidacion}</span></td>
+                            <td className="texto-suave" style={{ fontSize: '0.9em' }}>
+                              {f.capturadoPor ? (
+                                <>
+                                  {nombreUsuario(f.capturadoPor, responsablesCatalogo)}
+                                  {f.origenCaptura === 'Automatico' && ' (automático)'}
+                                  <br />
+                                  {f.capturadoEn && new Date(f.capturadoEn).toLocaleString('es')}
+                                </>
+                              ) : '—'}
+                            </td>
+                            <td className="texto-suave" style={{ fontSize: '0.9em' }}>
+                              {f.validadoPor ? (
+                                <>
+                                  {nombreUsuario(f.validadoPor, responsablesCatalogo)}
+                                  <br />
+                                  {f.validadoEn && new Date(f.validadoEn).toLocaleString('es')}
+                                </>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <strong>Comentario del levantamiento</strong>
+                  <p className={datosCeldaDetalle.comentario ? undefined : 'texto-suave'} style={{ margin: '4px 0 0' }}>
+                    {datosCeldaDetalle.comentario ?? 'Sin comentario.'}
+                  </p>
+                </div>
+
+                <div>
+                  <strong>Evidencia adjunta</strong>
+                  {adjuntosCeldaDetalle.length === 0 ? (
+                    <p className="texto-suave" style={{ margin: '4px 0 0' }}>Sin adjuntos.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
+                      {adjuntosCeldaDetalle.map((a) => (
+                        <a
+                          key={a.id} className="boton sutil" style={{ justifyContent: 'flex-start' }}
+                          href={`/api/adjuntos/${a.id}/descarga`} target="_blank" rel="noreferrer"
+                          data-testid={`celda-detalle-adjunto-${a.nombreArchivo}`}
+                        >
+                          <Icono nombre="adjunto" tamano={13} /> {a.nombreArchivo}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </PanelLateral>
       )}

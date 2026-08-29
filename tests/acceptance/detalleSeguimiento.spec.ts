@@ -60,9 +60,12 @@ test('Histórico: clic en el indicador abre el mismo panel de detalle que Estado
   const filaHistorico = pagina.getByTestId('historico-Indicador con detalle');
   await expect(filaHistorico).toContainText('Responsable Detalle');
 
-  // Clic en la fila abre el panel de detalle (antes no hacía nada: sin onClick).
-  await filaHistorico.click();
-  await expect(pagina.getByRole('heading', { name: 'Indicador con detalle' })).toBeVisible();
+  // Clic en la fila abre el panel de detalle (antes no hacía nada: sin onClick). Se hace clic
+  // en la celda del NOMBRE específicamente (no en cualquier punto de la fila, Batch AU): las
+  // celdas de período tienen su PROPIO detalle de celda ahora, con `stopPropagation` — un clic
+  // ahí ya no burbujea a este panel de indicador.
+  await filaHistorico.locator('td').first().click();
+  await expect(pagina.getByRole('heading', { name: 'Indicador con detalle', exact: true })).toBeVisible();
 });
 
 test('el panel de detalle tiene un botón por fila de período (no uno genérico) que navega a Recolección con ESE período', async () => {
