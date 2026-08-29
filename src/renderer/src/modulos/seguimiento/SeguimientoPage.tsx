@@ -717,7 +717,10 @@ export function SeguimientoPage(): React.JSX.Element {
         // cumplimiento fusionado a la derecha (ocupa el alto de ambas filas) — sin texto adicional
         // ("Meta: ", "% de meta"), la posición en la grilla ya dice qué es cada valor.
         return (
-          <td key={c.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
+          <td
+            key={c.periodoId} className={`celda-periodo-resultado${col.grupo ? ' columna-corte-miembro' : ''}`}
+            data-testid={`historico-${h.nombre}-${c.periodoId}`}
+          >
             <div className="grilla-resultado-periodo">
               <span className="valor-resultado">{punto?.valor ?? <span className="texto-suave">—</span>}</span>
               <span className="valor-meta texto-suave" data-testid={`historico-${h.nombre}-${c.periodoId}-meta`}>
