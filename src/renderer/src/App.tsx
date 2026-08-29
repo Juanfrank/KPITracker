@@ -68,11 +68,18 @@ function Shell(): React.JSX.Element {
   const { usuario, simulando, logout, salirSimulacion } = useAuth();
   const [tema, setTema] = useState<string>(() => localStorage.getItem('kpitracker-tema') ?? 'claro');
   const [buscando, setBuscando] = useState(false);
+  // Batch AR (pedido explícito del usuario): menú lateral colapsable — persiste la preferencia
+  // igual que el tema, así que sobrevive a un F5 y entre sesiones del mismo navegador.
+  const [colapsado, setColapsado] = useState<boolean>(() => localStorage.getItem('kpitracker-sidebar-colapsado') === '1');
 
   useEffect(() => {
     document.documentElement.dataset.tema = tema;
     localStorage.setItem('kpitracker-tema', tema);
   }, [tema]);
+
+  useEffect(() => {
+    localStorage.setItem('kpitracker-sidebar-colapsado', colapsado ? '1' : '0');
+  }, [colapsado]);
 
   useEffect(() => {
     const manejar = (e: KeyboardEvent): void => {
@@ -110,10 +117,26 @@ function Shell(): React.JSX.Element {
           </button>
         </div>
       )}
-      <div className="shell">
-        <nav className="sidebar">
-          <div className="logo">
-            KPI<span>Tracker</span>
+      <div className={`shell ${colapsado ? 'sidebar-colapsado' : ''}`}>
+        <nav className={`sidebar ${colapsado ? 'colapsado' : ''}`}>
+          <div className="logo-fila">
+            <div className="logo">
+              <span className="logo-texto">
+                KPI<span>Tracker</span>
+              </span>
+              <span className="logo-mini">K</span>
+            </div>
+            <button
+              type="button"
+              className="boton sutil alternar-sidebar"
+              onClick={() => setColapsado((v) => !v)}
+              title={colapsado ? 'Expandir menú' : 'Colapsar menú'}
+              data-testid="alternar-sidebar"
+            >
+              <span style={{ display: 'inline-flex', transform: colapsado ? undefined : 'rotate(180deg)' }}>
+                <Icono nombre="flecha" tamano={13} />
+              </span>
+            </button>
           </div>
           {secciones.map((seccion) => (
             <div key={seccion}>
@@ -123,17 +146,18 @@ function Shell(): React.JSX.Element {
                   key={m.id}
                   to={`/${m.id}`}
                   className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
+                  title={colapsado ? m.etiqueta : undefined}
                   data-testid={`nav-${m.id}`}
                 >
                   <Icono nombre={m.icono} />
-                  {m.etiqueta}
+                  <span className="etiqueta-nav">{m.etiqueta}</span>
                 </NavLink>
               ))}
             </div>
           ))}
-          <div style={{ marginTop: 'auto', padding: '10px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="fila-usuario">
             <Icono nombre="usuario" tamano={15} />
-            <span className="texto-suave" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span className="texto-suave etiqueta-nav" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {usuario?.nombreCompleto}
             </span>
             <button className="boton sutil" onClick={salir} title="Cerrar sesión" data-testid="cerrar-sesion">
@@ -151,7 +175,7 @@ function Shell(): React.JSX.Element {
             <button className="boton sutil" onClick={() => setBuscando(true)} title="Búsqueda global (Ctrl+K)">
               <Icono nombre="buscar" />
             </button>
-            <span className="atajo">Ctrl+K</span>
+            <span className="atajo etiqueta-nav">Ctrl+K</span>
           </div>
         </nav>
         <main className="contenido" data-testid={idActual ? `pagina-${idActual}` : undefined}>

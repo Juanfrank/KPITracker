@@ -116,3 +116,18 @@ test('el tema claro/oscuro se puede alternar', async () => {
   await pagina.locator('.sidebar .pie .boton').first().click();
   await expect(pagina.locator('html')).toHaveAttribute('data-tema', inicial ?? 'claro');
 });
+
+test('Batch AR: el menú lateral se puede colapsar/expandir — oculta el texto, conserva los íconos', async () => {
+  const etiquetaSeguimiento = pagina.getByTestId('nav-seguimiento').locator('.etiqueta-nav');
+  await expect(etiquetaSeguimiento).toBeVisible();
+
+  await pagina.getByTestId('alternar-sidebar').click();
+  await expect(pagina.locator('.sidebar')).toHaveClass(/colapsado/);
+  await expect(etiquetaSeguimiento).toBeHidden();
+  // El ícono y el link siguen siendo clickeables — la navegación no se pierde al colapsar.
+  await expect(pagina.getByTestId('nav-seguimiento')).toBeVisible();
+
+  await pagina.getByTestId('alternar-sidebar').click();
+  await expect(pagina.locator('.sidebar')).not.toHaveClass(/colapsado/);
+  await expect(etiquetaSeguimiento).toBeVisible();
+});

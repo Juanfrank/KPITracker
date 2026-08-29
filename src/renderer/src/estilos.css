@@ -112,17 +112,84 @@ body {
   padding: 14px 10px;
   gap: 2px;
   overflow-y: auto;
+  transition: padding var(--transicion);
+}
+
+.logo-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
 }
 
 .sidebar .logo {
   font-size: 17px;
   font-weight: 700;
-  padding: 6px 12px 14px;
+  padding: 6px 0 6px 12px;
   letter-spacing: 0.2px;
 }
 
 .sidebar .logo span {
   color: var(--primario);
+}
+
+.logo-mini {
+  display: none;
+}
+
+/* Batch AR (pedido explícito del usuario): menú lateral colapsable — `.shell.sidebar-colapsado`
+   angosta la columna de la grilla; `.sidebar.colapsado` oculta todo el texto (`.etiqueta-nav`,
+   secciones, atajo) y deja solo los íconos, centrados, con el nombre como `title` (tooltip
+   nativo) en cada `<NavLink>`. */
+.alternar-sidebar {
+  flex-shrink: 0;
+}
+
+.shell.sidebar-colapsado {
+  grid-template-columns: 60px 1fr;
+}
+
+.sidebar.colapsado {
+  padding: 14px 6px;
+}
+
+.sidebar.colapsado .logo-fila {
+  justify-content: center;
+}
+
+.sidebar.colapsado .logo-texto {
+  display: none;
+}
+
+.sidebar.colapsado .logo-mini {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--primario);
+  padding: 6px 0;
+}
+
+.sidebar.colapsado .seccion,
+.sidebar.colapsado .etiqueta-nav {
+  display: none;
+}
+
+.sidebar.colapsado .nav-item {
+  justify-content: center;
+  padding: 9px 0;
+}
+
+.fila-usuario {
+  margin-top: auto;
+  padding: 10px 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar.colapsado .fila-usuario {
+  justify-content: center;
+  padding: 10px 0 0;
 }
 
 .sidebar .seccion {
@@ -448,6 +515,30 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px var(--primario-suave);
 }
 
+/* Botón que abre un panel flotante pero debe LEERSE como un <select> nativo (Batch AK/AO,
+   `DropdownMultiple` de Seguimiento > Histórico) — mismo aspecto que los `<select>` de la barra
+   de filtros, en vez del estilo de píldora de `.filtro-chip`, que lo hacía pasar por un simple
+   chip decorativo y no por un control desplegable. */
+.boton-select-simulado {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 200px;
+  font: inherit;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: border-color var(--transicion), box-shadow var(--transicion);
+}
+
+.boton-select-simulado:hover {
+  border-color: var(--texto-3);
+}
+
 input.invalido,
 td.invalido input {
   border-color: var(--peligro);
@@ -512,6 +603,14 @@ table.tabla th {
   white-space: nowrap;
 }
 
+/* Batch AN (pedido explícito del usuario): gridline vertical en todas las tablas — antes
+   solo había separación horizontal (`border-bottom`). Sin borde en la última columna, para no
+   duplicar el borde derecho de `.tabla-envoltura`. */
+table.tabla th:not(:last-child),
+table.tabla td:not(:last-child) {
+  border-right: 1px solid var(--borde);
+}
+
 /*
  * Batch Z/AA (grupos de corte, hoy en Seguimiento > Histórico): `.tabla-envoltura` vive dentro
  * de `main.contenido`, un contenedor flex en columna. Un hijo flex con `overflow: auto` tiene
@@ -551,6 +650,19 @@ table.tabla tbody tr.fila-eliminada {
 
 table.tabla tbody tr.fila-eliminada:hover {
   background: transparent;
+}
+
+/* Batch AQ (pedido explícito del usuario): fila de Totales de Histórico — siempre visible al pie
+   de la tabla, como un sticky footer (mismo mecanismo que ya usa el encabezado con `top: 0`, pero
+   pegado al fondo del contenedor con scroll `.tabla-envoltura`). */
+table.tabla tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--superficie-3);
+  font-weight: 700;
+  border-top: 2px solid var(--borde);
+  border-bottom: none;
 }
 
 /* Conector visual de jerarquía (Batch U, U4/U5a) antes del nombre en filas anidadas de Categorías/Equipos. */

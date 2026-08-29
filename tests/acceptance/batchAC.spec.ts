@@ -136,3 +136,23 @@ test('AC2 (Batch AI): el subtotal de una categoría con subcategoría es recursi
   // aplanaría los indicadores de la hija en vez de tratarla como una sola entrada).
   await expect(pagina.getByTestId(`subtotal-Subtotal AI Padre-${periodoId}`)).toHaveText('80%');
 });
+
+test('AC3 (Batch AQ): la fila de Totales agrega TODOS los indicadores visibles, distinto en Lista vs Árbol (orden jerárquico distinto)', async () => {
+  const anio = new Date().getFullYear();
+  const periodoId = `${anio}-Mensual-01`;
+
+  // Lista: sin jerarquía, los 5 indicadores creados en AC1+AC2 son entradas DIRECTAS del nodo
+  // virtual "Total" — (60+80+90+60+80)/5 = 74%, NO el promedio de subtotales de categoría.
+  await pagina.getByTestId('vista-historico-lista').click();
+  await expect(pagina.getByTestId('tabla-historico')).toBeVisible();
+  await expect(pagina.getByTestId(`subtotal-totales-${periodoId}`)).toHaveText('74%');
+
+  // Árbol (Categoría): el Total no tiene indicadores propios — sus "hijos" son las categorías
+  // raíz ("Subtotal AC" 70%, "Subtotal AI Padre" 80%, ya recursivo) — (70+80)/2 = 75%.
+  await pagina.getByTestId('vista-historico-arbol').click();
+  await expect(pagina.getByTestId('tabla-historico-arbol')).toBeVisible();
+  await expect(pagina.getByTestId(`subtotal-totales-${periodoId}`)).toHaveText('75%');
+
+  // La fila de Totales siempre está presente, con su propia etiqueta "Total".
+  await expect(pagina.getByTestId('historico-fila-totales')).toContainText('Total');
+});

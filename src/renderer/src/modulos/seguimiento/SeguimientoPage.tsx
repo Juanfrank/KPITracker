@@ -297,10 +297,15 @@ function DropdownMultiple({
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }} ref={contenedor}>
+      {/* Batch AO (pedido explícito del usuario — "no veo el dropdown de cortes"): el botón
+          existía, pero el estilo de chip/píldora (igual al de los botones "Ver como" de arriba)
+          lo hacía pasar desapercibido como un simple filtro más. Se le da apariencia de <select>
+          real (mismo borde/fondo/radio que el resto de los <select> de la barra de filtros), para
+          que se lea de inmediato como un control desplegable, no como un chip decorativo. */}
       <button
-        type="button" className="filtro-chip" onClick={() => setAbierto((v) => !v)} title={resumen} data-testid={testId}
+        type="button" className="boton-select-simulado" onClick={() => setAbierto((v) => !v)} title={resumen} data-testid={testId}
       >
-        {resumen} <Icono nombre="flecha" tamano={11} />
+        <span>{resumen}</span> <Icono nombre="flecha" tamano={12} />
       </button>
       {abierto && (
         <div
@@ -540,7 +545,8 @@ function subtotalRecursivo(
 
 function celdasSubtotal(
   item: NodoConHijos<FilaHistorico>, columnas: ColumnaGrillaHistorico[], resultadosCorte: Map<string, number | null>,
-  medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>, testIdNodo: string
+  medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>, testIdNodo: string,
+  titulo = 'Subtotal — agrega los indicadores directos y, recursivamente, el subtotal de cada subcategoría/sub-equipo'
 ): React.JSX.Element[] {
   return columnas.map((col) => {
     const agregado = subtotalRecursivo(item, col, resultadosCorte, medicionCategoriaPorId);
@@ -553,7 +559,7 @@ function celdasSubtotal(
       return (
         <td
           key={`c-${col.grupo.id}`} className="columna-corte-colapsada columna-valor" style={{ fontWeight: 600 }}
-          title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
+          title={titulo} data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
         >
           {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
         </td>
@@ -562,13 +568,45 @@ function celdasSubtotal(
     return (
       <td
         key={col.columna.periodoId} className={`columna-valor${col.grupo ? ' columna-corte-miembro' : ''}`} style={{ fontWeight: 600 }}
-        title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.columna.periodoId}`}
+        title={titulo} data-testid={`subtotal-${testIdNodo}-${col.columna.periodoId}`}
       >
         {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
       </td>
     );
   });
 }
+
+/**
+ * Nodo virtual "Total" (Batch AQ, pedido explícito del usuario): una fila de Totales, siempre
+ * visible al pie de Histórico (como un sticky footer), que agrega TODOS los indicadores visibles
+ * como si fueran una categoría/equipo raíz que engloba a las demás — reutiliza el mismo motor
+ * recursivo (`subtotalRecursivo`/`celdasSubtotal`) que ya usa cada fila de grupo, así que respeta
+ * la regla de agregación configurada en cada categoría/subcategoría de la jerarquía (o el
+ * promedio simple por defecto para el propio nodo virtual, que nunca tiene configuración). En la
+ * vista Lista (sin jerarquía) sus `filasDirectas` son TODOS los indicadores; en las vistas Árbol
+ * no tiene indicadores propios — sus "hijos" son los nodos de nivel 0 del árbol activo, cada uno
+ * aportando su propio subtotal ya recursivo como una entrada más (mismo criterio "como si se
+ * tratase de otro indicador" del batch AI) — por eso el Total puede diferir entre Lista, Árbol
+ * (Categoría) y Árbol (Equipo): cada uno agrega en un orden jerárquico distinto.
+ */
+function nodoVirtualTotalCategoria(filasDirectas: FilaHistorico[], hijos: NodoConHijos<FilaHistorico>[]): NodoConHijos<FilaHistorico> {
+  return {
+    nodo: {
+      tipo: 'categoria', id: '__total__', categoriaId: '__total__', nivel: -1, nombre: 'Total',
+      prefijo: null, contador: 0, tieneHijos: hijos.length > 0, filasDirectas
+    },
+    hijos
+  };
+}
+
+function nodoVirtualTotalEquipo(hijos: NodoConHijos<FilaHistorico>[]): NodoConHijos<FilaHistorico> {
+  return {
+    nodo: { tipo: 'equipo', id: '__total__', equipoId: '__total__', nivel: -1, nombre: 'Total', contador: 0, tieneHijos: hijos.length > 0, filasDirectas: [] },
+    hijos
+  };
+}
+
+const TITULO_TOTALES = 'Total — agrega todos los indicadores visibles, recursivamente por categoría/equipo';
 
 /**
  * Tablero de Seguimiento: estados calculados dinámicamente (fecha actual,
@@ -759,6 +797,15 @@ export function SeguimientoPage(): React.JSX.Element {
   const arbolEquipoHistoricoCompleto = construirArbolEquipoSeguimiento(historicoVisible, equiposCatalogo, categoriasCatalogo);
   const arbolEquipoHistorico = nodosVisibles(arbolEquipoHistoricoCompleto, colapsadasEquipo);
   const nodosConHijosEquipo = construirArbolConHijos(arbolEquipoHistoricoCompleto);
+  // Batch AQ (pedido explícito del usuario): fila de Totales, una por vista — cada una agrega en
+  // el orden jerárquico de SU propio árbol (ver docstring de `nodoVirtualTotalCategoria`).
+  const nodoTotalesLista = nodoVirtualTotalCategoria(historicoVisible, []);
+  const nodoTotalesArbolCategoria = nodoVirtualTotalCategoria(
+    [], arbolHistoricoCompleto.filter((n) => n.nivel === 0).map((n) => nodosConHijosHistorico.get(n.id)!)
+  );
+  const nodoTotalesArbolEquipo = nodoVirtualTotalEquipo(
+    arbolEquipoHistoricoCompleto.filter((n) => n.nivel === 0).map((n) => nodosConHijosEquipo.get(n.id)!)
+  );
   const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string; fechaFin: string }>();
   for (const fila of historicoVisible) {
     for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio, fechaFin: p.fechaFin });
@@ -1398,7 +1445,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
                   <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
                   <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
-                  <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
@@ -1408,7 +1455,7 @@ export function SeguimientoPage(): React.JSX.Element {
                     <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
                     <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
                     <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                    <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                    <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
                   </>
                 )}
                 {/* Las columnas de período (dinámicas, una por período) no se ordenan — ver docstring de VALOR_COLUMNA_HISTORICO. */}
@@ -1440,6 +1487,12 @@ export function SeguimientoPage(): React.JSX.Element {
                 </tr>
               )}
             </tbody>
+            <tfoot>
+              <tr className="fila-totales" data-testid="historico-fila-totales">
+                <td colSpan={4}><strong>Total</strong></td>
+                {celdasSubtotal(nodoTotalesLista, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
@@ -1454,7 +1507,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   <th rowSpan={2}>Categoría / Indicador</th>
                   <th rowSpan={2}>Responsable</th>
                   <th rowSpan={2}>Línea base</th>
-                  <th rowSpan={2}>Meta</th>
+                  <th rowSpan={2}>Meta global</th>
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
@@ -1465,7 +1518,7 @@ export function SeguimientoPage(): React.JSX.Element {
                     <th>Categoría / Indicador</th>
                     <th>Responsable</th>
                     <th>Línea base</th>
-                    <th>Meta</th>
+                    <th>Meta global</th>
                   </>
                 )}
                 {hayGruposHistorico
@@ -1531,6 +1584,13 @@ export function SeguimientoPage(): React.JSX.Element {
                 </tr>
               )}
             </tbody>
+            <tfoot>
+              <tr className="fila-totales" data-testid="historico-fila-totales">
+                <td className="celda-arbol" />
+                <td colSpan={4}><strong>Total</strong></td>
+                {celdasSubtotal(nodoTotalesArbolCategoria, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
@@ -1545,7 +1605,7 @@ export function SeguimientoPage(): React.JSX.Element {
                   <th rowSpan={2}>Equipo / Categoría / Indicador</th>
                   <th rowSpan={2}>Responsable</th>
                   <th rowSpan={2}>Línea base</th>
-                  <th rowSpan={2}>Meta</th>
+                  <th rowSpan={2}>Meta global</th>
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
@@ -1556,7 +1616,7 @@ export function SeguimientoPage(): React.JSX.Element {
                     <th>Equipo / Categoría / Indicador</th>
                     <th>Responsable</th>
                     <th>Línea base</th>
-                    <th>Meta</th>
+                    <th>Meta global</th>
                   </>
                 )}
                 {hayGruposHistorico
@@ -1621,6 +1681,13 @@ export function SeguimientoPage(): React.JSX.Element {
                 </tr>
               )}
             </tbody>
+            <tfoot>
+              <tr className="fila-totales" data-testid="historico-fila-totales">
+                <td className="celda-arbol" />
+                <td colSpan={4}><strong>Total</strong></td>
+                {celdasSubtotal(nodoTotalesArbolEquipo, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

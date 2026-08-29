@@ -284,7 +284,7 @@ export function IndicadoresPage(): React.JSX.Element {
               <th>Nombre</th>
               <th>Periodicidad</th>
               <th>Línea base</th>
-              <th>Meta</th>
+              <th>Meta global</th>
               <th>Desagregaciones</th>
               <th>Estado</th>
             </tr>
