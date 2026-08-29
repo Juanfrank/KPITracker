@@ -688,6 +688,14 @@ table.tabla tbody tr.fila-eliminada:hover {
   min-width: 90px !important;
 }
 
+/* Batch AM (pedido explícito del usuario): las columnas de VALOR (línea base, meta, subtotales
+   por columna) estaban alineadas a la izquierda por defecto de `<td>` — se centran, igual que ya
+   está la celda de Resultado/Meta/% (`.celda-periodo-resultado`) y el corte colapsado. */
+.columna-valor {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Celda de resultado por período en Histórico (pedido explícito del usuario): Resultado y Meta
    apilados a la izquierda, el % de cumplimiento fusionado a la derecha (alto completo) — sin
    texto adicional, la posición ya identifica cada valor — centrada horizontalmente en la celda. */

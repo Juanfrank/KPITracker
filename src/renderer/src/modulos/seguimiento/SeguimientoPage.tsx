@@ -552,7 +552,7 @@ function celdasSubtotal(
     if (col.tipo === 'corte') {
       return (
         <td
-          key={`c-${col.grupo.id}`} className="columna-corte-colapsada" style={{ fontWeight: 600 }}
+          key={`c-${col.grupo.id}`} className="columna-corte-colapsada columna-valor" style={{ fontWeight: 600 }}
           title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
         >
           {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
@@ -561,7 +561,7 @@ function celdasSubtotal(
     }
     return (
       <td
-        key={col.columna.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} style={{ fontWeight: 600 }}
+        key={col.columna.periodoId} className={`columna-valor${col.grupo ? ' columna-corte-miembro' : ''}`} style={{ fontWeight: 600 }}
         title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.columna.periodoId}`}
       >
         {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
@@ -835,8 +835,8 @@ export function SeguimientoPage(): React.JSX.Element {
           </>
         )}
       </td>
-      <td className="texto-suave">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
-      <td className="texto-suave">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+      <td className="texto-suave columna-valor">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+      <td className="texto-suave columna-valor">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
       {columnasGrillaHistorico.map((col) => {
         if (col.tipo === 'corte') {
           const valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`);
