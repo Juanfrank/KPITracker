@@ -72,6 +72,10 @@ export class ServicioMedicionCategoria extends ServicioBase {
    * PROPIA periodicidad coincide con la de `periodoId` (se parsea de su id):
    * si la categoría mezcla periodicidades, hay que calcular una vez por cada
    * una — limitación conocida, documentada, no silenciosa.
+   *
+   * La operación matemática se efectúa sobre el % de cumplimiento respecto de
+   * la meta vigente de cada indicador (valor/meta*100), no sobre el valor
+   * crudo — un indicador sin meta resoluble para el período queda fuera.
    */
   async calcular(categoriaId: string, periodoId: string): Promise<ResultadoMedicionCategoria> {
     const config = await this.obtener(categoriaId);
@@ -111,17 +115,23 @@ export class ServicioMedicionCategoria extends ServicioBase {
       }
       if (valor == null) continue;
 
-      let tieneMeta = false;
+      // Aclaración explícita del usuario: la operación matemática del subtotal
+      // se efectúa sobre el % de cumplimiento respecto de la meta, no sobre el
+      // valor crudo — sin meta resoluble para este período no hay % posible,
+      // el indicador queda fuera de la agregación de la categoría.
+      let meta: number | null = null;
       try {
         const definicion = indicador.periodicidadPersonalizadaId ? definiciones.get(indicador.periodicidadPersonalizadaId) : undefined;
         const periodo = crearPeriodo(anio, indicador.periodicidad, numero, definicion);
         const metasIndicador = await this.metasRepo.listarPorIndicador(indicador.id);
-        tieneMeta = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones) != null;
+        const metaVigente = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones);
+        meta = metaVigente?.valor ?? indicador.metaGlobal;
       } catch {
-        // Periodicidad Personalizada sin definición resoluble: se agrega igual, sin peso de meta.
+        // Periodicidad Personalizada sin definición resoluble: sin meta ubicable, se excluye abajo.
       }
+      if (meta == null || meta === 0) continue;
 
-      entradas.push({ valor, tieneMeta, peso: tratamiento?.peso });
+      entradas.push({ valor: (valor / meta) * 100, tieneMeta: true, peso: tratamiento?.peso });
     }
 
     return {

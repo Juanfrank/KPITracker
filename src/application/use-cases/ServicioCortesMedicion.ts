@@ -21,6 +21,11 @@ import { permisosActuales } from './contextoUsuario';
  * No modifica ningún resultado — es puramente de LECTURA/reportería,
  * calculado bajo demanda (`calcular`).
  *
+ * Aclaración explícita del usuario: la agregación opera sobre el % de
+ * cumplimiento respecto de la meta vigente de cada período (valor/meta*100),
+ * no sobre el valor crudo capturado — un período sin meta resoluble no
+ * produce % y queda fuera del bucket, sin importar `omitirPeriodosSinMeta`.
+ *
  * Limitación conocida (documentada, no silenciosa): los indicadores
  * calculados (`esCalculado`) se excluyen del cálculo — evaluarlos requeriría
  * duplicar `EvaluadorFormulas` + el grafo de dependencias que hoy solo vive
@@ -131,13 +136,22 @@ export class ServicioCortesMedicion extends ServicioBase {
         const periodosDelBucket = periodosIndicador.filter((p) => p.fechaInicio >= bucket.fechaInicio && p.fechaFin <= bucket.fechaFin);
         if (periodosDelBucket.length === 0) continue;
 
+        // Aclaración explícita del usuario: la agregación opera sobre el % de
+        // cumplimiento respecto de la meta (valor/meta*100), no sobre el valor
+        // crudo. Sin meta resoluble no hay % posible, así que el período queda
+        // fuera de la agregación sin importar `omitirPeriodosSinMeta` — ese
+        // toggle ya no puede "incluir sin meta" bajo este modelo, solo controla
+        // (cuando SÍ hay meta) si se excluyen igual los períodos sin meta de
+        // otros indicadores mezclados en la misma regla general; se deja intacto.
         const entradas: EntradaAgregable[] = [];
         for (const periodo of periodosDelBucket) {
           const valor = valorPorPeriodoId.get(periodo.id);
           if (valor == null) continue;
-          const tieneMeta = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones) != null;
-          if (corte.omitirPeriodosSinMeta && !tieneMeta) continue;
-          entradas.push({ valor, tieneMeta });
+          const metaVigente = metaVigenteParaPeriodo(metasIndicador, 'GENERAL', periodo, definiciones);
+          const meta = metaVigente?.valor ?? indicador.metaGlobal;
+          const tieneMeta = meta != null;
+          if (!tieneMeta || meta === 0) continue;
+          entradas.push({ valor: (valor / meta) * 100, tieneMeta });
         }
         if (entradas.length === 0) continue;
 

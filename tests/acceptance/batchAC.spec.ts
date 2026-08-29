@@ -47,6 +47,9 @@ test('AC1: la fila de una categoría en Histórico > Árbol (Categoría) muestra
     await pagina.getByTestId('indicador-categoria').click();
     await pagina.getByTestId('indicador-categoria').fill('Subtotal AC');
     await pagina.getByTestId('indicador-categoria-opcion-Subtotal AC').click();
+    // Meta global 100 — el subtotal agrega sobre el % de cumplimiento (valor/meta*100), no el
+    // valor crudo, así que sin una meta resoluble el resultado capturado no produciría ningún %.
+    await pagina.getByTestId('indicador-meta').fill('100');
     await pagina.getByTestId('guardar-indicador').click();
     await expect(pagina.getByTestId(`indicador-${nombre}`)).toBeVisible();
 
@@ -66,7 +69,8 @@ test('AC1: la fila de una categoría en Histórico > Árbol (Categoría) muestra
   await expect(pagina.getByTestId('tabla-historico-arbol')).toBeVisible();
   await expect(pagina.getByTestId('historico-arbol-categoria-Subtotal AC')).toBeVisible();
 
-  // (60 + 80) / 2 = 70 — promedio simple, sin config de medición para "Subtotal AC".
+  // Meta 100 en ambos: % de cumplimiento 60% y 80% — (60 + 80) / 2 = 70, promedio simple,
+  // sin config de medición para "Subtotal AC" (la operación matemática opera sobre el %, no el valor crudo).
   const periodoId = `${anio}-Mensual-01`;
   await expect(pagina.getByTestId(`subtotal-Subtotal AC-${periodoId}`)).toHaveText('70');
 });

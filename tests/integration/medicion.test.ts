@@ -81,6 +81,11 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     await sembrarResultado(indicador.id, '2020-Mensual-04', 5);
     await sembrarResultado(indicador.id, '2020-Mensual-05', 50);
     await sembrarResultado(indicador.id, '2020-Mensual-06', 15);
+    // Meta 100 en cada período: la agregación opera sobre el % de cumplimiento (valor/meta*100),
+    // así que con meta=100 el % coincide numéricamente con el valor crudo sembrado arriba.
+    for (const mes of ['01', '02', '03', '04', '05', '06']) {
+      await app.manejadores['metas:guardar'](metaPuntual(indicador.id, `2020-Mensual-${mes}`, 100));
+    }
 
     const corte = await app.manejadores['cortesMedicion:guardar'](corteBase({ nombre: 'Trimestral', reglaGeneral: 'promedio' }));
     const resultados = await app.manejadores['cortesMedicion:calcular']({ id: corte.id });
@@ -100,6 +105,11 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     await sembrarResultado(a.id, '2020-Mensual-02', 30);
     await sembrarResultado(b.id, '2020-Mensual-01', 10);
     await sembrarResultado(b.id, '2020-Mensual-02', 30);
+    // Meta 100 en cada período — el % de cumplimiento coincide numéricamente con el valor crudo.
+    for (const indicadorId of [a.id, b.id]) {
+      await app.manejadores['metas:guardar'](metaPuntual(indicadorId, '2020-Mensual-01', 100));
+      await app.manejadores['metas:guardar'](metaPuntual(indicadorId, '2020-Mensual-02', 100));
+    }
 
     const corte = await app.manejadores['cortesMedicion:guardar'](
       corteBase({ nombre: 'Corte', reglaGeneral: 'promedio', reglasPorIndicador: { [a.id]: 'maximo' } })
@@ -111,25 +121,29 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     expect(q1B?.valorAgregado).toBe(20); // promedio (general)
   });
 
-  it('omitirPeriodosSinMeta excluye del bucket los períodos sin Meta configurada (default true en la UI)', async () => {
+  it('un período sin Meta configurada siempre se excluye del bucket — la agregación opera sobre % de cumplimiento, que sin meta no existe (independiente de omitirPeriodosSinMeta)', async () => {
     const indicador = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Con metas' }), valores: [] });
     await sembrarResultado(indicador.id, '2020-Mensual-01', 10);
     await sembrarResultado(indicador.id, '2020-Mensual-02', 20);
-    await sembrarResultado(indicador.id, '2020-Mensual-03', 30); // sin Meta — se excluye
+    await sembrarResultado(indicador.id, '2020-Mensual-03', 30); // sin Meta — se excluye, sin % posible
     await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-01', 100));
     await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-02', 100));
 
-    const corte = await app.manejadores['cortesMedicion:guardar'](corteBase({ nombre: 'Con omitir', omitirPeriodosSinMeta: true }));
+    // omitirPeriodosSinMeta en false: bajo el modelo de % ya no tiene efecto — marzo se excluye igual.
+    const corte = await app.manejadores['cortesMedicion:guardar'](corteBase({ nombre: 'Con omitir', omitirPeriodosSinMeta: false }));
     const resultados = await app.manejadores['cortesMedicion:calcular']({ id: corte.id });
     const q1 = resultados.find((r) => r.indicadorId === indicador.id && r.periodoId === '2020-Trimestral-01');
     expect(q1?.periodosConsiderados).toBe(2); // marzo excluido, sin Meta
-    expect(q1?.valorAgregado).toBe(15); // (10+20)/2
+    expect(q1?.valorAgregado).toBe(15); // (10% + 20%) / 2 — meta 100 en ambos, % coincide con el valor crudo
   });
 
   it('acotarAl100 acota el valor agregado final de cada bucket a un máximo de 100', async () => {
     const indicador = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Sobre 100' }), valores: [] });
     await sembrarResultado(indicador.id, '2020-Mensual-01', 120);
     await sembrarResultado(indicador.id, '2020-Mensual-02', 150);
+    // Meta 100 en ambos: % de cumplimiento 120% y 150% — el máximo (150%) se acota a 100.
+    await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-01', 100));
+    await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-02', 100));
 
     const corte = await app.manejadores['cortesMedicion:guardar'](corteBase({ nombre: 'Acotado', reglaGeneral: 'maximo', acotarAl100: true }));
     const resultados = await app.manejadores['cortesMedicion:calcular']({ id: corte.id });
@@ -165,6 +179,10 @@ describe('ServicioMedicionCategoria (Batch Y)', () => {
     const b = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'B', categoria: categoria.id }), valores: [] });
     await sembrarResultado(a.id, '2020-Mensual-01', 10);
     await sembrarResultado(b.id, '2020-Mensual-01', 30);
+    // Meta 100 en ambos: la agregación opera sobre el % de cumplimiento (valor/meta*100),
+    // que con meta=100 coincide numéricamente con el valor crudo sembrado arriba.
+    await app.manejadores['metas:guardar'](metaPuntual(a.id, '2020-Mensual-01', 100));
+    await app.manejadores['metas:guardar'](metaPuntual(b.id, '2020-Mensual-01', 100));
     return { categoria, a, b };
   }
 

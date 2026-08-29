@@ -176,8 +176,12 @@ export function CortesMedicionPage(): React.JSX.Element {
               style={{ width: 'auto' }}
               data-testid="corte-omitir-sin-meta"
             />
-            Omitir períodos sin meta (no se agregan al cálculo)
+            Omitir períodos sin meta
           </label>
+          <p className="texto-suave" style={{ marginTop: 4, fontSize: 13 }}>
+            El cálculo agrega el % de cumplimiento respecto de la meta de cada período (valor ÷ meta) —
+            un período sin meta configurada no tiene % posible y siempre queda fuera, más allá de esta opción.
+          </p>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
             <input
               type="checkbox"

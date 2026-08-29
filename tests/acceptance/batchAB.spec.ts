@@ -36,6 +36,9 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   await pagina.getByTestId('indicador-nombre').fill('Indicador Dinámico AB');
   await pagina.getByTestId('indicador-definicion').fill('Para probar el valor dinámico del corte.');
   await pagina.getByTestId('indicador-periodicidad').selectOption('Mensual');
+  // Meta global 100 — el corte agrega sobre el % de cumplimiento (valor/meta*100), no el valor
+  // crudo, así que sin una meta resoluble el resultado capturado no produciría ningún %.
+  await pagina.getByTestId('indicador-meta').fill('100');
   await pagina.getByTestId('guardar-indicador').click();
   await expect(pagina.getByTestId('indicador-Indicador Dinámico AB')).toBeVisible();
 
@@ -57,9 +60,6 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   await pagina.getByTestId('corte-nombre').fill('Corte Dinámico AB');
   await pagina.getByTestId('corte-periodicidad').selectOption('Trimestral');
   await pagina.getByTestId('corte-regla-general').selectOption('maximo');
-  // Sin Meta configurada para este indicador — desactivar "omitir sin meta" para que el
-  // resultado capturado SÍ entre en la agregación (default true, ver corteVacio()).
-  await pagina.getByTestId('corte-omitir-sin-meta').uncheck();
   await pagina.getByTestId('guardar-corte-medicion').click();
   await expect(pagina.getByTestId('corte-medicion-Corte Dinámico AB')).toBeVisible();
 
@@ -72,7 +72,7 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   await expect(pagina.getByTestId(grupoT1)).toBeVisible();
   await pagina.getByTestId(`toggle-grupo-corte-T1 ${anio}`).click();
 
-  // Colapsado: la celda del grupo muestra el valor agregado REAL (88, capturado arriba),
+  // Colapsado: la celda del grupo muestra el % de cumplimiento REAL (88/meta 100 = 88%),
   // calculado en vivo — no un placeholder ni un botón "Calcular" de por medio.
   const filaHistorico = pagina.getByTestId('historico-Indicador Dinámico AB');
   await expect(filaHistorico.locator('td.columna-corte-colapsada')).toHaveText('88');

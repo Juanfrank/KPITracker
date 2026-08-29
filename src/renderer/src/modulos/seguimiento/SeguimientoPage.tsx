@@ -403,10 +403,14 @@ function entradasSubtotal(
     let valor: number | null;
     let tieneMeta = false;
     if (col.tipo === 'corte') {
+      // El servicio de cortes ya agrega sobre % de cumplimiento — ver `ServicioCortesMedicion.calcular`.
       valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`) ?? null;
     } else {
+      // Aclaración explícita del usuario: la operación matemática del subtotal se
+      // efectúa sobre el % de cumplimiento respecto de la meta, no sobre el valor
+      // crudo — sin meta configurada no hay % posible, el punto queda fuera.
       const punto = h.puntos.find((p) => p.periodoId === col.columna.periodoId);
-      valor = punto?.valor ?? null;
+      valor = punto?.cumplimientoPct ?? null;
       tieneMeta = punto?.metaPeriodo != null;
     }
     if (valor == null) continue;
