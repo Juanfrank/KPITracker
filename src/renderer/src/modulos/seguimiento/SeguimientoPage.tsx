@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Categoria, CorteMedicion, Equipo } from '@domain/index';
-import { GeneradorPeriodos, etiquetaConPrefijo } from '@domain/index';
+import type { Categoria, ConfiguracionMedicionCategoria, CorteMedicion, EntradaAgregable, Equipo } from '@domain/index';
+import { GeneradorPeriodos, agregar, etiquetaConPrefijo } from '@domain/index';
 import type { FilaHistorico, FilaTablero, DetalleSeguimiento } from '@application/use-cases/ServicioSeguimiento';
 import { indicadoresQueRequierenNotificacion } from '@application/notificaciones/DetectorVencimientos';
 import { invocar } from '../../api';
@@ -46,9 +46,21 @@ interface FilaClasificable {
   equipoId: string | null;
 }
 
+/**
+ * `filasDirectas` (Batch AC, pedido explícito del usuario — subtotales por
+ * grupo): SOLO los indicadores propios de este nodo, sin bajar a
+ * subcategorías/sub-equipos — mismo contrato no-recursivo que ya
+ * documenta `ServicioMedicionCategoria` para "Medición por categoría", que
+ * el subtotal de columna reutiliza. `categoriaId`/`equipoId` son el id
+ * CRUDO (sin el prefijo de anidación bajo un equipo, ver `prefijoId` abajo)
+ * — hace falta para resolver la configuración de medición del nodo.
+ */
 type NodoArbolSeguimiento<F extends FilaClasificable = FilaTablero> =
-  | { tipo: 'equipo'; id: string; nivel: number; nombre: string; contador: number; tieneHijos: boolean }
-  | { tipo: 'categoria'; id: string; nivel: number; nombre: string; prefijo: string | null; contador: number; tieneHijos: boolean }
+  | { tipo: 'equipo'; id: string; equipoId: string; nivel: number; nombre: string; contador: number; tieneHijos: boolean; filasDirectas: F[] }
+  | {
+      tipo: 'categoria'; id: string; categoriaId: string; nivel: number; nombre: string; prefijo: string | null;
+      contador: number; tieneHijos: boolean; filasDirectas: F[];
+    }
   | { tipo: 'indicador'; id: string; nivel: number; fila: F };
 
 /**
@@ -97,8 +109,9 @@ function construirNodosCategoria<F extends FilaClasificable>(
     const hijos = hijosDe.get(categoria.id) ?? [];
     const propias = [...(filasPorCategoria.get(categoria.id) ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
     nodos.push({
-      tipo: 'categoria', id: `${prefijoId}${categoria.id}`, nivel, nombre: categoria.nombre, prefijo: categoria.prefijo,
-      contador: contarTotal(categoria.id), tieneHijos: hijos.length > 0 || propias.length > 0
+      tipo: 'categoria', id: `${prefijoId}${categoria.id}`, categoriaId: categoria.id, nivel, nombre: categoria.nombre,
+      prefijo: categoria.prefijo, contador: contarTotal(categoria.id), tieneHijos: hijos.length > 0 || propias.length > 0,
+      filasDirectas: filasPorCategoria.get(categoria.id) ?? []
     });
     for (const hijo of hijos) visitar(hijo, nivel + 1);
     for (const f of propias) nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivel + 1, fila: f });
@@ -107,8 +120,8 @@ function construirNodosCategoria<F extends FilaClasificable>(
 
   if (sinCategoria.length > 0) {
     nodos.push({
-      tipo: 'categoria', id: `${prefijoId}${SIN_CATEGORIA}`, nivel: nivelBase, nombre: 'Sin categoría', prefijo: null,
-      contador: sinCategoria.length, tieneHijos: true
+      tipo: 'categoria', id: `${prefijoId}${SIN_CATEGORIA}`, categoriaId: SIN_CATEGORIA, nivel: nivelBase,
+      nombre: 'Sin categoría', prefijo: null, contador: sinCategoria.length, tieneHijos: true, filasDirectas: sinCategoria
     });
     for (const f of [...sinCategoria].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
       nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivelBase + 1, fila: f });
@@ -177,10 +190,15 @@ function construirArbolEquipoSeguimiento<F extends FilaClasificable>(
   const nodos: NodoArbolSeguimiento<F>[] = [];
   const visitar = (equipo: Equipo, nivel: number): void => {
     const hijos = hijosDe.get(equipo.id) ?? [];
-    const nodosCategoria = construirNodosCategoria(filasPorEquipo.get(equipo.id) ?? [], categorias, nivel + 1, `${equipo.id}:`);
+    const filasPropias = filasPorEquipo.get(equipo.id) ?? [];
+    const nodosCategoria = construirNodosCategoria(filasPropias, categorias, nivel + 1, `${equipo.id}:`);
     nodos.push({
-      tipo: 'equipo', id: equipo.id, nivel, nombre: equipo.nombre,
-      contador: contarTotal(equipo.id), tieneHijos: hijos.length > 0 || nodosCategoria.length > 0
+      // `filasDirectas` = TODOS los indicadores directos de este equipo (sin bajar a sub-equipos),
+      // sin importar su categoría — a diferencia de una categoría, un equipo no se subdivide más
+      // que por categoría (dimensión aparte, ya desglosada en los nodos-categoría anidados debajo).
+      tipo: 'equipo', id: equipo.id, equipoId: equipo.id, nivel, nombre: equipo.nombre,
+      contador: contarTotal(equipo.id), tieneHijos: hijos.length > 0 || nodosCategoria.length > 0,
+      filasDirectas: filasPropias
     });
     for (const hijo of hijos) visitar(hijo, nivel + 1);
     nodos.push(...nodosCategoria);
@@ -190,8 +208,8 @@ function construirArbolEquipoSeguimiento<F extends FilaClasificable>(
   if (sinEquipo.length > 0) {
     const nodosCategoria = construirNodosCategoria(sinEquipo, categorias, 1, `${SIN_EQUIPO}:`);
     nodos.push({
-      tipo: 'equipo', id: SIN_EQUIPO, nivel: 0, nombre: 'Sin equipo',
-      contador: sinEquipo.length, tieneHijos: nodosCategoria.length > 0
+      tipo: 'equipo', id: SIN_EQUIPO, equipoId: SIN_EQUIPO, nivel: 0, nombre: 'Sin equipo',
+      contador: sinEquipo.length, tieneHijos: nodosCategoria.length > 0, filasDirectas: sinEquipo
     });
     nodos.push(...nodosCategoria);
   }
@@ -362,6 +380,71 @@ function encabezadosMiembroCorte(columnas: ColumnaGrillaHistorico[]): React.JSX.
 }
 
 /**
+ * Subtotal de una fila de grupo (Equipo/Categoría/Subcategoría) en Histórico
+ * (Batch AC, pedido explícito del usuario — lo que Y7 llamó "Medición por
+ * categoría", reutilizado acá tal cual: la regla configurada de la
+ * categoría, o promedio simple si no hay una — un equipo nunca tiene
+ * configuración propia, así que siempre promedia). Solo entran los
+ * indicadores DIRECTOS del nodo (`filasDirectas` — mismo contrato
+ * no-recursivo que ya documenta `ServicioMedicionCategoria`: una
+ * subcategoría/sub-equipo es su propio subtotal, no se sube al padre).
+ * `agregacionPropia` (desagregar por debajo de GENERAL) NO se soporta acá
+ * — necesitaría los resultados de cada desagregación, que Histórico no
+ * carga; limitación conocida, documentada, no silenciosa.
+ */
+function entradasSubtotal(
+  filas: FilaHistorico[], col: ColumnaGrillaHistorico, resultadosCorte: Map<string, number | null>,
+  config: ConfiguracionMedicionCategoria | undefined
+): EntradaAgregable[] {
+  const entradas: EntradaAgregable[] = [];
+  for (const h of filas) {
+    const tratamiento = config?.tratamientoIndicadores[h.indicadorId];
+    if (tratamiento?.excluir) continue;
+    let valor: number | null;
+    let tieneMeta = false;
+    if (col.tipo === 'corte') {
+      valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`) ?? null;
+    } else {
+      const punto = h.puntos.find((p) => p.periodoId === col.columna.periodoId);
+      valor = punto?.valor ?? null;
+      tieneMeta = punto?.metaPeriodo != null;
+    }
+    if (valor == null) continue;
+    entradas.push({ valor, tieneMeta, peso: tratamiento?.peso });
+  }
+  return entradas;
+}
+
+function celdasSubtotal(
+  filas: FilaHistorico[], columnas: ColumnaGrillaHistorico[], resultadosCorte: Map<string, number | null>,
+  config: ConfiguracionMedicionCategoria | undefined, testIdNodo: string
+): React.JSX.Element[] {
+  const regla = config?.reglaGeneral ?? 'promedio';
+  return columnas.map((col) => {
+    const entradas = entradasSubtotal(filas, col, resultadosCorte, config);
+    const valor = entradas.length > 0 ? agregar(regla, entradas) : null;
+    if (col.tipo === 'corte') {
+      return (
+        <td
+          key={`c-${col.grupo.id}`} className="columna-corte-colapsada" style={{ fontWeight: 600 }}
+          title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
+        >
+          {valor == null ? <span className="texto-suave">—</span> : valor}
+        </td>
+      );
+    }
+    return (
+      <td
+        key={col.columna.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} style={{ fontWeight: 600 }}
+        title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.columna.periodoId}`}
+      >
+        {valor == null ? <span className="texto-suave">—</span> : valor}
+      </td>
+    );
+  });
+}
+
+/**
  * Tablero de Seguimiento: estados calculados dinámicamente (fecha actual,
  * fecha límite, periodicidad, períodos registrados y fecha de corte) —
  * nunca a partir de banderas persistidas.
@@ -406,6 +489,11 @@ export function SeguimientoPage(): React.JSX.Element {
   // capturados — así que se recalcula en vivo cada vez que un corte se activa en el filtro,
   // sin ningún botón. Clave `${indicadorId}:${bucketId}`, coincide con `grupo.id` de abajo.
   const [resultadosCorte, setResultadosCorte] = useState<Map<string, number | null>>(new Map());
+  // Configuración de "Medición por categoría" (Y7) de cada categoría del catálogo, reutilizada
+  // acá para el subtotal por columna de las filas de grupo en Histórico (Batch AC, pedido
+  // explícito del usuario) — un equipo nunca tiene una entrada acá (sin config propia, cae al
+  // promedio simple por defecto de `celdasSubtotal`).
+  const [medicionCategoriaPorId, setMedicionCategoriaPorId] = useState<Map<string, ConfiguracionMedicionCategoria>>(new Map());
   const navigate = useNavigate();
 
   /**
@@ -443,6 +531,18 @@ export function SeguimientoPage(): React.JSX.Element {
   const alternarGrupoCorteHistorico = (bucketId: string): void => {
     setExpandidosCorteHistorico((previo) => ({ ...previo, [bucketId]: !(previo[bucketId] ?? true) }));
   };
+
+  // Trae la configuración de medición de cada categoría del catálogo, una sola vez por cada
+  // carga de `categoriasCatalogo` — un puñado de llamadas (una por categoría), no por columna.
+  useEffect(() => {
+    if (categoriasCatalogo.length === 0) return;
+    void Promise.all(
+      categoriasCatalogo.map((c) => trpcClient.medicionCategoria.obtener.query({ categoriaId: c.id }).then((cfg) => [c.id, cfg] as const))
+    ).then((pares) => {
+      const validos = pares.filter((p): p is [string, ConfiguracionMedicionCategoria] => p[1] != null);
+      setMedicionCategoriaPorId(new Map(validos));
+    });
+  }, [categoriasCatalogo]);
 
   // Recalcula en vivo el valor agregado de cada corte activo (Batch AB) — corre automáticamente
   // al activar/desactivar un corte en el filtro, nunca por una acción manual del usuario.
@@ -1223,11 +1323,12 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      <td colSpan={3 + columnasGrillaHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      <td colSpan={3} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                         {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                       </td>
+                      {celdasSubtotal(nodo.filasDirectas, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId.get(nodo.categoriaId), nodo.nombre)}
                     </tr>
                   );
                 }
@@ -1305,6 +1406,10 @@ export function SeguimientoPage(): React.JSX.Element {
                 }
                 const colapsada = colapsadasEquipo.has(nodo.id);
                 const etiqueta = nodo.tipo === 'categoria' ? etiquetaConPrefijo(nodo.prefijo, nodo.nombre) : nodo.nombre;
+                // Equipo: siempre promedio (sin config propia, ver `celdasSubtotal`). Categoría/subcategoría
+                // anidada bajo el equipo: reusa su config de "Medición por categoría" — sus `filasDirectas`
+                // ya vienen acotadas a este equipo (`construirNodosCategoria` recibe solo sus filas).
+                const configSubtotal = nodo.tipo === 'categoria' ? medicionCategoriaPorId.get(nodo.categoriaId) : undefined;
                 return (
                   <tr key={`g-${nodo.id}`} className="fila-categoria" data-testid={`historico-equipo-${nodo.tipo}-${nodo.nombre}`}>
                     <td className="celda-arbol">
@@ -1320,11 +1425,12 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    <td colSpan={3 + columnasGrillaHistorico.length} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    <td colSpan={3} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                     </td>
+                    {celdasSubtotal(nodo.filasDirectas, columnasGrillaHistorico, resultadosCorte, configSubtotal, `${nodo.tipo}-${nodo.nombre}`)}
                   </tr>
                 );
               })}
