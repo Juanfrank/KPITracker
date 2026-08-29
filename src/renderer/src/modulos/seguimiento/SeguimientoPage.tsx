@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Categoria, ConfiguracionMedicionCategoria, CorteMedicion, EntradaAgregable, Equipo } from '@domain/index';
 import { GeneradorPeriodos, agregar, etiquetaConPrefijo } from '@domain/index';
@@ -259,6 +259,77 @@ function nodosVisibles<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F
     if (nodo.tipo !== 'indicador' && nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
   }
   return visibles;
+}
+
+/**
+ * Dropdown compacto de selección múltiple (Batch AK, pedido explícito del
+ * usuario — el `<select multiple>` nativo ocupaba mucho espacio fijo en
+ * pantalla, siempre desplegado como una lista de varias filas): un botón
+ * que resume la selección, con un panel flotante de checkboxes al hacer
+ * clic — mismo patrón de clic-afuera que `SelectorBuscable`.
+ */
+function DropdownMultiple({
+  placeholder, opciones, seleccionados, alCambiar, testId
+}: {
+  placeholder: string;
+  opciones: { id: string; etiqueta: string }[];
+  seleccionados: string[];
+  alCambiar: (ids: string[]) => void;
+  testId: string;
+}): React.JSX.Element {
+  const [abierto, setAbierto] = useState(false);
+  const contenedor = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!abierto) return;
+    const alClicFuera = (e: MouseEvent): void => {
+      if (contenedor.current && !contenedor.current.contains(e.target as Node)) setAbierto(false);
+    };
+    document.addEventListener('mousedown', alClicFuera);
+    return () => document.removeEventListener('mousedown', alClicFuera);
+  }, [abierto]);
+
+  const etiquetasElegidas = opciones.filter((o) => seleccionados.includes(o.id)).map((o) => o.etiqueta);
+  const resumen =
+    etiquetasElegidas.length === 0 ? placeholder
+    : etiquetasElegidas.length <= 2 ? etiquetasElegidas.join(', ')
+    : `${etiquetasElegidas.length} seleccionados`;
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }} ref={contenedor}>
+      <button
+        type="button" className="filtro-chip" onClick={() => setAbierto((v) => !v)} title={resumen} data-testid={testId}
+      >
+        {resumen} <Icono nombre="flecha" tamano={11} />
+      </button>
+      {abierto && (
+        <div
+          className="tarjeta"
+          style={{
+            position: 'absolute', left: 0, top: '100%', zIndex: 30, minWidth: 260, maxHeight: 240,
+            overflowY: 'auto', padding: 6, marginTop: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.15)'
+          }}
+          data-testid={`${testId}-panel`}
+        >
+          {opciones.length === 0 && <div className="texto-suave" style={{ padding: '6px 8px' }}>Sin opciones</div>}
+          {opciones.map((o) => (
+            <label
+              key={o.id}
+              style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '5px 8px', cursor: 'pointer', fontSize: 13 }}
+            >
+              <input
+                type="checkbox"
+                checked={seleccionados.includes(o.id)}
+                onChange={(e) => alCambiar(e.target.checked ? [...seleccionados, o.id] : seleccionados.filter((id) => id !== o.id))}
+                data-testid={`${testId}-opcion-${o.etiqueta}`}
+              />
+              {o.etiqueta}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const FILTROS_ESTADO = [
@@ -1271,18 +1342,15 @@ export function SeguimientoPage(): React.JSX.Element {
       )}
 
       {pestana === 'historico' && cortes.length > 0 && (
-        <div className="filtros-chips" style={{ alignItems: 'flex-start' }}>
+        <div className="filtros-chips">
           <span className="texto-suave" style={{ alignSelf: 'center' }}>Cortes de medición (agrupar columnas):</span>
-          <select
-            multiple
-            value={cortesActivosHistorico}
-            onChange={(e) => setCortesActivosHistorico(Array.from(e.target.selectedOptions, (o) => o.value))}
-            style={{ minHeight: 60, width: 260 }}
-            data-testid="historico-filtro-cortes"
-          >
-            {cortes.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.periodicidad})</option>)}
-          </select>
-          <span className="texto-suave">Ctrl/Cmd+clic para elegir varios.</span>
+          <DropdownMultiple
+            placeholder="Ninguno"
+            opciones={cortes.map((c) => ({ id: c.id, etiqueta: `${c.nombre} (${c.periodicidad})` }))}
+            seleccionados={cortesActivosHistorico}
+            alCambiar={setCortesActivosHistorico}
+            testId="historico-filtro-cortes"
+          />
         </div>
       )}
 

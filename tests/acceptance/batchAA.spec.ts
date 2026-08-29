@@ -78,7 +78,10 @@ test('AA3: columnas de corte agrupadas en Seguimiento > Histórico — filtro mu
   const celdaEnero = `historico-Indicador Histórico AA-${anio}-Mensual-01`;
   await expect(pagina.getByTestId(celdaEnero)).toBeVisible();
 
-  await pagina.getByTestId('historico-filtro-cortes').selectOption({ label: 'Corte Trimestral AA (Trimestral)' });
+  // Batch AK: el multi-select nativo pasó a ser un dropdown compacto (botón + panel de checkboxes).
+  await pagina.getByTestId('historico-filtro-cortes').click();
+  await pagina.getByTestId('historico-filtro-cortes-opcion-Corte Trimestral AA (Trimestral)').click();
+  await pagina.getByTestId('historico-filtro-cortes').click(); // cierra el panel
   const grupoT1 = `grupo-corte-T1 ${anio}`;
   await expect(pagina.getByTestId(grupoT1)).toBeVisible();
   // Expandido por defecto: enero sigue siendo su propia columna, bajo el grupo.

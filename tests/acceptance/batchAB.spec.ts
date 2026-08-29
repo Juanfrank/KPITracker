@@ -66,7 +66,10 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   await pagina.getByTestId('nav-seguimiento').click();
   await pagina.getByTestId('pestana-historico').click();
   await expect(pagina.getByTestId('tabla-historico')).toBeVisible();
-  await pagina.getByTestId('historico-filtro-cortes').selectOption({ label: 'Corte Dinámico AB (Trimestral)' });
+  // Batch AK: el multi-select nativo pasó a ser un dropdown compacto (botón + panel de checkboxes).
+  await pagina.getByTestId('historico-filtro-cortes').click();
+  await pagina.getByTestId('historico-filtro-cortes-opcion-Corte Dinámico AB (Trimestral)').click();
+  await pagina.getByTestId('historico-filtro-cortes').click(); // cierra el panel
 
   const grupoT1 = `grupo-corte-T1 ${anio}`;
   await expect(pagina.getByTestId(grupoT1)).toBeVisible();
