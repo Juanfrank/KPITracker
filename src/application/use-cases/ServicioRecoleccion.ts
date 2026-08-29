@@ -49,6 +49,13 @@ export interface FilaCaptura {
   /** Estado de validación post-registro (Batch T) — 'Pendiente' si la celda todavía no tiene resultado guardado. */
   estadoValidacion: 'Pendiente' | 'Validado' | 'Rechazado';
   comentarioValidacion: string | null;
+  /** Batch AV/AU: quién y cuándo capturó el valor VIGENTE de esta celda — null sin resultado guardado. */
+  origenCaptura: 'Manual' | 'Automatico' | null;
+  capturadoPor: string | null;
+  capturadoEn: string | null;
+  /** Quién y cuándo validó/rechazó — null mientras esté Pendiente o sin resultado guardado. */
+  validadoPor: string | null;
+  validadoEn: string | null;
 }
 
 export interface DatosCaptura {
@@ -156,7 +163,12 @@ export class ServicioRecoleccion extends ServicioBase {
           observacion: null,
           actualizadoEn: null,
           estadoValidacion: 'Pendiente',
-          comentarioValidacion: null
+          comentarioValidacion: null,
+          origenCaptura: null,
+          capturadoPor: null,
+          capturadoEn: null,
+          validadoPor: null,
+          validadoEn: null
         }],
         advertencias: []
       };
@@ -205,7 +217,12 @@ export class ServicioRecoleccion extends ServicioBase {
         observacion: existente?.observacion ?? null,
         actualizadoEn: existente?.actualizadoEn ?? null,
         estadoValidacion: existente?.estadoValidacion ?? 'Pendiente',
-        comentarioValidacion: existente?.comentarioValidacion ?? null
+        comentarioValidacion: existente?.comentarioValidacion ?? null,
+        origenCaptura: existente?.origenCaptura ?? null,
+        capturadoPor: existente?.capturadoPor ?? null,
+        capturadoEn: existente?.capturadoEn ?? null,
+        validadoPor: existente?.validadoPor ?? null,
+        validadoEn: existente?.validadoEn ?? null
       };
     });
 
@@ -379,7 +396,7 @@ export class ServicioRecoleccion extends ServicioBase {
         filasConError += 1;
         continue;
       }
-      await this.persistirValorCelda(indicadorId, periodoId, clave, parseado.valor as number | null, null);
+      await this.persistirValorCelda(indicadorId, periodoId, clave, parseado.valor as number | null, null, 'Automatico');
       celdasActualizadas += 1;
     }
 
@@ -402,14 +419,17 @@ export class ServicioRecoleccion extends ServicioBase {
    * escritura de `Resultado.valor`, por eso el redondeo matemático real a
    * 2 decimales (pedido explícito del usuario) se aplica acá, no en cada
    * llamador: cubre captura manual, pegado desde Excel y obtención
-   * automática por igual.
+   * automática por igual. `origen` (Batch AV, pedido explícito del
+   * usuario) marca cómo se obtuvo ESTE valor — 'Automatico' solo lo pasa
+   * `obtenerResultadoAutomatico`, todo lo demás es 'Manual' por defecto.
    */
   private async persistirValorCelda(
     indicadorId: string,
     periodoId: string,
     claveDesagregacion: string,
     valorCrudo: number | null,
-    observacion: string | null
+    observacion: string | null,
+    origen: 'Manual' | 'Automatico' = 'Manual'
   ): Promise<void> {
     const valor = valorCrudo == null ? null : redondear2(valorCrudo);
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
@@ -438,6 +458,9 @@ export class ServicioRecoleccion extends ServicioBase {
       validadoPor: reiniciaValidacion ? null : (anterior?.validadoPor ?? null),
       validadoEn: reiniciaValidacion ? null : (anterior?.validadoEn ?? null),
       comentarioValidacion: reiniciaValidacion ? null : (anterior?.comentarioValidacion ?? null),
+      origenCaptura: origen,
+      capturadoPor: usuarioActual(),
+      capturadoEn: ahora,
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });
@@ -596,6 +619,11 @@ export class ServicioRecoleccion extends ServicioBase {
       validadoPor: reiniciaValidacion ? null : (anterior?.validadoPor ?? null),
       validadoEn: reiniciaValidacion ? null : (anterior?.validadoEn ?? null),
       comentarioValidacion: reiniciaValidacion ? null : (anterior?.comentarioValidacion ?? null),
+      // Restaurar es siempre una acción manual y deliberada de una persona, sin importar
+      // cómo se había capturado la versión que reemplaza (Batch AV).
+      origenCaptura: 'Manual',
+      capturadoPor: usuarioActual(),
+      capturadoEn: ahora,
       creadoEn: anterior?.creadoEn ?? ahora,
       actualizadoEn: ahora
     });

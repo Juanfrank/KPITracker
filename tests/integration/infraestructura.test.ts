@@ -70,6 +70,9 @@ function resultado(id: string, indicadorId: string, periodoId: string, clave: st
     validadoPor: null,
     validadoEn: null,
     comentarioValidacion: null,
+    origenCaptura: 'Manual',
+    capturadoPor: null,
+    capturadoEn: '2025-04-05T00:00:00Z',
     creadoEn: '2025-04-05T00:00:00Z',
     actualizadoEn: '2025-04-05T00:00:00Z'
   };

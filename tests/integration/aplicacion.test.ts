@@ -323,6 +323,31 @@ describe('Composition root — periodicidad personalizada en Recolección', () =
   });
 });
 
+describe('Composition root — Batch AV: marca interna de origen de captura (Manual/Automatico)', () => {
+  it('una celda capturada a mano (o restaurada) queda marcada "Manual", con capturadoPor/capturadoEn', async () => {
+    const guardado = await app.manejadores['indicadores:guardar']({ indicador: indicador(), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: guardado.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: guardado.id, periodoId, fechaCorte: '2025-06-30' });
+
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10'
+    });
+    const [primero] = await app.infra.resultados.obtenerPorIndicadorPeriodo(guardado.id, periodoId);
+    expect(primero?.origenCaptura).toBe('Manual');
+    expect(primero?.capturadoPor).toBe('local'); // usuarioActual() por defecto en el contexto de estos tests.
+    expect(primero?.capturadoEn).toBeTruthy();
+
+    // Reeditar (segunda escritura de la misma celda) sigue marcado Manual, con capturadoEn actualizado.
+    await app.manejadores['recoleccion:guardarCelda']({
+      indicadorId: guardado.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '20'
+    });
+    const [segundo] = await app.infra.resultados.obtenerPorIndicadorPeriodo(guardado.id, periodoId);
+    expect(segundo?.origenCaptura).toBe('Manual');
+    expect(segundo?.valor).toBe(20);
+  });
+});
+
 describe('Composition root — advertencias de validación cruzada en Recolección', () => {
   it('advierte cuando el resultado General es menor que el máximo de sus desagregaciones', async () => {
     const lista = await app.manejadores['listas:guardar']({
@@ -457,6 +482,15 @@ describe('Composition root — segmentador de subtotal en orígenes automáticos
       expect(captura.filas.find((f) => f.claveDesagregacion === `${sexo.id}=M`)?.valor).toBe(300);
       expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=SD'))?.valor).toBe(180);
       expect(captura.filas.find((f) => f.claveDesagregacion.includes('=M') && f.claveDesagregacion.includes('=STG'))?.valor).toBe(120);
+
+      // Batch AV (pedido explícito del usuario): toda celda escrita por obtenerResultadoAutomatico
+      // queda marcada como 'Automatico', con su propio timestamp de captura.
+      const guardados = await app.infra.resultados.obtenerPorIndicadorPeriodo(guardado.id, periodoId);
+      expect(guardados.length).toBe(4);
+      for (const g of guardados) {
+        expect(g.origenCaptura).toBe('Automatico');
+        expect(g.capturadoEn).toBeTruthy();
+      }
     } finally {
       servidor.close();
     }

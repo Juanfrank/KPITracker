@@ -50,6 +50,7 @@ async function sembrarResultado(indicadorId: string, periodoId: string, valor: n
   const resultado: Resultado = {
     id: app.infra.ids.nuevoId(), indicadorId, periodoId, anio, claveDesagregacion: 'GENERAL', valor,
     observacion: null, estadoValidacion: 'Pendiente', validadoPor: null, validadoEn: null, comentarioValidacion: null,
+    origenCaptura: 'Manual', capturadoPor: null, capturadoEn: '2020-01-01T00:00:00.000Z',
     creadoEn: '2020-01-01T00:00:00.000Z', actualizadoEn: '2020-01-01T00:00:00.000Z'
   };
   await app.infra.resultados.guardar(resultado);

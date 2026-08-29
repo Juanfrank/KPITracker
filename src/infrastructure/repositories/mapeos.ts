@@ -197,6 +197,11 @@ export const aResultado = (f: Fila): Resultado => ({
   validadoPor: sn(f.validado_por),
   validadoEn: sn(f.validado_en),
   comentarioValidacion: sn(f.comentario_validacion),
+  origenCaptura: (sn(f.origen_captura) ?? 'Manual') as Resultado['origenCaptura'],
+  capturadoPor: sn(f.capturado_por),
+  // Backfill de filas previas al Batch AV (ver migración): sin capturado_en propio, la mejor
+  // aproximación disponible es actualizado_en.
+  capturadoEn: sn(f.capturado_en) ?? s(f.actualizado_en),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -206,6 +211,7 @@ export const deResultado = (r: Resultado): Fila => ({
   clave_desagregacion: r.claveDesagregacion, valor: r.valor, observacion: r.observacion,
   estado_validacion: r.estadoValidacion, validado_por: r.validadoPor, validado_en: r.validadoEn,
   comentario_validacion: r.comentarioValidacion,
+  origen_captura: r.origenCaptura, capturado_por: r.capturadoPor, capturado_en: r.capturadoEn,
   creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 

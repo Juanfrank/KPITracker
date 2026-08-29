@@ -13,6 +13,15 @@ export type EstadoValidacionResultado = 'Pendiente' | 'Validado' | 'Rechazado';
  * `ServicioRecoleccion.guardarCelda`), para que un valor validado en pantalla
  * siempre corresponda a lo último capturado.
  */
+/**
+ * Cómo se obtuvo el valor VIGENTE de un `Resultado` (Batch AV, pedido
+ * explícito del usuario) — 'Automatico' solo cuando vino de
+ * `ServicioRecoleccion.obtenerResultadoAutomatico`; 'Manual' en cualquier
+ * otro caso (captura a mano, pegado desde Excel, o restaurar una versión
+ * previa — todas acciones deliberadas de una persona).
+ */
+export type OrigenCapturaResultado = 'Manual' | 'Automatico';
+
 export interface Resultado {
   readonly id: string;
   indicadorId: string;
@@ -29,6 +38,16 @@ export interface Resultado {
   validadoPor: string | null;
   validadoEn: string | null;
   comentarioValidacion: string | null;
+  /** Batch AV — ver `OrigenCapturaResultado`. */
+  origenCaptura: OrigenCapturaResultado;
+  /** Usuario que escribió el valor vigente (última escritura de `valor`/`observacion`). */
+  capturadoPor: string | null;
+  /**
+   * Fecha/hora de esa escritura — a diferencia de `actualizadoEn`, NO cambia
+   * al validar/rechazar (Batch T), así que es la fuente confiable de "cuándo
+   * se capturó el dato actual".
+   */
+  capturadoEn: string;
   readonly creadoEn: string;
   actualizadoEn: string;
 }
