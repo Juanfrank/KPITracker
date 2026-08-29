@@ -603,7 +603,8 @@ export function SeguimientoPage(): React.JSX.Element {
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<Categoria[]>([]);
   const [equiposCatalogo, setEquiposCatalogo] = useState<Equipo[]>([]);
   const [reasignando, setReasignando] = useState(false);
-  const [avisoDescartado, setAvisoDescartado] = useState(false);
+  const [panelVencimientosAbierto, setPanelVencimientosAbierto] = useState(false);
+  const contenedorVencimientos = useRef<HTMLDivElement>(null);
   // Columnas de corte agrupadas en Histórico (Batch AA — antes vivía en Configuración de Metas,
   // reubicado acá porque un corte agrega RESULTADOS capturados, y es Histórico quien los muestra).
   const [cortes, setCortes] = useState<CorteMedicion[]>([]);
@@ -625,16 +626,32 @@ export function SeguimientoPage(): React.JSX.Element {
   /**
    * Reemplazo mínimo (Fase 4 §9.1/§9.7) de la notificación proactiva
    * nativa de Electron (`Notification` del proceso main, cada hora — ver
-   * `src/main/index.ts`, sin equivalente en un servidor web): un banner
-   * descartable, calculado en el cliente contra el tablero ya cargado con
-   * la misma función pura que usaba el disparo original. Sin persistencia
-   * entre sesiones ni permisos del navegador — un rediseño real (cron +
-   * email/webhook) queda fuera de esta fase, ver "Riesgos residuales" del plan.
+   * `src/main/index.ts`, sin equivalente en un servidor web): calculado en
+   * el cliente contra el tablero ya cargado con la misma función pura que
+   * usaba el disparo original. Sin persistencia entre sesiones ni permisos
+   * del navegador — un rediseño real (cron + email/webhook) queda fuera de
+   * esta fase, ver "Riesgos residuales" del plan.
+   *
+   * Presentación (Batch AL, pedido explícito del usuario): antes un banner
+   * fijo que ocupaba espacio en pantalla siempre que hubiera avisos — ahora
+   * un icono de campanita con el conteo, que despliega un panel scrollable
+   * al hacer clic (mismo patrón de clic-afuera que `SelectorBuscable`).
    */
   const avisosVencimiento = useMemo(
     () => indicadoresQueRequierenNotificacion(filas, new Date().toISOString().slice(0, 10)),
     [filas]
   );
+
+  useEffect(() => {
+    if (!panelVencimientosAbierto) return;
+    const alClicFuera = (e: MouseEvent): void => {
+      if (contenedorVencimientos.current && !contenedorVencimientos.current.contains(e.target as Node)) {
+        setPanelVencimientosAbierto(false);
+      }
+    };
+    document.addEventListener('mousedown', alClicFuera);
+    return () => document.removeEventListener('mousedown', alClicFuera);
+  }, [panelVencimientosAbierto]);
 
   const cargarTablero = (): void => {
     void invocar('seguimiento:tablero', undefined)
@@ -905,23 +922,41 @@ export function SeguimientoPage(): React.JSX.Element {
       <Encabezado
         titulo="Seguimiento"
         descripcion="Estado de cumplimiento de los levantamientos por indicador. El estado se calcula dinámicamente con la fecha límite configurada."
+        acciones={
+          avisosVencimiento.length > 0 && (
+            <div style={{ position: 'relative' }} ref={contenedorVencimientos}>
+              <button
+                type="button"
+                className="boton sutil"
+                style={{ position: 'relative' }}
+                onClick={() => setPanelVencimientosAbierto((v) => !v)}
+                aria-label={`${avisosVencimiento.length} indicador${avisosVencimiento.length === 1 ? '' : 'es'} vencido${avisosVencimiento.length === 1 ? '' : 's'} o próximo${avisosVencimiento.length === 1 ? '' : 's'} a vencer`}
+                data-testid="campana-vencimientos"
+              >
+                <Icono nombre="campana" tamano={18} />
+                <span className="badge-campana">{avisosVencimiento.length}</span>
+              </button>
+              {panelVencimientosAbierto && (
+                <div
+                  className="tarjeta"
+                  style={{
+                    position: 'absolute', right: 0, top: '100%', zIndex: 30, width: 320, maxHeight: 280,
+                    overflowY: 'auto', marginTop: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 10
+                  }}
+                  data-testid="panel-vencimientos"
+                >
+                  <strong>{avisosVencimiento.length}</strong> indicador{avisosVencimiento.length === 1 ? '' : 'es'} vencido{avisosVencimiento.length === 1 ? '' : 's'} o próximo{avisosVencimiento.length === 1 ? '' : 's'} a vencer:
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    {avisosVencimiento.map((a) => (
+                      <li key={a.indicadorId}>{a.nombre} — {a.motivo === 'Vencido' ? 'vencido' : `vence ${a.fechaLimite}`}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )
+        }
       />
-      {!avisoDescartado && avisosVencimiento.length > 0 && (
-        <div className="aviso info" data-testid="aviso-vencimientos" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ flex: 1 }}>
-            <strong>{avisosVencimiento.length}</strong> indicador{avisosVencimiento.length === 1 ? '' : 'es'} vencido{avisosVencimiento.length === 1 ? '' : 's'} o próximo{avisosVencimiento.length === 1 ? '' : 's'} a vencer:
-            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {avisosVencimiento.slice(0, 5).map((a) => (
-                <li key={a.indicadorId}>{a.nombre} — {a.motivo === 'Vencido' ? 'vencido' : `vence ${a.fechaLimite}`}</li>
-              ))}
-              {avisosVencimiento.length > 5 && <li className="texto-suave">y {avisosVencimiento.length - 5} más…</li>}
-            </ul>
-          </div>
-          <button className="boton sutil" onClick={() => setAvisoDescartado(true)} aria-label="Descartar aviso" data-testid="descartar-aviso-vencimientos">
-            <Icono nombre="cerrar" tamano={13} />
-          </button>
-        </div>
-      )}
       <div className="filtros-chips">
         {PESTANAS.map((p) => (
           <button
