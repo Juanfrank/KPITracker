@@ -70,7 +70,8 @@ test('AC1: la fila de una categoría en Histórico > Árbol (Categoría) muestra
   await expect(pagina.getByTestId('historico-arbol-categoria-Subtotal AC')).toBeVisible();
 
   // Meta 100 en ambos: % de cumplimiento 60% y 80% — (60 + 80) / 2 = 70, promedio simple,
-  // sin config de medición para "Subtotal AC" (la operación matemática opera sobre el %, no el valor crudo).
+  // sin config de medición para "Subtotal AC" (la operación matemática opera sobre el %, no el
+  // valor crudo). Las celdas de subtotal muestran solo el resultado, en formato %.
   const periodoId = `${anio}-Mensual-01`;
-  await expect(pagina.getByTestId(`subtotal-Subtotal AC-${periodoId}`)).toHaveText('70');
+  await expect(pagina.getByTestId(`subtotal-Subtotal AC-${periodoId}`)).toHaveText('70%');
 });

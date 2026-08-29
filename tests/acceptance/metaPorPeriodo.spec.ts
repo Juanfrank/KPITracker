@@ -36,6 +36,9 @@ test('preparación: indicador con meta global, un resultado capturado, y una Met
 
   await pagina.getByTestId('nav-recoleccion').click();
   await pagina.getByTestId('recoleccion-indicador').selectOption({ label: 'Tasa de vacunación anual' });
+  // "Período" es un dropdown separado de "Fecha de corte" — sin elegirlo explícito, queda en
+  // el que el formulario preseleccione por defecto (no necesariamente Junio), ver Batch AB.
+  await pagina.getByTestId('recoleccion-periodo').selectOption({ label: 'Junio 2026' });
   await expect(pagina.getByTestId('grilla-captura')).toBeVisible();
   await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
   await pagina.getByTestId('celda-GENERAL').fill('82.5');
@@ -56,7 +59,7 @@ test('preparación: indicador con meta global, un resultado capturado, y una Met
   await pagina.waitForTimeout(700);
 });
 
-test('el histórico muestra "Meta: 95" (la Meta configurada del período), no la meta global 90', async () => {
+test('el histórico muestra "95" (la Meta configurada del período) en la celda de Meta, no la meta global 90', async () => {
   await pagina.getByTestId('nav-seguimiento').click();
   await pagina.getByTestId('pestana-historico').click();
   await expect(pagina.getByTestId('tabla-historico')).toBeVisible();
@@ -64,11 +67,13 @@ test('el histórico muestra "Meta: 95" (la Meta configurada del período), no la
   const fila = pagina.getByTestId('historico-Tasa de vacunación anual');
   await expect(fila).toBeVisible();
   await expect(fila).toContainText('82.5');
-  await expect(fila).toContainText('Meta: 95');
-  await expect(fila).not.toContainText('Meta: 90');
+  // Composición de la celda de período (pedido explícito del usuario): Resultado/Meta/% en una
+  // grilla, sin texto adicional — la celda de Meta muestra solo el valor, "95" (no "Meta: 95").
+  const periodoId = '2026-Mensual-06';
+  await expect(pagina.getByTestId(`historico-Tasa de vacunación anual-${periodoId}-meta`)).toHaveText('95');
 });
 
-test('un indicador sin Meta configurada para el período cae al escalar metaGlobal (compatibilidad): sin línea "Meta: X"', async () => {
+test('un indicador sin Meta configurada para el período cae al escalar metaGlobal (compatibilidad): la celda de Meta muestra "—"', async () => {
   await pagina.getByTestId('nav-indicadores').click();
   await pagina.getByTestId('nuevo-indicador').click();
   await pagina.getByTestId('indicador-nombre').fill('Sin meta por período');
@@ -79,6 +84,7 @@ test('un indicador sin Meta configurada para el período cae al escalar metaGlob
 
   await pagina.getByTestId('nav-recoleccion').click();
   await pagina.getByTestId('recoleccion-indicador').selectOption({ label: 'Sin meta por período' });
+  await pagina.getByTestId('recoleccion-periodo').selectOption({ label: 'Junio 2026' });
   await expect(pagina.getByTestId('grilla-captura')).toBeVisible();
   await pagina.getByTestId('recoleccion-fecha-corte').fill('2026-06-30');
   await pagina.getByTestId('celda-GENERAL').fill('40');
@@ -92,8 +98,9 @@ test('un indicador sin Meta configurada para el período cae al escalar metaGlob
   const fila = pagina.getByTestId('historico-Sin meta por período');
   await expect(fila).toBeVisible();
   await expect(fila).toContainText('40');
-  // Sin Meta configurada para el período no hay línea "Meta: X" — pero el
-  // cumplimiento (%) igual se calcula por compatibilidad contra metaGlobal (50): 40/50 = 80%.
-  await expect(fila).not.toContainText('Meta:');
-  await expect(fila).toContainText('80% de meta');
+  // Sin Meta configurada para el período la celda de Meta muestra "—" — pero el cumplimiento
+  // (%) igual se calcula por compatibilidad contra metaGlobal (50): 40/50 = 80%.
+  const periodoId = '2026-Mensual-06';
+  await expect(pagina.getByTestId(`historico-Sin meta por período-${periodoId}-meta`)).toHaveText('—');
+  await expect(pagina.getByTestId(`historico-Sin meta por período-${periodoId}-pct`)).toHaveText('80%');
 });

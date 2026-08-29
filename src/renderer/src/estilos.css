@@ -671,6 +671,39 @@ table.tabla tbody tr.fila-eliminada:hover {
   min-width: 90px !important;
 }
 
+/* Celda de resultado por período en Histórico (pedido explícito del usuario): Resultado y Meta
+   apilados a la izquierda, el % de cumplimiento fusionado a la derecha (alto completo) — sin
+   texto adicional, la posición ya identifica cada valor. */
+.grilla-resultado-periodo {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 84px;
+}
+
+.grilla-resultado-periodo .valor-resultado {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+}
+
+.grilla-resultado-periodo .valor-meta {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 0.85em;
+}
+
+.grilla-resultado-periodo .valor-porcentaje {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding-left: 8px;
+  border-left: 1px solid var(--borde);
+  font-weight: 700;
+  color: var(--info);
+}
+
 /* ============ Chips y estados ============ */
 .chip {
   display: inline-flex;

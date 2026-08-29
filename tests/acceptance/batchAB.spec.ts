@@ -75,5 +75,5 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   // Colapsado: la celda del grupo muestra el % de cumplimiento REAL (88/meta 100 = 88%),
   // calculado en vivo — no un placeholder ni un botón "Calcular" de por medio.
   const filaHistorico = pagina.getByTestId('historico-Indicador Dinámico AB');
-  await expect(filaHistorico.locator('td.columna-corte-colapsada')).toHaveText('88');
+  await expect(filaHistorico.locator('td.columna-corte-colapsada')).toHaveText('88%');
 });

@@ -430,13 +430,15 @@ function celdasSubtotal(
     // Un promedio de valores con decimales arrastra ruido de punto flotante (p. ej.
     // 85.44999999999999) — se redondea a 2 decimales solo para MOSTRAR, sin tocar el cálculo.
     const valor = agregado == null ? null : Math.round(agregado * 100) / 100;
+    // El subtotal agrega entradas que ya son % de cumplimiento (ver entradasSubtotal) — el
+    // resultado de la regla configurada (promedio, máximo...) sigue siendo un %, se muestra como tal.
     if (col.tipo === 'corte') {
       return (
         <td
           key={`c-${col.grupo.id}`} className="columna-corte-colapsada" style={{ fontWeight: 600 }}
           title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
         >
-          {valor == null ? <span className="texto-suave">—</span> : valor}
+          {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
         </td>
       );
     }
@@ -445,7 +447,7 @@ function celdasSubtotal(
         key={col.columna.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} style={{ fontWeight: 600 }}
         title="Subtotal — solo indicadores directos de este nodo" data-testid={`subtotal-${testIdNodo}-${col.columna.periodoId}`}
       >
-        {valor == null ? <span className="texto-suave">—</span> : valor}
+        {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
       </td>
     );
   });
@@ -705,24 +707,26 @@ export function SeguimientoPage(): React.JSX.Element {
           const valorMostrado = valor == null ? null : Math.round(valor * 100) / 100;
           return (
             <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada" title={`Valor agregado del corte para ${col.grupo.etiqueta}`}>
-              {valorMostrado == null ? <span className="texto-suave">—</span> : valorMostrado}
+              {valorMostrado == null ? <span className="texto-suave">—</span> : `${valorMostrado}%`}
             </td>
           );
         }
         const c = col.columna;
         const punto = h.puntos.find((p) => p.periodoId === c.periodoId);
+        // Composición pedida por el usuario: Resultado y Meta apilados a la izquierda, el % de
+        // cumplimiento fusionado a la derecha (ocupa el alto de ambas filas) — sin texto adicional
+        // ("Meta: ", "% de meta"), la posición en la grilla ya dice qué es cada valor.
         return (
           <td key={c.periodoId} className={col.grupo ? 'columna-corte-miembro' : undefined} data-testid={`historico-${h.nombre}-${c.periodoId}`}>
-            {punto?.valor == null ? <span className="texto-suave">—</span> : punto.valor}
-            {/* Meta configurada VIGENTE para este período específico (no el escalar Meta global) — Batch de mejora "grid de metas". */}
-            {punto?.metaPeriodo != null && (
-              <div className="texto-suave" style={{ fontSize: '0.85em' }} data-testid={`historico-${h.nombre}-${c.periodoId}-meta`}>
-                Meta: {punto.metaPeriodo}
-              </div>
-            )}
-            {punto?.cumplimientoPct != null && (
-              <div className="texto-suave" style={{ fontSize: '0.85em' }}>{punto.cumplimientoPct.toFixed(0)}% de meta</div>
-            )}
+            <div className="grilla-resultado-periodo">
+              <span className="valor-resultado">{punto?.valor ?? <span className="texto-suave">—</span>}</span>
+              <span className="valor-meta texto-suave" data-testid={`historico-${h.nombre}-${c.periodoId}-meta`}>
+                {punto?.metaPeriodo ?? '—'}
+              </span>
+              <span className="valor-porcentaje" data-testid={`historico-${h.nombre}-${c.periodoId}-pct`}>
+                {punto?.cumplimientoPct != null ? `${Math.round(punto.cumplimientoPct)}%` : <span className="texto-suave">—</span>}
+              </span>
+            </div>
           </td>
         );
       })}
