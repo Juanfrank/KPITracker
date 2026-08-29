@@ -48,12 +48,13 @@ interface FilaClasificable {
 
 /**
  * `filasDirectas` (Batch AC, pedido explícito del usuario — subtotales por
- * grupo): SOLO los indicadores propios de este nodo, sin bajar a
- * subcategorías/sub-equipos — mismo contrato no-recursivo que ya
- * documenta `ServicioMedicionCategoria` para "Medición por categoría", que
- * el subtotal de columna reutiliza. `categoriaId`/`equipoId` son el id
- * CRUDO (sin el prefijo de anidación bajo un equipo, ver `prefijoId` abajo)
- * — hace falta para resolver la configuración de medición del nodo.
+ * grupo): los indicadores propios de este nodo (sin bajar a
+ * subcategorías/sub-equipos). El subtotal MOSTRADO sí es recursivo (Batch
+ * AI, pedido explícito del usuario): agrega estas entradas directas MÁS el
+ * resultado ya agregado de cada hijo del mismo tipo, como si fuera un
+ * indicador más — ver `subtotalRecursivo`. `categoriaId`/`equipoId` son el
+ * id CRUDO (sin el prefijo de anidación bajo un equipo, ver `prefijoId`
+ * abajo) — hace falta para resolver la configuración de medición del nodo.
  */
 type NodoArbolSeguimiento<F extends FilaClasificable = FilaTablero> =
   | { tipo: 'equipo'; id: string; equipoId: string; nivel: number; nombre: string; contador: number; tieneHijos: boolean; filasDirectas: F[] }
@@ -224,6 +225,28 @@ function construirArbolEquipoSeguimiento<F extends FilaClasificable>(
  * reconstruir el árbol. Solo los nodos que agrupan (todo menos
  * `'indicador'`) son colapsables.
  */
+/**
+ * Envuelve un nodo del árbol junto a sus hijos DIRECTOS (misma lista plana
+ * DFS pre-order + `nivel` que consume `nodosVisibles`, reconstruyendo la
+ * relación padre→hijos explícita) — lo que necesita el subtotal recursivo
+ * (pedido explícito del usuario) para poder mirar los hijos de un nodo sin
+ * volver a recorrer el árbol completo cada vez.
+ */
+interface NodoConHijos<F extends FilaClasificable> { nodo: NodoArbolSeguimiento<F>; hijos: NodoConHijos<F>[]; }
+
+function construirArbolConHijos<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F>[]): Map<string, NodoConHijos<F>> {
+  const porId = new Map<string, NodoConHijos<F>>();
+  const pila: NodoConHijos<F>[] = [];
+  for (const nodo of nodos) {
+    const item: NodoConHijos<F> = { nodo, hijos: [] };
+    while (pila.length > 0 && pila[pila.length - 1]!.nodo.nivel >= nodo.nivel) pila.pop();
+    if (pila.length > 0) pila[pila.length - 1]!.hijos.push(item);
+    pila.push(item);
+    porId.set(nodo.id, item);
+  }
+  return porId;
+}
+
 function nodosVisibles<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F>[], colapsadas: Set<string>): NodoArbolSeguimiento<F>[] {
   const visibles: NodoArbolSeguimiento<F>[] = [];
   let ocultarDesdeNivel: number | null = null;
@@ -380,14 +403,10 @@ function encabezadosMiembroCorte(columnas: ColumnaGrillaHistorico[]): React.JSX.
 }
 
 /**
- * Subtotal de una fila de grupo (Equipo/Categoría/Subcategoría) en Histórico
- * (Batch AC, pedido explícito del usuario — lo que Y7 llamó "Medición por
- * categoría", reutilizado acá tal cual: la regla configurada de la
- * categoría, o promedio simple si no hay una — un equipo nunca tiene
- * configuración propia, así que siempre promedia). Solo entran los
- * indicadores DIRECTOS del nodo (`filasDirectas` — mismo contrato
- * no-recursivo que ya documenta `ServicioMedicionCategoria`: una
- * subcategoría/sub-equipo es su propio subtotal, no se sube al padre).
+ * Entradas DIRECTAS de un nodo (sus propios indicadores, sin bajar a
+ * hijos) para una columna — la regla configurada de la categoría (o
+ * promedio simple si no hay una; un equipo nunca tiene configuración
+ * propia) las agrega junto con las de los hijos, ver `subtotalRecursivo`.
  * `agregacionPropia` (desagregar por debajo de GENERAL) NO se soporta acá
  * — necesitaría los resultados de cada desagregación, que Histórico no
  * carga; limitación conocida, documentada, no silenciosa.
@@ -419,14 +438,41 @@ function entradasSubtotal(
   return entradas;
 }
 
-function celdasSubtotal(
-  filas: FilaHistorico[], columnas: ColumnaGrillaHistorico[], resultadosCorte: Map<string, number | null>,
-  config: ConfiguracionMedicionCategoria | undefined, testIdNodo: string
-): React.JSX.Element[] {
+/**
+ * Subtotal RECURSIVO de un nodo (Equipo/Categoría/Subcategoría) para una
+ * columna — cambio de comportamiento pedido explícito por el usuario: agrega
+ * tanto sus indicadores DIRECTOS como el resultado YA AGREGADO de cada hijo
+ * de su MISMO tipo de agrupación (subcategoría bajo categoría, sub-equipo
+ * bajo equipo) — una sola entrada por hijo, "como si se tratase de otro
+ * indicador" (peso 1 por defecto), no sus indicadores individuales uno a
+ * uno — eso duplicaría el conteo, porque el hijo ya los cuenta en su propio
+ * subtotal. Un hijo de OTRO tipo (el árbol de categorías anidado dentro de
+ * un nodo-equipo) se ignora acá a propósito: es la MISMA `filasDirectas`
+ * del equipo vista por otra dimensión, no un nivel jerárquico adicional.
+ */
+function subtotalRecursivo(
+  item: NodoConHijos<FilaHistorico>, col: ColumnaGrillaHistorico, resultadosCorte: Map<string, number | null>,
+  medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>
+): number | null {
+  const nodo = item.nodo;
+  if (nodo.tipo === 'indicador') return null;
+  const config = nodo.tipo === 'categoria' ? medicionCategoriaPorId.get(nodo.categoriaId) : undefined;
+  const entradas = entradasSubtotal(nodo.filasDirectas, col, resultadosCorte, config);
+  for (const hijo of item.hijos) {
+    if (hijo.nodo.tipo !== nodo.tipo) continue;
+    const valorHijo = subtotalRecursivo(hijo, col, resultadosCorte, medicionCategoriaPorId);
+    if (valorHijo != null) entradas.push({ valor: valorHijo, tieneMeta: true });
+  }
   const regla = config?.reglaGeneral ?? 'promedio';
+  return entradas.length > 0 ? agregar(regla, entradas) : null;
+}
+
+function celdasSubtotal(
+  item: NodoConHijos<FilaHistorico>, columnas: ColumnaGrillaHistorico[], resultadosCorte: Map<string, number | null>,
+  medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>, testIdNodo: string
+): React.JSX.Element[] {
   return columnas.map((col) => {
-    const entradas = entradasSubtotal(filas, col, resultadosCorte, config);
-    const agregado = entradas.length > 0 ? agregar(regla, entradas) : null;
+    const agregado = subtotalRecursivo(item, col, resultadosCorte, medicionCategoriaPorId);
     // Un promedio de valores con decimales arrastra ruido de punto flotante (p. ej.
     // 85.44999999999999) — se redondea a 2 decimales solo para MOSTRAR, sin tocar el cálculo.
     const valor = agregado == null ? null : Math.round(agregado * 100) / 100;
@@ -617,10 +663,14 @@ export function SeguimientoPage(): React.JSX.Element {
   const historicoVisibleLista = ordenarFilas(historicoVisible, ordenHistorico, VALOR_COLUMNA_HISTORICO);
   const arbol = nodosVisibles(construirArbolSeguimiento(visibles, categoriasCatalogo), colapsadasCategorias);
   const arbolEquipo = nodosVisibles(construirArbolEquipoSeguimiento(visibles, equiposCatalogo, categoriasCatalogo), colapsadasEquipo);
-  const arbolHistorico = nodosVisibles(construirArbolSeguimiento(historicoVisible, categoriasCatalogo), colapsadasCategorias);
-  const arbolEquipoHistorico = nodosVisibles(
-    construirArbolEquipoSeguimiento(historicoVisible, equiposCatalogo, categoriasCatalogo), colapsadasEquipo
-  );
+  // "Completo" (sin filtrar por colapso) — el subtotal recursivo necesita ver los hijos de un
+  // nodo aunque estén colapsados (ocultos de la tabla, pero igual deben contar en el cálculo).
+  const arbolHistoricoCompleto = construirArbolSeguimiento(historicoVisible, categoriasCatalogo);
+  const arbolHistorico = nodosVisibles(arbolHistoricoCompleto, colapsadasCategorias);
+  const nodosConHijosHistorico = construirArbolConHijos(arbolHistoricoCompleto);
+  const arbolEquipoHistoricoCompleto = construirArbolEquipoSeguimiento(historicoVisible, equiposCatalogo, categoriasCatalogo);
+  const arbolEquipoHistorico = nodosVisibles(arbolEquipoHistoricoCompleto, colapsadasEquipo);
+  const nodosConHijosEquipo = construirArbolConHijos(arbolEquipoHistoricoCompleto);
   const columnasPorId = new Map<string, { etiqueta: string; fechaInicio: string; fechaFin: string }>();
   for (const fila of historicoVisible) {
     for (const p of fila.puntos) columnasPorId.set(p.periodoId, { etiqueta: p.etiqueta, fechaInicio: p.fechaInicio, fechaFin: p.fechaFin });
@@ -1348,7 +1398,9 @@ export function SeguimientoPage(): React.JSX.Element {
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                       </td>
-                      {celdasSubtotal(nodo.filasDirectas, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId.get(nodo.categoriaId), nodo.nombre)}
+                      {celdasSubtotal(
+                        nodosConHijosHistorico.get(nodo.id)!, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, nodo.nombre
+                      )}
                     </tr>
                   );
                 }
@@ -1426,10 +1478,6 @@ export function SeguimientoPage(): React.JSX.Element {
                 }
                 const colapsada = colapsadasEquipo.has(nodo.id);
                 const etiqueta = nodo.tipo === 'categoria' ? etiquetaConPrefijo(nodo.prefijo, nodo.nombre) : nodo.nombre;
-                // Equipo: siempre promedio (sin config propia, ver `celdasSubtotal`). Categoría/subcategoría
-                // anidada bajo el equipo: reusa su config de "Medición por categoría" — sus `filasDirectas`
-                // ya vienen acotadas a este equipo (`construirNodosCategoria` recibe solo sus filas).
-                const configSubtotal = nodo.tipo === 'categoria' ? medicionCategoriaPorId.get(nodo.categoriaId) : undefined;
                 return (
                   <tr key={`g-${nodo.id}`} className="fila-categoria" data-testid={`historico-equipo-${nodo.tipo}-${nodo.nombre}`}>
                     <td className="celda-arbol">
@@ -1451,7 +1499,10 @@ export function SeguimientoPage(): React.JSX.Element {
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
                     </td>
-                    {celdasSubtotal(nodo.filasDirectas, columnasGrillaHistorico, resultadosCorte, configSubtotal, `${nodo.tipo}-${nodo.nombre}`)}
+                    {celdasSubtotal(
+                      nodosConHijosEquipo.get(nodo.id)!, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId,
+                      `${nodo.tipo}-${nodo.nombre}`
+                    )}
                   </tr>
                 );
               })}
