@@ -422,7 +422,10 @@ function celdasSubtotal(
   const regla = config?.reglaGeneral ?? 'promedio';
   return columnas.map((col) => {
     const entradas = entradasSubtotal(filas, col, resultadosCorte, config);
-    const valor = entradas.length > 0 ? agregar(regla, entradas) : null;
+    const agregado = entradas.length > 0 ? agregar(regla, entradas) : null;
+    // Un promedio de valores con decimales arrastra ruido de punto flotante (p. ej.
+    // 85.44999999999999) — se redondea a 2 decimales solo para MOSTRAR, sin tocar el cálculo.
+    const valor = agregado == null ? null : Math.round(agregado * 100) / 100;
     if (col.tipo === 'corte') {
       return (
         <td
