@@ -700,9 +700,12 @@ export function SeguimientoPage(): React.JSX.Element {
       {columnasGrillaHistorico.map((col) => {
         if (col.tipo === 'corte') {
           const valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`);
+          // Igual que en celdasSubtotal: agregar % de cumplimiento arrastra ruido de punto
+          // flotante (p. ej. 92.5925925925926) — se redondea a 2 decimales solo para MOSTRAR.
+          const valorMostrado = valor == null ? null : Math.round(valor * 100) / 100;
           return (
             <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada" title={`Valor agregado del corte para ${col.grupo.etiqueta}`}>
-              {valor == null ? <span className="texto-suave">—</span> : valor}
+              {valorMostrado == null ? <span className="texto-suave">—</span> : valorMostrado}
             </td>
           );
         }
