@@ -190,8 +190,12 @@ export function CortesMedicionPage(): React.JSX.Element {
               style={{ width: 'auto' }}
               data-testid="corte-acotar-100"
             />
-            Acotar resultado al 100%
+            Acotar cada resultado participante al 100%
           </label>
+          <p className="texto-suave" style={{ marginTop: 4, fontSize: 13 }}>
+            Acota el % de cumplimiento de cada período ANTES de agregarlo — un sobre-cumplimiento puntual
+            (p. ej. 150%) no "arrastra hacia arriba" el promedio combinado de los demás períodos del bucket.
+          </p>
 
           <Campo etiqueta="Reglas específicas por indicador">
             <div className="tabla-envoltura">

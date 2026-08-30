@@ -151,12 +151,21 @@ export class ServicioCortesMedicion extends ServicioBase {
           const meta = metaVigente?.valor ?? indicador.metaGlobal;
           const tieneMeta = meta != null;
           if (!tieneMeta || meta === 0) continue;
-          entradas.push({ valor: redondear2((valor / meta) * 100), tieneMeta });
+          // Aclaración explícita del usuario: `acotarAl100` acota cada resultado
+          // PARTICIPANTE (el % de cumplimiento de cada período que entra a la
+          // agregación) antes de agregar — no el valor ya agregado del bucket.
+          // Un período con sobre-cumplimiento (p. ej. 150%) deja de "arrastrar
+          // hacia arriba" a los demás períodos del mismo bucket cuando se
+          // promedia; con la regla `maximo` el resultado no cambia (100 sigue
+          // siendo el máximo posible ya acotado), pero con `promedio` sí, y es
+          // exactamente el caso que antes producía una discrepancia visible entre
+          // el Subtotal del corte y los % mensuales que lo componen.
+          const cumplimiento = redondear2((valor / meta) * 100);
+          entradas.push({ valor: corte.acotarAl100 ? Math.min(cumplimiento, 100) : cumplimiento, tieneMeta });
         }
         if (entradas.length === 0) continue;
 
-        let valorAgregado = agregar(regla, entradas);
-        if (corte.acotarAl100 && valorAgregado != null) valorAgregado = Math.min(valorAgregado, 100);
+        const valorAgregado = agregar(regla, entradas);
 
         resultados.push({
           indicadorId: indicador.id,

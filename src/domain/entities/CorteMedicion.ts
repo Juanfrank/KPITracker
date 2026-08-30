@@ -37,7 +37,14 @@ export interface CorteMedicion {
   reglasPorIndicador: Record<string, TipoAgregacion>;
   /** Si `true` (default), los períodos sin Meta configurada se EXCLUYEN por completo de la agregación (no solo se despesan, como ya hace `promedioPonderado`). */
   omitirPeriodosSinMeta: boolean;
-  /** Si `true` (default), el valor agregado final de cada bucket se acota a un máximo de 100 (pensado para indicadores medidos como porcentaje). */
+  /**
+   * Si `true` (default), cada resultado PARTICIPANTE de la agregación (el %
+   * de cumplimiento de cada período que entra al bucket, ver
+   * `ServicioCortesMedicion.calcular`) se acota a un máximo de 100 ANTES de
+   * agregarse — no el valor ya agregado del bucket. Pensado para indicadores
+   * medidos como porcentaje, donde un sobre-cumplimiento puntual no debería
+   * "arrastrar hacia arriba" el resultado combinado de los demás períodos.
+   */
   acotarAl100: boolean;
   readonly creadoEn: string;
   actualizadoEn: string;

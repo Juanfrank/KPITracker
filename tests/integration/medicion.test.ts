@@ -140,11 +140,11 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     expect(q1?.valorAgregado).toBe(15); // (10% + 20%) / 2 — meta 100 en ambos, % coincide con el valor crudo
   });
 
-  it('acotarAl100 acota el valor agregado final de cada bucket a un máximo de 100', async () => {
+  it('acotarAl100, con la regla "maximo", acota cada período participante a 100 antes de agregar — el máximo de dos períodos sobre 100 sigue dando 100', async () => {
     const indicador = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Sobre 100' }), valores: [] });
     await sembrarResultado(indicador.id, '2020-Mensual-01', 120);
     await sembrarResultado(indicador.id, '2020-Mensual-02', 150);
-    // Meta 100 en ambos: % de cumplimiento 120% y 150% — el máximo (150%) se acota a 100.
+    // Meta 100 en ambos: % de cumplimiento 120% y 150% — cada uno se acota a 100 antes del máximo.
     await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-01', 100));
     await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-02', 100));
 
@@ -152,6 +152,23 @@ describe('ServicioCortesMedicion (Batch Y, rediseñado por periodicidad en Batch
     const resultados = await app.manejadores['cortesMedicion:calcular']({ id: corte.id });
     const q1 = resultados.find((r) => r.indicadorId === indicador.id && r.periodoId === '2020-Trimestral-01');
     expect(q1?.valorAgregado).toBe(100);
+  });
+
+  it('acotarAl100 acota cada resultado PARTICIPANTE antes de agregar, no el resultado ya agregado — con "promedio" da un valor distinto de acotar el promedio final', async () => {
+    // Aclaración explícita del usuario: un sobre-cumplimiento puntual no debe "arrastrar hacia
+    // arriba" el promedio de los demás períodos del bucket — se acota ANTES de promediar.
+    const indicador = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Mixto sobre y bajo 100' }), valores: [] });
+    await sembrarResultado(indicador.id, '2020-Mensual-01', 50);  // 50% de cumplimiento
+    await sembrarResultado(indicador.id, '2020-Mensual-02', 200); // 200% de cumplimiento
+    await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-01', 100));
+    await app.manejadores['metas:guardar'](metaPuntual(indicador.id, '2020-Mensual-02', 100));
+
+    const corte = await app.manejadores['cortesMedicion:guardar'](corteBase({ nombre: 'Mixto acotado', reglaGeneral: 'promedio', acotarAl100: true }));
+    const resultados = await app.manejadores['cortesMedicion:calcular']({ id: corte.id });
+    const q1 = resultados.find((r) => r.indicadorId === indicador.id && r.periodoId === '2020-Trimestral-01');
+    // Acotando ANTES de promediar: (50 + min(200,100)) / 2 = 75. Si se acotara el promedio ya
+    // agregado (comportamiento anterior, incorrecto), (50+200)/2=125 → acotado a 100 — muy distinto.
+    expect(q1?.valorAgregado).toBe(75);
   });
 
   it('rechaza guardar con nombre duplicado, regla inválida o periodicidad inválida (Mensual no es un corte válido)', async () => {
