@@ -1,16 +1,21 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'node:path';
 
+// `import.meta.dirname` (no `__dirname`, este archivo es ESM) — Vite avisa
+// que el `configLoader: 'native'` que será default más adelante no soporta
+// `__dirname` en el config.
+const raiz = import.meta.dirname;
+
 export default defineConfig({
   resolve: {
     alias: {
-      '@domain': resolve(__dirname, 'src/domain'),
-      '@application': resolve(__dirname, 'src/application'),
-      '@infrastructure': resolve(__dirname, 'src/infrastructure'),
-      '@shared': resolve(__dirname, 'src/shared'),
-      '@renderer': resolve(__dirname, 'src/renderer'),
-      '@composicion': resolve(__dirname, 'src/composicion'),
-      '@server': resolve(__dirname, 'src/server')
+      '@domain': resolve(raiz, 'src/domain'),
+      '@application': resolve(raiz, 'src/application'),
+      '@infrastructure': resolve(raiz, 'src/infrastructure'),
+      '@shared': resolve(raiz, 'src/shared'),
+      '@renderer': resolve(raiz, 'src/renderer'),
+      '@composicion': resolve(raiz, 'src/composicion'),
+      '@server': resolve(raiz, 'src/server')
     }
   },
   test: {

@@ -15,16 +15,21 @@ import { resolve } from 'node:path';
  * sirve el bundle) y hace que la cookie de sesión viaje igual en los dos
  * entornos.
  */
+// `import.meta.dirname` (no `__dirname`, este archivo es ESM) — Vite 8 avisa
+// que el `configLoader: 'native'` que será default más adelante no soporta
+// `__dirname` en el config.
+const raiz = import.meta.dirname;
+
 const alias = {
-  '@domain': resolve(__dirname, 'src/domain'),
-  '@application': resolve(__dirname, 'src/application'),
-  '@infrastructure': resolve(__dirname, 'src/infrastructure'),
-  '@shared': resolve(__dirname, 'src/shared'),
-  '@renderer': resolve(__dirname, 'src/renderer')
+  '@domain': resolve(raiz, 'src/domain'),
+  '@application': resolve(raiz, 'src/application'),
+  '@infrastructure': resolve(raiz, 'src/infrastructure'),
+  '@shared': resolve(raiz, 'src/shared'),
+  '@renderer': resolve(raiz, 'src/renderer')
 };
 
 export default defineConfig({
-  root: resolve(__dirname, 'src/renderer'),
+  root: resolve(raiz, 'src/renderer'),
   plugins: [react()],
   resolve: { alias },
   server: {
@@ -33,7 +38,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: resolve(__dirname, 'out/renderer'),
+    outDir: resolve(raiz, 'out/renderer'),
     emptyOutDir: true
   }
 });
