@@ -341,3 +341,38 @@ describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / valida
     expect(captura.filas.find((f) => f.claveDesagregacion === 'GENERAL')?.estadoValidacion).toBe('Pendiente');
   });
 });
+
+describe('Orígenes automáticos — origenes.listar redacta credenciales sin "origenes.administrar" (audit de seguridad, HIGH-2)', () => {
+  it('un usuario sin permiso alguno recibe la configuración SIN la contraseña; quien administra orígenes (o el admin) la recibe completa', async () => {
+    const admin = await clienteAdmin();
+    const origen = await admin.origenes.guardar.mutate({
+      id: '', nombre: 'SQL de prueba', tipo: 'SQL', descripcion: '',
+      configuracion: { servidor: 'db.interno.local', usuario: 'sa', contrasena: 'SuperSecreta123' },
+      parametrosGenerales: [], activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    } as never) as { id: string };
+
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'sin.permisos.origenes', nombreCompleto: 'Sin Permisos', password: 'contrasenaSegura1' });
+    const clienteSinPermisos = crearCliente(fetchConCookies());
+    await clienteSinPermisos.auth.login.mutate({ nombreUsuario: 'sin.permisos.origenes', password: 'contrasenaSegura1' });
+
+    const rol = await admin.roles.guardar.mutate({
+      id: '', nombre: 'Administra orígenes', ambito: 'general', permisos: ['origenes.administrar'], esSistema: false, creadoEn: '', actualizadoEn: ''
+    });
+    await admin.usuarios.crear.mutate({
+      nombreUsuario: 'con.permiso.origenes', nombreCompleto: 'Con Permiso', password: 'contrasenaSegura1', rolGeneralId: rol.id
+    });
+    const clienteConPermiso = crearCliente(fetchConCookies());
+    await clienteConPermiso.auth.login.mutate({ nombreUsuario: 'con.permiso.origenes', password: 'contrasenaSegura1' });
+
+    const [comoSinPermisos] = await clienteSinPermisos.origenes.listar.query();
+    expect(comoSinPermisos!.id).toBe(origen.id);
+    expect(comoSinPermisos!.configuracion.contrasena).toBeUndefined();
+    expect(comoSinPermisos!.configuracion.servidor).toBe('db.interno.local'); // el resto de la config (no secreta) sigue viajando, para poblar dropdowns
+
+    const [comoConPermiso] = await clienteConPermiso.origenes.listar.query();
+    expect(comoConPermiso!.configuracion.contrasena).toBe('SuperSecreta123');
+
+    const [comoAdmin] = await admin.origenes.listar.query();
+    expect(comoAdmin!.configuracion.contrasena).toBe('SuperSecreta123');
+  });
+});

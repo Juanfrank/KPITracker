@@ -41,11 +41,11 @@ export function crearRouterAdjuntos(aplicacion: AplicacionServidor): Router {
 
   router.get('/:id/descarga', async (req, res) => {
     try {
-      const adjunto = await aplicacion.infra.adjuntos.obtener(req.params.id);
-      if (!adjunto) {
-        res.status(404).json({ error: 'El adjunto ya no existe.' });
-        return;
-      }
+      // Pasa por `ServicioAdjuntos.obtenerConPermiso` (no el repo crudo) —
+      // exige el mismo permiso 'ver' que gatea el indicador dueño del
+      // levantamiento, ver el docstring de `ServicioAdjuntos` (audit de
+      // seguridad, HIGH-1).
+      const adjunto = await aplicacion.servicios.adjuntos.obtenerConPermiso(req.params.id);
       res.download(aplicacion.infra.archivos.rutaAbsoluta(adjunto.rutaRelativa), adjunto.nombreArchivo);
     } catch (error) {
       responderError(res, error);

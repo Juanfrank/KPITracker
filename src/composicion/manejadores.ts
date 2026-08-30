@@ -89,7 +89,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     infra.periodicidades, infra.usuarios, infra.categorias, infra.equipos, infra.atributos, reglasFechaLimite,
     infra.metas
   );
-  const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos);
+  const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos, infra.indicadores, infra.usuarios);
   const automatizacion = new ServicioAutomatizacionIndicador(
     ctx, infra.automatizaciones, infra.indicadores, infra.origenesAutomaticos, infra.atributos,
     infra.listas, infra.periodicidades, infra.conectorOrigen
