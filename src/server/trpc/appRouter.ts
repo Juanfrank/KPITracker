@@ -22,6 +22,7 @@ import { usuariosRouter } from './routers/usuarios';
 import { rolesRouter } from './routers/roles';
 import { cortesMedicionRouter } from './routers/cortesMedicion';
 import { medicionCategoriaRouter } from './routers/medicionCategoria';
+import { medicionEquipoRouter } from './routers/medicionEquipo';
 import { simulacionRouter } from './routers/simulacion';
 import { workspacesRouter } from './routers/workspaces';
 import { rolesGlobalesRouter } from './routers/rolesGlobales';
@@ -56,6 +57,7 @@ export const appRouter = router({
   roles: rolesRouter,
   cortesMedicion: cortesMedicionRouter,
   medicionCategoria: medicionCategoriaRouter,
+  medicionEquipo: medicionEquipoRouter,
   simulacion: simulacionRouter,
   workspaces: workspacesRouter,
   rolesGlobales: rolesGlobalesRouter

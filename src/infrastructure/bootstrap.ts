@@ -7,8 +7,9 @@ import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex, CorteMedicionRepositoryKnex,
   CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MedicionCategoriaRepositoryKnex,
-  MetaRepositoryKnex, PermisoCategoriaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex,
-  RolGlobalRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
+  MedicionEquipoRepositoryKnex, MetaRepositoryKnex, PermisoCategoriaRepositoryKnex, PermisoExcepcionalRepositoryKnex,
+  ReglaRepositoryKnex, ResultadoRepositoryKnex, RolGlobalRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex,
+  UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
 import { aCategoria, aWorkspace, deCategoria, deWorkspace } from './repositories/mapeos';
@@ -50,6 +51,7 @@ export interface Infraestructura {
   workspaces: CatalogoRepositoryKnex<Workspace>;
   cortesMedicion: CorteMedicionRepositoryKnex;
   medicionCategoria: MedicionCategoriaRepositoryKnex;
+  medicionEquipo: MedicionEquipoRepositoryKnex;
   permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
   /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
   permisosCategoria: PermisoCategoriaRepositoryKnex;
@@ -114,6 +116,7 @@ export async function crearInfraestructura(
   const workspaces = new CatalogoRepositoryKnex(knex, 'workspaces', aWorkspace, deWorkspace, true);
   const cortesMedicion = new CorteMedicionRepositoryKnex(knex);
   const medicionCategoria = new MedicionCategoriaRepositoryKnex(knex);
+  const medicionEquipo = new MedicionEquipoRepositoryKnex(knex);
   const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
   const permisosCategoria = new PermisoCategoriaRepositoryKnex(knex);
   const credencialesGeneradas = new CredencialGeneradaRepositoryKnex(knex);
@@ -158,6 +161,7 @@ export async function crearInfraestructura(
     workspaces,
     cortesMedicion,
     medicionCategoria,
+    medicionEquipo,
     permisosExcepcionales,
     permisosCategoria,
     credencialesGeneradas,

@@ -1,8 +1,9 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, ConfiguracionMedicionCategoria,
-  CorteMedicion, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista,
-  MapeoColumna, Meta, OrigenAutomatico, ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio,
-  Resultado, ResultadoHistorial, Rol, RolGlobal, Sesion, TratamientoIndicadorMedicion, Usuario, Workspace
+  ConfiguracionMedicionEquipo, CorteMedicion, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Equipo,
+  Indicador, Levantamiento, Lista, MapeoColumna, Meta, OrigenAutomatico, ParametroDinamico, ParametroGeneral,
+  RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Rol, RolGlobal, Sesion, TratamientoIndicadorMedicion,
+  Usuario, Workspace
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -480,12 +481,28 @@ export const aMedicionCategoria = (f: Fila): ConfiguracionMedicionCategoria => (
   categoriaId: s(f.categoria_id),
   reglaGeneral: s(f.regla_general) as ConfiguracionMedicionCategoria['reglaGeneral'],
   tratamientoIndicadores: json<Record<string, TratamientoIndicadorMedicion>>(f.tratamiento_indicadores, {}),
+  acotarAl100: b(f.acotar_al_100),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deMedicionCategoria = (c: ConfiguracionMedicionCategoria): Fila => ({
   categoria_id: c.categoriaId, regla_general: c.reglaGeneral,
-  tratamiento_indicadores: JSON.stringify(c.tratamientoIndicadores), actualizado_en: c.actualizadoEn
+  tratamiento_indicadores: JSON.stringify(c.tratamientoIndicadores), acotar_al_100: c.acotarAl100,
+  actualizado_en: c.actualizadoEn
+});
+
+export const aMedicionEquipo = (f: Fila): ConfiguracionMedicionEquipo => ({
+  equipoId: s(f.equipo_id),
+  reglaGeneral: s(f.regla_general) as ConfiguracionMedicionEquipo['reglaGeneral'],
+  tratamientoIndicadores: json<Record<string, TratamientoIndicadorMedicion>>(f.tratamiento_indicadores, {}),
+  acotarAl100: b(f.acotar_al_100),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deMedicionEquipo = (c: ConfiguracionMedicionEquipo): Fila => ({
+  equipo_id: c.equipoId, regla_general: c.reglaGeneral,
+  tratamiento_indicadores: JSON.stringify(c.tratamientoIndicadores), acotar_al_100: c.acotarAl100,
+  actualizado_en: c.actualizadoEn
 });
 
 export const aSesion = (f: Fila): Sesion => ({

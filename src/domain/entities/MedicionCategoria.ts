@@ -33,6 +33,15 @@ export interface ConfiguracionMedicionCategoria {
   readonly categoriaId: string;
   reglaGeneral: TipoAgregacion;
   tratamientoIndicadores: Record<string, TratamientoIndicadorMedicion>;
+  /**
+   * Mismo criterio que `CorteMedicion.acotarAl100` (pedido explícito del
+   * usuario: "la misma configuración de resumen" en categorías y equipos,
+   * default encendido): cada resultado PARTICIPANTE de la agregación de esta
+   * categoría — el % de cumplimiento de cada indicador directo, y el
+   * subtotal ya calculado de cada subcategoría — se acota a un máximo de 100
+   * ANTES de combinarse con `reglaGeneral`, no el valor ya agregado.
+   */
+  acotarAl100: boolean;
   actualizadoEn: string;
 }
 

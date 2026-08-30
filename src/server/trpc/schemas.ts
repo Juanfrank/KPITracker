@@ -55,4 +55,10 @@ export const objetoConCategoriaId = z.custom<any>(
   { message: 'Se esperaba un objeto con un campo "categoriaId" (string).' }
 );
 
+/** `medicionEquipo.guardar`/`ConfiguracionMedicionEquipo` — clave propia es `equipoId`, no `id`. */
+export const objetoConEquipoId = z.custom<any>(
+  (valor) => esObjeto(valor) && typeof valor.equipoId === 'string',
+  { message: 'Se esperaba un objeto con un campo "equipoId" (string).' }
+);
+
 /* eslint-enable @typescript-eslint/no-explicit-any */

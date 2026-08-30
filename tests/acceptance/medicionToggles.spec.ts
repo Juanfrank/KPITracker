@@ -179,7 +179,7 @@ test('AT3 — peso: promedio ponderado da más influencia a un indicador, y vuel
   await expect(pagina.getByTestId(`subtotal-AT Hija-${periodoId}`)).toHaveText('80%');
 });
 
-test('AT4 — nivel EQUIPO: el subtotal recursivo de un equipo/sub-equipo es siempre promedio simple, independiente de cualquier configuración de categoría', async () => {
+test('AT4 — nivel EQUIPO: sin config propia guardada, el subtotal recursivo de un equipo/sub-equipo cae al default (promedio simple), independiente de cualquier configuración de categoría', async () => {
   await pagina.getByTestId('nav-admin').click();
   await pagina.getByTestId('nuevo-equipo').click();
   await pagina.getByTestId('equipo-nombre').fill('AT Equipo Padre');

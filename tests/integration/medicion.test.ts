@@ -217,7 +217,8 @@ describe('ServicioMedicionCategoria (Batch Y)', () => {
   it('"excluir" saca a ese indicador del cálculo', async () => {
     const { categoria, a } = await categoriaConDosIndicadores();
     await app.manejadores['medicionCategoria:guardar']({
-      categoriaId: categoria.id, reglaGeneral: 'promedio', tratamientoIndicadores: { [a.id]: { excluir: true } }, actualizadoEn: ''
+      categoriaId: categoria.id, reglaGeneral: 'promedio', tratamientoIndicadores: { [a.id]: { excluir: true } },
+      acotarAl100: true, actualizadoEn: ''
     });
     const resultado = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
     expect(resultado.valorAgregado).toBe(30); // solo B
@@ -227,10 +228,66 @@ describe('ServicioMedicionCategoria (Batch Y)', () => {
   it('un peso mayor da más influencia a ese indicador en el promedio', async () => {
     const { categoria, a } = await categoriaConDosIndicadores();
     await app.manejadores['medicionCategoria:guardar']({
-      categoriaId: categoria.id, reglaGeneral: 'promedio', tratamientoIndicadores: { [a.id]: { peso: 3 } }, actualizadoEn: ''
+      categoriaId: categoria.id, reglaGeneral: 'promedio', tratamientoIndicadores: { [a.id]: { peso: 3 } },
+      acotarAl100: true, actualizadoEn: ''
     });
     // (10*3 + 30*1) / (3+1) = 60/4 = 15
     const resultado = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
     expect(resultado.valorAgregado).toBe(15);
+  });
+
+  it('acotarAl100 (default true) acota cada indicador PARTICIPANTE antes de agregar, no el resultado ya combinado', async () => {
+    // Mismo criterio que ServicioCortesMedicion — pedido explícito del usuario: la misma
+    // configuración de resumen en categorías/equipos que ya tenía Cortes.
+    const categoria = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Mixta', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const a = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Bajo 100', categoria: categoria.id }), valores: [] });
+    const b = await app.manejadores['indicadores:guardar']({ indicador: indicadorBase({ nombre: 'Sobre 100', categoria: categoria.id }), valores: [] });
+    await sembrarResultado(a.id, '2020-Mensual-01', 50); // 50% de cumplimiento
+    await sembrarResultado(b.id, '2020-Mensual-01', 200); // 200% de cumplimiento
+    await app.manejadores['metas:guardar'](metaPuntual(a.id, '2020-Mensual-01', 100));
+    await app.manejadores['metas:guardar'](metaPuntual(b.id, '2020-Mensual-01', 100));
+
+    // Default de una categoría nueva (sin guardar configuración explícita): acotarAl100 = true.
+    const resultado = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
+    // Acotando ANTES de promediar: (50 + min(200,100)) / 2 = 75. Acotar el promedio ya agregado
+    // (comportamiento incorrecto que se corrigió) daría (50+200)/2=125 → acotado a 100.
+    expect(resultado.valorAgregado).toBe(75);
+
+    await app.manejadores['medicionCategoria:guardar']({
+      categoriaId: categoria.id, reglaGeneral: 'promedio', tratamientoIndicadores: {}, acotarAl100: false, actualizadoEn: ''
+    });
+    const sinAcotar = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
+    expect(sinAcotar.valorAgregado).toBe(125); // (50+200)/2, sin acotar
+  });
+});
+
+describe('ServicioMedicionEquipo (misma configuración de resumen que ServicioMedicionCategoria, extendida a Equipos)', () => {
+  it('sin configuración guardada, usa el default (promedio, sin excepciones, acotarAl100 true)', async () => {
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Ventas', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    const config = await app.manejadores['medicionEquipo:obtener']({ equipoId: equipo.id });
+    expect(config).toEqual({ equipoId: equipo.id, reglaGeneral: 'promedio', tratamientoIndicadores: {}, acotarAl100: true, actualizadoEn: '' });
+  });
+
+  it('guardar valida que el equipo exista y persiste la configuración (regla, tratamiento, acotarAl100)', async () => {
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Operaciones', descripcion: '', activo: true, eliminado: false, padreId: null, creadoEn: '', actualizadoEn: ''
+    });
+    const guardado = await app.manejadores['medicionEquipo:guardar']({
+      equipoId: equipo.id, reglaGeneral: 'maximo', tratamientoIndicadores: { 'ind-1': { peso: 2 } }, acotarAl100: false, actualizadoEn: ''
+    });
+    expect(guardado.reglaGeneral).toBe('maximo');
+    expect(guardado.acotarAl100).toBe(false);
+    const releido = await app.manejadores['medicionEquipo:obtener']({ equipoId: equipo.id });
+    expect(releido).toEqual(guardado);
+
+    const inexistente = await app.manejadores['medicionEquipo:guardar']({
+      equipoId: 'no-existe', reglaGeneral: 'promedio', tratamientoIndicadores: {}, acotarAl100: true, actualizadoEn: ''
+    }).catch((e) => e);
+    expect((inexistente as Error & { detalles?: string[] }).detalles?.join(' ')).toMatch(/equipo/);
   });
 });

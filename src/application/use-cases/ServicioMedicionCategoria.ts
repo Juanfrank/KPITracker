@@ -12,7 +12,7 @@ import type { ContextoAplicacion } from './base';
 import { permisosActuales } from './contextoUsuario';
 
 const CONFIG_POR_DEFECTO = (categoriaId: string): ConfiguracionMedicionCategoria => ({
-  categoriaId, reglaGeneral: 'promedio', tratamientoIndicadores: {}, actualizadoEn: ''
+  categoriaId, reglaGeneral: 'promedio', tratamientoIndicadores: {}, acotarAl100: true, actualizadoEn: ''
 });
 
 /**
@@ -131,7 +131,13 @@ export class ServicioMedicionCategoria extends ServicioBase {
       }
       if (meta == null || meta === 0) continue;
 
-      entradas.push({ valor: redondear2((valor / meta) * 100), tieneMeta: true, peso: tratamiento?.peso });
+      // Mismo criterio que `ServicioCortesMedicion.calcular` (pedido explícito del usuario, misma
+      // configuración de resumen): `acotarAl100` acota cada resultado PARTICIPANTE antes de
+      // agregar, no el resultado ya combinado.
+      const cumplimiento = redondear2((valor / meta) * 100);
+      entradas.push({
+        valor: config.acotarAl100 ? Math.min(cumplimiento, 100) : cumplimiento, tieneMeta: true, peso: tratamiento?.peso
+      });
     }
 
     return {

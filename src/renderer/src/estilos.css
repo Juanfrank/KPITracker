@@ -618,6 +618,29 @@ table.tabla th {
   white-space: nowrap;
 }
 
+/* Batch BB — mismo bug que el `scroll-padding-bottom` de `.panel-lateral .cuerpo`, ahora contra
+   el <th> sticky por ARRIBA: al hacer scroll hasta una fila que queda justo debajo del encabezado
+   (p. ej. la primera fila visible tras abrir un panel largo), el navegador la desplaza solo hasta
+   que asoma, sin dejar el alto del <th> pegajoso como margen — quedaba tapada por él. Cubre la
+   navegación estándar por teclado (Tab), que sí respeta `scroll-margin`/`scroll-padding` — el
+   scroll programático de bajo nivel (p. ej. el que dispara Playwright) no los respeta, de ahí el
+   override de abajo que resuelve la causa real dentro de paneles laterales. */
+table.tabla tbody tr {
+  scroll-margin-top: 40px;
+}
+
+/* Fix real del bug de arriba: dentro de un panel lateral las tablas son listas cortas (config,
+   tratamiento por indicador, vínculos) — el <th> pegajoso no aporta nada ahí (nunca hay tanto
+   contenido como para perderlo de vista) y es la causa de la superposición, porque el scroll de
+   bajo nivel que usa Playwright (`DOM.scrollIntoViewIfNeeded` vía CDP) no respeta `scroll-margin`/
+   `scroll-padding` — deja la fila apenas asomando justo debajo del encabezado, que al ser sticky
+   queda pintado ENCIMA de esa fila y le roba los clics. Sin sticky acá, el problema desaparece de
+   raíz. Las tablas grandes de Seguimiento/Histórico (fuera de un panel, con encabezados
+   ordenables) conservan el sticky — ahí sí importa para listas largas. */
+.panel-lateral table.tabla th {
+  position: static;
+}
+
 /* Batch AN (pedido explícito del usuario): gridline vertical en todas las tablas — antes
    solo había separación horizontal (`border-bottom`). Sin borde en la última columna, para no
    duplicar el borde derecho de `.tabla-envoltura`. */
@@ -643,6 +666,18 @@ table.tabla td.celda-arbol {
  * el resto de pantallas donde nunca hay suficiente contenido para disparar el encogimiento.
  */
 .tabla-envoltura.evita-colapso-flex {
+  flex-shrink: 0;
+}
+
+/* Batch BB (bug real encontrado al agregar medición por equipo): el `.cuerpo` de un panel lateral
+   es TAMBIÉN un flex column con overflow — la misma "automatic minimum size" de flexbox que
+   motivó `.evita-colapso-flex` arriba aplica igual acá. Antes ningún panel tenía contenido
+   suficiente para gatillarlo; agregar el bloque de medición (categoría/equipo) alcanzó ese punto,
+   colapsando la tabla de abajo ("Indicadores de este equipo") a ~2px y produciendo overlaps de
+   clic imposibles de depurar por CSS de scroll (`scroll-margin`/`scroll-padding`, que el scroll de
+   bajo nivel que usa Playwright tampoco respeta). Regla general (no solo la tabla que lo gatilló)
+   para que ninguna tabla futura dentro de un panel repita el problema sin acordarse de la clase. */
+.panel-lateral .cuerpo .tabla-envoltura {
   flex-shrink: 0;
 }
 
@@ -999,12 +1034,22 @@ table.tabla tfoot td {
 }
 
 .panel-lateral .cuerpo {
-  padding: 18px 20px;
+  padding: 18px 20px 90px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
   flex: 1;
+  /* Batch BB (bug real encontrado al agregar medición por equipo — un panel con contenido
+     suficiente para necesitar scroll dejaba su última fila justo debajo del footer fijo
+     "Cancelar/Guardar"): el `padding-bottom` de arriba (90px, > el alto real del footer, ~61px)
+     es la parte que realmente importa — agranda el alto de scroll VERDADERO del contenedor, así
+     que cualquier fila cabe con margen real por debajo, sin importar qué mecanismo de scroll la
+     lleve a la vista. `scroll-padding-*` (hint de scroll-snap) NO alcanza acá: el scroll de bajo
+     nivel que usa Playwright (`DOM.scrollIntoViewIfNeeded` vía CDP) lo ignora — verificado
+     empíricamente; solo un padding real resuelve el problema para todo mecanismo de scroll. */
+  scroll-padding-bottom: 72px;
+  scroll-padding-top: 40px;
 }
 
 .panel-lateral footer {

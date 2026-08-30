@@ -1,8 +1,8 @@
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, ConfiguracionMedicionCategoria,
-  CorteMedicion, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista, EntidadAdjunto, Equipo, Indicador,
-  Lista, Meta, OrigenAutomatico, ParametroDinamico, Periodo, RegistroAuditoria, ReglaNegocio, ResultadoCorteMedicion,
-  ResultadoHistorial, ResultadoMedicionCategoria, Rol
+  ConfiguracionMedicionEquipo, CorteMedicion, DefinicionPeriodicidad, ConfiguracionGeneral, ElementoLista,
+  EntidadAdjunto, Equipo, Indicador, Lista, Meta, OrigenAutomatico, ParametroDinamico, Periodo, RegistroAuditoria,
+  ReglaNegocio, ResultadoCorteMedicion, ResultadoHistorial, ResultadoMedicionCategoria, Rol
 } from '@domain/index';
 import type { FiltroAuditoria, ResultadoPrueba, ResultadoTabular, ValorAtributoEntidad } from '@application/ports/index';
 import type { DatosCaptura, ResultadoObtencionAutomatica } from '@application/use-cases/ServicioRecoleccion';
@@ -190,6 +190,10 @@ export interface CanalesIpc {
   'medicionCategoria:guardar': { req: ConfiguracionMedicionCategoria; res: ConfiguracionMedicionCategoria };
   /** Agrega los valores de los indicadores DIRECTOS de la categoría para un período dado. */
   'medicionCategoria:calcular': { req: { categoriaId: string; periodoId: string }; res: ResultadoMedicionCategoria };
+
+  /** Mismo contrato que `medicionCategoria:*` para un equipo — ver docstring de `ConfiguracionMedicionEquipo`. */
+  'medicionEquipo:obtener': { req: { equipoId: string }; res: ConfiguracionMedicionEquipo | null };
+  'medicionEquipo:guardar': { req: ConfiguracionMedicionEquipo; res: ConfiguracionMedicionEquipo };
 
   'portable:exportar': { req: void; res: { json: string } };
   'portable:importar': { req: { json: string }; res: { advertencias: string[] } };

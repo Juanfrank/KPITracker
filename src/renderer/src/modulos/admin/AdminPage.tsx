@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
-  AmbitoPermiso, Categoria, ConfiguracionMedicionCategoria, Equipo, FuenteParametroGeneral, Indicador,
-  OrigenAutomatico, ParametroGeneral, Rol, RolGlobal, TipoAgregacion, TipoOrigenAutomatico,
+  AmbitoPermiso, Categoria, ConfiguracionMedicionCategoria, ConfiguracionMedicionEquipo, Equipo, FuenteParametroGeneral,
+  Indicador, OrigenAutomatico, ParametroGeneral, Rol, RolGlobal, TipoAgregacion, TipoOrigenAutomatico,
   TratamientoIndicadorMedicion
 } from '@domain/index';
 import {
@@ -470,8 +470,23 @@ function SeccionCategorias(): React.JSX.Element {
                 Combina el valor de todos los indicadores DIRECTOS de esta categoría en un solo resultado.
                 Las subcategorías se calculan aparte, con su propia configuración.
               </span>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={medicion.acotarAl100}
+                  onChange={(e) => setMedicion({ ...medicion, acotarAl100: e.target.checked })}
+                  data-testid="categoria-medicion-acotar-100"
+                />
+                Acotar cada resultado participante al 100%
+              </label>
+              <span className="texto-suave">
+                Acota el % de cumplimiento de cada indicador directo (y el subtotal ya calculado de cada
+                subcategoría) ANTES de combinarlo — un sobre-cumplimiento puntual no "arrastra hacia arriba" el
+                resultado combinado. Mismo criterio que en Cortes de medición.
+              </span>
               {indicadores.filter((i) => i.categoria === editando.id).length > 0 && (
-                <div className="tabla-envoltura" style={{ marginTop: 8 }}>
+                <div className="tabla-envoltura evita-colapso-flex" style={{ marginTop: 8 }}>
                   <table className="tabla">
                     <thead>
                       <tr><th>Indicador</th><th>Excluir</th><th>Peso</th><th>Agregación propia</th></tr>
@@ -544,6 +559,14 @@ function SeccionEquipos(): React.JSX.Element {
   const [errores, setErrores] = useState<string[]>([]);
   const [responsables, setResponsables] = useState<UsuarioAsignable[]>([]);
   const [indicadores, setIndicadores] = useState<Indicador[]>([]);
+  // Medición por equipo (mismo criterio que Categorías, pedido explícito del usuario): solo
+  // tiene sentido para un equipo ya creado — se carga al abrir el editor de una fila existente.
+  const [medicion, setMedicion] = useState<ConfiguracionMedicionEquipo | null>(null);
+
+  useEffect(() => {
+    if (!editando?.id) { setMedicion(null); return; }
+    void trpcClient.medicionEquipo.obtener.query({ equipoId: editando.id }).then(setMedicion);
+  }, [editando?.id]);
 
   const cargar = useCallback(async (): Promise<void> => {
     setItems(await invocar('equipos:listar', { incluirEliminados: mostrarEliminados }));
@@ -566,9 +589,24 @@ function SeccionEquipos(): React.JSX.Element {
 
   const guardar = async (): Promise<void> => {
     if (!editando) return;
-    await invocar('equipos:guardar', editando);
+    const guardado = await invocar('equipos:guardar', editando);
+    if (medicion) await trpcClient.medicionEquipo.guardar.mutate({ ...medicion, equipoId: guardado.id });
     setEditando(null);
     await cargar();
+  };
+
+  const establecerTratamientoEquipo = (indicadorId: string, cambios: Partial<TratamientoIndicadorMedicion>): void => {
+    if (!medicion) return;
+    const actual = medicion.tratamientoIndicadores[indicadorId] ?? {};
+    const nuevo: TratamientoIndicadorMedicion = { ...actual, ...cambios };
+    const limpio: TratamientoIndicadorMedicion = {};
+    if (nuevo.excluir) limpio.excluir = true;
+    if (nuevo.peso != null && nuevo.peso !== 1) limpio.peso = nuevo.peso;
+    if (nuevo.agregacionPropia) limpio.agregacionPropia = nuevo.agregacionPropia;
+    const tratamientoIndicadores = { ...medicion.tratamientoIndicadores };
+    if (Object.keys(limpio).length === 0) delete tratamientoIndicadores[indicadorId];
+    else tratamientoIndicadores[indicadorId] = limpio;
+    setMedicion({ ...medicion, tratamientoIndicadores });
   };
 
   const eliminar = async (id: string): Promise<void> => {
@@ -729,6 +767,88 @@ function SeccionEquipos(): React.JSX.Element {
             Activo
           </label>
 
+          {editando.id && medicion && (
+            <Campo etiqueta="Medición — ¿cómo se calcula el resultado del período de este equipo?">
+              <select
+                value={medicion.reglaGeneral}
+                onChange={(e) => setMedicion({ ...medicion, reglaGeneral: e.target.value as TipoAgregacion })}
+                data-testid="equipo-medicion-regla-general"
+              >
+                {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+              </select>
+              <span className="texto-suave">
+                Combina el valor de todos los indicadores de este equipo (directos e indirectos vía responsable) en
+                un solo resultado. Los sub-equipos se calculan aparte, con su propia configuración.
+              </span>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={medicion.acotarAl100}
+                  onChange={(e) => setMedicion({ ...medicion, acotarAl100: e.target.checked })}
+                  data-testid="equipo-medicion-acotar-100"
+                />
+                Acotar cada resultado participante al 100%
+              </label>
+              <span className="texto-suave">
+                Acota el % de cumplimiento de cada indicador (y el subtotal ya calculado de cada sub-equipo) ANTES
+                de combinarlo — un sobre-cumplimiento puntual no "arrastra hacia arriba" el resultado combinado.
+                Mismo criterio que en Categorías y en Cortes de medición.
+              </span>
+              {indicadores.filter((i) => vinculoDe(i) !== 'ninguno').length > 0 && (
+                <div className="tabla-envoltura evita-colapso-flex" style={{ marginTop: 8 }}>
+                  <table className="tabla">
+                    <thead>
+                      <tr><th>Indicador</th><th>Excluir</th><th>Peso</th><th>Agregación propia</th></tr>
+                    </thead>
+                    <tbody>
+                      {indicadores.filter((i) => vinculoDe(i) !== 'ninguno').map((i) => {
+                        const t = medicion.tratamientoIndicadores[i.id] ?? {};
+                        return (
+                          <tr key={i.id}>
+                            <td>{i.nombre}</td>
+                            <td>
+                              <input
+                                type="checkbox"
+                                style={{ width: 'auto' }}
+                                checked={t.excluir ?? false}
+                                onChange={(e) => establecerTratamientoEquipo(i.id, { excluir: e.target.checked })}
+                                data-testid={`equipo-medicion-excluir-${i.nombre}`}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                style={{ width: 70 }}
+                                value={t.peso ?? 1}
+                                onChange={(e) => establecerTratamientoEquipo(i.id, { peso: Number(e.target.value) })}
+                                data-testid={`equipo-medicion-peso-${i.nombre}`}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={t.agregacionPropia ?? ''}
+                                onChange={(e) =>
+                                  establecerTratamientoEquipo(i.id, { agregacionPropia: (e.target.value || undefined) as TipoAgregacion | undefined })
+                                }
+                                data-testid={`equipo-medicion-propia-${i.nombre}`}
+                              >
+                                <option value="">— valor general —</option>
+                                {OPCIONES_AGREGACION.map((op) => <option key={op} value={op}>{ETIQUETAS_AGREGACION[op]}</option>)}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Campo>
+          )}
+
           {editando.id && (
             <>
               <h4 style={{ margin: '16px 0 8px' }}>Indicadores de este equipo</h4>
@@ -736,7 +856,7 @@ function SeccionEquipos(): React.JSX.Element {
                 Directo: vinculado explícitamente a este equipo. Indirecto: vía el responsable asignado — cámbielo
                 desde el indicador o su responsable, no aquí.
               </p>
-              <div className="tabla-envoltura">
+              <div className="tabla-envoltura evita-colapso-flex">
                 <table className="tabla">
                   <thead>
                     <tr>

@@ -6,6 +6,7 @@ import type {
   Categoria,
   ConfiguracionGeneral,
   ConfiguracionMedicionCategoria,
+  ConfiguracionMedicionEquipo,
   CorteMedicion,
   DefinicionPeriodicidad,
   ElementoLista,
@@ -290,6 +291,13 @@ export interface IMedicionCategoriaRepository {
   obtener(categoriaId: string): Promise<ConfiguracionMedicionCategoria | null>;
   listar(): Promise<ConfiguracionMedicionCategoria[]>;
   guardar(config: ConfiguracionMedicionCategoria): Promise<void>;
+}
+
+/** Mismo contrato que `IMedicionCategoriaRepository`, para `ConfiguracionMedicionEquipo` — ver docstring de la entidad. */
+export interface IMedicionEquipoRepository {
+  obtener(equipoId: string): Promise<ConfiguracionMedicionEquipo | null>;
+  listar(): Promise<ConfiguracionMedicionEquipo[]>;
+  guardar(config: ConfiguracionMedicionEquipo): Promise<void>;
 }
 
 /** Un permiso concedido individualmente a un usuario, fuera de su rol nativo — ver docstring de `Usuario`. */

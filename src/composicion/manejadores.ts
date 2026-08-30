@@ -18,6 +18,7 @@ import { ServicioAutomatizacionIndicador } from '@application/use-cases/Servicio
 import { ServicioRoles } from '@application/use-cases/ServicioRoles';
 import { ServicioCortesMedicion } from '@application/use-cases/ServicioCortesMedicion';
 import { ServicioMedicionCategoria } from '@application/use-cases/ServicioMedicionCategoria';
+import { ServicioMedicionEquipo } from '@application/use-cases/ServicioMedicionEquipo';
 import { LIMITE_FILAS_PRUEBA_ORIGEN } from '@shared/ipc';
 
 /**
@@ -107,6 +108,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const medicionCategoria = new ServicioMedicionCategoria(
     ctx, infra.medicionCategoria, infra.categorias, infra.indicadores, infra.resultados, infra.metas, infra.periodicidades, infra.usuarios
   );
+  const medicionEquipo = new ServicioMedicionEquipo(ctx, infra.medicionEquipo, infra.equipos);
   const auditoria = new ServicioAuditoria(infra.auditoria, infra.indicadores, infra.usuarios);
 
   const manejadores: Aplicacion['manejadores'] = {
@@ -235,6 +237,9 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     'medicionCategoria:obtener': ({ categoriaId }) => medicionCategoria.obtener(categoriaId),
     'medicionCategoria:guardar': (config) => medicionCategoria.guardar(config),
     'medicionCategoria:calcular': ({ categoriaId, periodoId }) => medicionCategoria.calcular(categoriaId, periodoId),
+
+    'medicionEquipo:obtener': ({ equipoId }) => medicionEquipo.obtener(equipoId),
+    'medicionEquipo:guardar': (config) => medicionEquipo.guardar(config),
 
     'portable:exportar': async () => ({ json: await infra.configPortable.exportar() }),
     'portable:importar': ({ json }) => infra.configPortable.importar(json),

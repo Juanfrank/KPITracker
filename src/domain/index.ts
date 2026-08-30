@@ -23,6 +23,7 @@ export * from './entities/Permiso';
 export * from './entities/Rol';
 export * from './entities/CorteMedicion';
 export * from './entities/MedicionCategoria';
+export * from './entities/MedicionEquipo';
 export * from './entities/Workspace';
 export * from './entities/PermisoGlobal';
 export * from './entities/RolGlobal';

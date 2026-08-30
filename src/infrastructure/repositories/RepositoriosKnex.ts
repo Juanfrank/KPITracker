@@ -3,26 +3,27 @@ import { randomUUID } from 'node:crypto';
 import { compararRoles } from '@domain/index';
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, ConfiguracionMedicionCategoria,
-  CorteMedicion, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista,
-  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Rol, RolGlobal, Sesion,
-  Usuario
+  ConfiguracionMedicionEquipo, CorteMedicion, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Equipo,
+  Indicador, Levantamiento, Lista, Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado,
+  ResultadoHistorial, Rol, RolGlobal, Sesion, Usuario
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
   IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICorteMedicionRepository,
   ICredencialGeneradaRepository, IIndicadorRepository, IListaRepository, IMedicionCategoriaRepository,
-  IMetaRepository, IPermisoCategoriaRepository, IPermisoExcepcionalRepository, IReglaRepository,
-  IResultadoRepository, IRolGlobalRepository, IRolRepository, ISesionRepository, IUsuarioRepository,
-  PermisoCategoria, ResumenPeriodo, ValorAtributoEntidad
+  IMedicionEquipoRepository, IMetaRepository, IPermisoCategoriaRepository, IPermisoExcepcionalRepository,
+  IReglaRepository, IResultadoRepository, IRolGlobalRepository, IRolRepository, ISesionRepository,
+  IUsuarioRepository, PermisoCategoria, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
   aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aCorteMedicion,
-  aDefinicionPeriodicidad, aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMedicionCategoria, aMeta,
-  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, aRol, aRolGlobal, aSesion, aUsuario,
+  aDefinicionPeriodicidad, aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMedicionCategoria, aMedicionEquipo,
+  aMeta, aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, aRol, aRolGlobal, aSesion, aUsuario,
   deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deCorteMedicion,
-  deDefinicionPeriodicidad, deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMedicionCategoria, deMeta,
-  deOrigenAutomatico, deRegla, deResultado, deResultadoHistorial, deRol, deRolGlobal, deSesion, deUsuario
+  deDefinicionPeriodicidad, deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMedicionCategoria,
+  deMedicionEquipo, deMeta, deOrigenAutomatico, deRegla, deResultado, deResultadoHistorial, deRol, deRolGlobal,
+  deSesion, deUsuario
 } from './mapeos';
 
 /**
@@ -546,6 +547,21 @@ export class MedicionCategoriaRepositoryKnex extends RepositorioBase implements 
 
   async guardar(config: ConfiguracionMedicionCategoria): Promise<void> {
     await upsert(this.knex, 'configuracion_medicion_categoria', { categoria_id: config.categoriaId }, deMedicionCategoria(config));
+  }
+}
+
+export class MedicionEquipoRepositoryKnex extends RepositorioBase implements IMedicionEquipoRepository {
+  async obtener(equipoId: string): Promise<ConfiguracionMedicionEquipo | null> {
+    const fila = await this.knex('configuracion_medicion_equipo').where({ equipo_id: equipoId }).first();
+    return fila ? aMedicionEquipo(fila) : null;
+  }
+
+  async listar(): Promise<ConfiguracionMedicionEquipo[]> {
+    return (await this.knex('configuracion_medicion_equipo').select('*')).map(aMedicionEquipo);
+  }
+
+  async guardar(config: ConfiguracionMedicionEquipo): Promise<void> {
+    await upsert(this.knex, 'configuracion_medicion_equipo', { equipo_id: config.equipoId }, deMedicionEquipo(config));
   }
 }
 
