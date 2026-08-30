@@ -1,6 +1,8 @@
 import { ID_ROL_ADMINISTRADOR } from '@domain/index';
 import type { ContextoPermisos } from '@domain/index';
-import type { IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository } from '@application/ports/index';
+import type {
+  IPermisoCategoriaRepository, IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository
+} from '@application/ports/index';
 
 /**
  * Resuelve el `ContextoPermisos` (dominio, `PoliticaPermisos.ts`) de un
@@ -27,7 +29,9 @@ export class ServicioPermisos {
     private readonly roles: IRolRepository,
     private readonly permisosExcepcionales: IPermisoExcepcionalRepository,
     /** Batch AX (fundación SaaS): resuelve `Usuario.rolGlobalId` → `ContextoPermisos.permisosGlobales`. */
-    private readonly rolesGlobales: IRolGlobalRepository
+    private readonly rolesGlobales: IRolGlobalRepository,
+    /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+    private readonly permisosCategoria: IPermisoCategoriaRepository
   ) {}
 
   async resolver(usuarioId: string): Promise<ContextoPermisos> {
@@ -40,16 +44,25 @@ export class ServicioPermisos {
         permisosGenerales: new Set(),
         permisosEquipo: new Set(),
         permisosExcepcionales: new Set(),
-        permisosGlobales: new Set()
+        permisosGlobales: new Set(),
+        permisosPorCategoria: new Map()
       };
     }
 
-    const [rolGeneral, rolEquipo, excepcionales, rolGlobal] = await Promise.all([
+    const [rolGeneral, rolEquipo, excepcionales, rolGlobal, porCategoria] = await Promise.all([
       usuario.rolGeneralId ? this.roles.obtener(usuario.rolGeneralId) : Promise.resolve(null),
       usuario.equipoId && usuario.rolEquipoId ? this.roles.obtener(usuario.rolEquipoId) : Promise.resolve(null),
       this.permisosExcepcionales.listarPorUsuario(usuarioId),
-      usuario.rolGlobalId ? this.rolesGlobales.obtener(usuario.rolGlobalId) : Promise.resolve(null)
+      usuario.rolGlobalId ? this.rolesGlobales.obtener(usuario.rolGlobalId) : Promise.resolve(null),
+      this.permisosCategoria.listarPorUsuario(usuarioId)
     ]);
+
+    const permisosPorCategoria = new Map<string, Set<string>>();
+    for (const p of porCategoria) {
+      const conjunto = permisosPorCategoria.get(p.categoriaId) ?? new Set<string>();
+      conjunto.add(p.permiso);
+      permisosPorCategoria.set(p.categoriaId, conjunto);
+    }
 
     return {
       esAdministrador: usuario.esAdministrador || rolGeneral?.id === ID_ROL_ADMINISTRADOR,
@@ -58,7 +71,8 @@ export class ServicioPermisos {
       permisosGenerales: new Set(rolGeneral?.ambito === 'general' ? rolGeneral.permisos : []),
       permisosEquipo: new Set(rolEquipo?.ambito === 'equipo' ? rolEquipo.permisos : []),
       permisosExcepcionales: new Set(excepcionales),
-      permisosGlobales: new Set(rolGlobal?.permisos ?? [])
+      permisosGlobales: new Set(rolGlobal?.permisos ?? []),
+      permisosPorCategoria
     };
   }
 }

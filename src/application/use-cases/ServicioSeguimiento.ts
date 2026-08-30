@@ -1,6 +1,6 @@
 import {
-  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, equipoEfectivo,
-  metaVigenteParaPeriodo, puedeVerIndicador, redondear2
+  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, cadenaAncestros,
+  equipoEfectivo, metaVigenteParaPeriodo, puedeVerIndicador, redondear2
 } from '@domain/index';
 import type {
   Atributo, Categoria, DeadlineRuleRegistry, DefinicionPeriodicidad, ElementoLista, Equipo, EstadoPeriodo,
@@ -205,7 +205,11 @@ export class ServicioSeguimiento extends ServicioBase {
     // tablero (en vez de un error) — ver `puedeVerIndicador`.
     const permisos = permisosActuales();
     const visibles = indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, {
+        equipoEfectivoId: equipoEfectivo(i, usuariosPorId),
+        responsable: i.responsable,
+        categoriasEfectivas: i.categoria ? cadenaAncestros(i.categoria, categorias) : []
+      })
     );
 
     for (const indicador of visibles) {
@@ -264,9 +268,15 @@ export class ServicioSeguimiento extends ServicioBase {
   async detalle(indicadorId: string): Promise<DetalleSeguimiento | null> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) return null;
-    const responsable = indicador.responsable ? await this.usuariosRepo.obtener(indicador.responsable) : null;
+    const [responsable, categorias] = await Promise.all([
+      indicador.responsable ? this.usuariosRepo.obtener(indicador.responsable) : Promise.resolve(null),
+      this.categoriasRepo.listar()
+    ]);
     const usuariosPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
-    if (!puedeVerIndicador(permisosActuales(), { equipoEfectivoId: equipoEfectivo(indicador, usuariosPorId), responsable: indicador.responsable })) {
+    const categoriasEfectivas = indicador.categoria ? cadenaAncestros(indicador.categoria, categorias) : [];
+    if (!puedeVerIndicador(permisosActuales(), {
+      equipoEfectivoId: equipoEfectivo(indicador, usuariosPorId), responsable: indicador.responsable, categoriasEfectivas
+    })) {
       return null;
     }
     const config = await this.configuracion.obtener();
@@ -325,7 +335,11 @@ export class ServicioSeguimiento extends ServicioBase {
     const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     const visibles = indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, {
+        equipoEfectivoId: equipoEfectivo(i, usuariosPorId),
+        responsable: i.responsable,
+        categoriasEfectivas: i.categoria ? cadenaAncestros(i.categoria, categorias) : []
+      })
     );
 
     for (const indicador of visibles) {

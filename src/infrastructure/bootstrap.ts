@@ -7,7 +7,7 @@ import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex, CorteMedicionRepositoryKnex,
   CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MedicionCategoriaRepositoryKnex,
-  MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex,
+  MetaRepositoryKnex, PermisoCategoriaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex,
   RolGlobalRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
@@ -51,6 +51,8 @@ export interface Infraestructura {
   cortesMedicion: CorteMedicionRepositoryKnex;
   medicionCategoria: MedicionCategoriaRepositoryKnex;
   permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
+  /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+  permisosCategoria: PermisoCategoriaRepositoryKnex;
   credencialesGeneradas: CredencialGeneradaRepositoryKnex;
   exportacion: ExportAnaliticoService;
   configPortable: ConfigPortableService;
@@ -113,6 +115,7 @@ export async function crearInfraestructura(
   const cortesMedicion = new CorteMedicionRepositoryKnex(knex);
   const medicionCategoria = new MedicionCategoriaRepositoryKnex(knex);
   const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
+  const permisosCategoria = new PermisoCategoriaRepositoryKnex(knex);
   const credencialesGeneradas = new CredencialGeneradaRepositoryKnex(knex);
   const exportacion = new ExportAnaliticoService(knex, rutas, configuracion, periodicidades, usuarios, categorias);
   const configPortable = new ConfigPortableService(
@@ -156,6 +159,7 @@ export async function crearInfraestructura(
     cortesMedicion,
     medicionCategoria,
     permisosExcepcionales,
+    permisosCategoria,
     credencialesGeneradas,
     exportacion,
     configPortable,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etiquetaConPrefijo, sinCiclo } from '@domain/entities/Catalogos';
+import { cadenaAncestros, etiquetaConPrefijo, sinCiclo } from '@domain/entities/Catalogos';
 
 describe('etiquetaConPrefijo', () => {
   it('antepone el prefijo cuando ambos están presentes', () => {
@@ -46,5 +46,27 @@ describe('sinCiclo', () => {
   it('acepta reasignar un elemento a un tío/hermano no relacionado', () => {
     const todos = [cat('a', null), cat('b', 'a'), cat('c', 'a'), cat('d', 'c')];
     expect(sinCiclo('b', 'd', todos)).toBe(true);
+  });
+});
+
+describe('cadenaAncestros', () => {
+  const cat = (id: string, padreId: string | null): { id: string; padreId: string | null } => ({ id, padreId });
+
+  it('una raíz sin padre devuelve solo su propio id', () => {
+    expect(cadenaAncestros('a', [cat('a', null)])).toEqual(['a']);
+  });
+
+  it('devuelve la cadena completa hasta la raíz, empezando por el propio id', () => {
+    const todos = [cat('a', null), cat('b', 'a'), cat('c', 'b')];
+    expect(cadenaAncestros('c', todos)).toEqual(['c', 'b', 'a']);
+  });
+
+  it('un id ausente del catálogo devuelve solo ese id', () => {
+    expect(cadenaAncestros('x', [cat('a', null)])).toEqual(['x']);
+  });
+
+  it('corta ante un ciclo preexistente en los datos en vez de colgarse', () => {
+    const todos = [cat('a', 'b'), cat('b', 'a')];
+    expect(cadenaAncestros('a', todos)).toEqual(['a', 'b']);
   });
 });

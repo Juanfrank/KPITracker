@@ -6,7 +6,7 @@ import type {
   TratamientoIndicadorMedicion
 } from '@domain/index';
 import {
-  ETIQUETAS_AGREGACION, OPCIONES_AGREGACION, agruparPermisosParaGrid,
+  ETIQUETAS_AGREGACION, OPCIONES_AGREGACION, PERMISOS_POR_CATEGORIA, agruparPermisosParaGrid,
   ejemploParaFuente, equipoEfectivo, sinCiclo
 } from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
@@ -1376,6 +1376,8 @@ interface UsuarioFila {
   activo: boolean;
   eliminado: boolean;
   permisosExcepcionales: string[];
+  /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+  permisosPorCategoria: Array<{ categoriaId: string; permisos: string[] }>;
 }
 
 function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; correo: string; password: string; esAdministrador: boolean } {
@@ -1407,6 +1409,8 @@ function SeccionUsuarios(): React.JSX.Element {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [rolesGlobales, setRolesGlobales] = useState<RolGlobal[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoriaPermisoSeleccionada, setCategoriaPermisoSeleccionada] = useState('');
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [creando, setCreando] = useState<ReturnType<typeof usuarioNuevoVacio> | null>(null);
   const [editando, setEditando] = useState<UsuarioFila | null>(null);
@@ -1419,16 +1423,18 @@ function SeccionUsuarios(): React.JSX.Element {
   >([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    const [usuarios, listaRoles, listaEquipos, listaRolesGlobales] = await Promise.all([
+    const [usuarios, listaRoles, listaEquipos, listaRolesGlobales, listaCategorias] = await Promise.all([
       trpcClient.usuarios.listar.query({ incluirEliminados: mostrarEliminados }),
       trpcClient.roles.listar.query(),
       invocar('equipos:listar', undefined),
-      trpcClient.rolesGlobales.listar.query()
+      trpcClient.rolesGlobales.listar.query(),
+      invocar('categorias:listar', undefined)
     ]);
     setItems(usuarios);
     setRoles(listaRoles);
     setEquipos(listaEquipos);
     setRolesGlobales(listaRolesGlobales);
+    setCategorias(listaCategorias);
   }, [mostrarEliminados]);
 
   useEffect(() => {
@@ -1472,6 +1478,13 @@ function SeccionUsuarios(): React.JSX.Element {
       }
       await trpcClient.usuarios.establecerEquipo.mutate({ id: editando.id, equipoId: editando.equipoId, rolEquipoId: editando.rolEquipoId });
       await trpcClient.usuarios.establecerPermisosExcepcionales.mutate({ id: editando.id, permisos: editando.permisosExcepcionales });
+      // RBAC granular por categoría: una llamada por categoría con permisos editados en esta sesión
+      // (`establecerParaCategoria` reemplaza el conjunto completo de ESA categoría, no acumula).
+      await Promise.all(
+        editando.permisosPorCategoria.map((p) =>
+          trpcClient.usuarios.establecerPermisosCategoria.mutate({ id: editando.id, categoriaId: p.categoriaId, permisos: p.permisos })
+        )
+      );
       await trpcClient.usuarios.establecerActivo.mutate({ id: editando.id, activo: editando.activo });
       // Batch AX: siempre `adminProcedure` — mismo criterio que `establecerPermisosExcepcionales`.
       await trpcClient.usuarios.establecerRolGlobal.mutate({ id: editando.id, rolGlobalId: editando.rolGlobalId });
@@ -1520,6 +1533,23 @@ function SeccionUsuarios(): React.JSX.Element {
       permisosExcepcionales: activo
         ? editando.permisosExcepcionales.filter((p) => p !== permiso)
         : [...editando.permisosExcepcionales, permiso]
+    });
+  };
+
+  /** RBAC granular por categoría: permisos actualmente concedidos para `categoriaId` (vacío si nunca se le concedió ninguno). */
+  const permisosDeCategoria = (categoriaId: string): string[] =>
+    editando?.permisosPorCategoria.find((p) => p.categoriaId === categoriaId)?.permisos ?? [];
+
+  const alternarPermisoCategoria = (categoriaId: string, permiso: string): void => {
+    if (!editando) return;
+    const actuales = permisosDeCategoria(categoriaId);
+    const nuevos = actuales.includes(permiso) ? actuales.filter((p) => p !== permiso) : [...actuales, permiso];
+    const existe = editando.permisosPorCategoria.some((p) => p.categoriaId === categoriaId);
+    setEditando({
+      ...editando,
+      permisosPorCategoria: existe
+        ? editando.permisosPorCategoria.map((p) => (p.categoriaId === categoriaId ? { ...p, permisos: nuevos } : p))
+        : [...editando.permisosPorCategoria, { categoriaId, permisos: nuevos }]
     });
   };
 
@@ -1586,7 +1616,7 @@ function SeccionUsuarios(): React.JSX.Element {
               <tr
                 key={u.id}
                 className={u.eliminado ? 'fila-eliminada' : undefined}
-                onClick={() => { if (!u.eliminado) setEditando(u); }}
+                onClick={() => { if (!u.eliminado) { setEditando(u); setCategoriaPermisoSeleccionada(''); } }}
                 style={{ cursor: u.eliminado ? 'default' : 'pointer' }}
                 data-testid={`usuario-${u.nombreUsuario}`}
               >
@@ -1830,6 +1860,58 @@ function SeccionUsuarios(): React.JSX.Element {
               testidPrefijo="usuario-permiso-excepcional-"
             />
             <span className="texto-suave">Concedidos fuera de su rol nativo, además de lo que ya le dé su rol general/de equipo.</span>
+          </Campo>
+          <Campo etiqueta="Permisos por categoría">
+            <span className="texto-suave">
+              Concede ver/registrar/validar resultados solo para los indicadores de UNA categoría (y sus subcategorías) —
+              independiente de equipo o rol. Elija una categoría para ver o editar sus permisos.
+            </span>
+            <select
+              value={categoriaPermisoSeleccionada}
+              onChange={(e) => setCategoriaPermisoSeleccionada(e.target.value)}
+              data-testid="usuario-permiso-categoria-selector"
+              style={{ marginTop: 6 }}
+            >
+              <option value="">— Elegir categoría —</option>
+              {ordenarJerarquia(categorias.filter((c) => !c.eliminado)).map((c) => (
+                <option key={c.id} value={c.id}>{'—'.repeat(c.nivel)} {c.nombre}</option>
+              ))}
+            </select>
+            {categoriaPermisoSeleccionada && (
+              <table className="tabla" style={{ marginTop: 8 }}>
+                <thead>
+                  <tr>
+                    <th>Permiso</th>
+                    <th style={{ textAlign: 'center', width: 80 }}>Concedido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PERMISOS_POR_CATEGORIA.map((p) => (
+                    <tr key={p.id}>
+                      <td style={{ fontSize: 13 }}>{p.etiqueta}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          style={{ width: 'auto' }}
+                          checked={permisosDeCategoria(categoriaPermisoSeleccionada).includes(p.id)}
+                          onChange={() => alternarPermisoCategoria(categoriaPermisoSeleccionada, p.id)}
+                          data-testid={`usuario-permiso-categoria-${p.id}`}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {editando.permisosPorCategoria.filter((p) => p.permisos.length > 0).length > 0 && (
+              <span className="texto-suave" style={{ display: 'block', marginTop: 6 }}>
+                Categorías con permisos concedidos:{' '}
+                {editando.permisosPorCategoria
+                  .filter((p) => p.permisos.length > 0)
+                  .map((p) => categorias.find((c) => c.id === p.categoriaId)?.nombre ?? p.categoriaId)
+                  .join(', ')}
+              </span>
+            )}
           </Campo>
         </PanelLateral>
       )}

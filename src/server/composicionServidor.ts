@@ -53,11 +53,13 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
     hasher, infra.usuarios, infra.sesiones, infra.ids, infra.reloj, HORAS_EXPIRACION_SESION, limitadorIntentos
   );
   const usuarios = new ServicioUsuarios(
-    infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales,
+    infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales, infra.permisosCategoria,
     infra.equipos, infra.indicadores, infra.credencialesGeneradas, ID_EQUIPO_GENERAL,
     infra.rolesGlobales, infra.workspaces
   );
-  const permisos = new ServicioPermisos(infra.usuarios, infra.roles, infra.permisosExcepcionales, infra.rolesGlobales);
+  const permisos = new ServicioPermisos(
+    infra.usuarios, infra.roles, infra.permisosExcepcionales, infra.rolesGlobales, infra.permisosCategoria
+  );
   const ctxAplicacion = { auditoria: infra.auditoria, reloj: infra.reloj, ids: infra.ids, exportacion: infra.exportacion };
   const workspaces = new ServicioCatalogoGenerico(
     ctxAplicacion, infra.workspaces, 'Workspace',

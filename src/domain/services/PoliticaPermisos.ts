@@ -18,6 +18,16 @@ export interface ContextoPermisos {
   /** Permisos concedidos individualmente, fuera del rol nativo — aplican como si fueran generales O de equipo (ver `puedeSobreIndicador`). */
   permisosExcepcionales: ReadonlySet<string>;
   /**
+   * RBAC granular por categoría: categoriaId → conjunto de permisos de
+   * ámbito `'categoria'` concedidos al usuario PARA ESA categoría concreta
+   * (ver `IPermisoCategoriaRepository`/`usuarios_permisos_categoria`). Un
+   * permiso concedido sobre una categoría padre no se "expande" acá — es
+   * `puedeSobreIndicador` quien, recibiendo la cadena de ancestros ya
+   * resuelta del indicador (`categoriasEfectivas`), busca el permiso en
+   * cualquiera de esos ids.
+   */
+  permisosPorCategoria: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
    * Permisos de `CATALOGO_PERMISOS_GLOBALES` (Batch AX) — ámbito de
    * Workspaces, no de indicadores/resultados. Resueltos desde
    * `Usuario.rolGlobalId`, ver `ServicioPermisos.resolver` y
@@ -37,21 +47,28 @@ function tienePermisoEfectivo(ctx: ContextoPermisos, permiso: string): boolean {
  * concreto: admin → todo; permiso general o excepcional
  * `resultados.<accion>.todos` → todo; equipo del usuario == equipo efectivo
  * del indicador Y tiene `resultados.<accion>.equipo` (rol de equipo o
- * excepcional) → ese indicador; y la regla inherente del responsable (nunca
- * para `'validar'`): el indicador tiene como responsable DIRECTO al mismo
- * usuario en curso (`indicador.responsable === ctx.usuarioId`) → siempre
- * ver/registrar ESE indicador, sin mirar roles.
+ * excepcional) → ese indicador; `resultados.<accion>.categoria` concedido
+ * sobre CUALQUIER categoría de `indicador.categoriasEfectivas` (el indicador
+ * hereda el permiso de una categoría padre) → ese indicador; y la regla
+ * inherente del responsable (nunca para `'validar'`): el indicador tiene
+ * como responsable DIRECTO al mismo usuario en curso
+ * (`indicador.responsable === ctx.usuarioId`) → siempre ver/registrar ESE
+ * indicador, sin mirar roles.
  */
 export function puedeSobreIndicador(
   ctx: ContextoPermisos,
   accion: AccionResultado,
-  indicador: { equipoEfectivoId: string | null; responsable: string | null }
+  indicador: { equipoEfectivoId: string | null; responsable: string | null; categoriasEfectivas?: readonly string[] }
 ): boolean {
   if (ctx.esAdministrador) return true;
   if (tienePermisoEfectivo(ctx, `resultados.${accion}.todos`)) return true;
   const permisoEquipo = `resultados.${accion}.equipo`;
   if (ctx.equipoId != null && ctx.equipoId === indicador.equipoEfectivoId) {
     if (ctx.permisosEquipo.has(permisoEquipo) || ctx.permisosExcepcionales.has(permisoEquipo)) return true;
+  }
+  const permisoCategoria = `resultados.${accion}.categoria`;
+  for (const categoriaId of indicador.categoriasEfectivas ?? []) {
+    if (ctx.permisosPorCategoria.get(categoriaId)?.has(permisoCategoria)) return true;
   }
   if (accion !== 'validar' && indicador.responsable != null && indicador.responsable === ctx.usuarioId) return true;
   return false;
@@ -62,7 +79,10 @@ export function puedeAdministrarCatalogos(ctx: ContextoPermisos): boolean {
 }
 
 /** Quien administra el catálogo completo de indicadores ve todos, sin importar equipo/responsable. */
-export function puedeVerIndicador(ctx: ContextoPermisos, indicador: { equipoEfectivoId: string | null; responsable: string | null }): boolean {
+export function puedeVerIndicador(
+  ctx: ContextoPermisos,
+  indicador: { equipoEfectivoId: string | null; responsable: string | null; categoriasEfectivas?: readonly string[] }
+): boolean {
   if (puedeAdministrarCatalogos(ctx) || tienePermisoEfectivo(ctx, 'indicadores.ver.todos')) return true;
   return puedeSobreIndicador(ctx, 'ver', indicador);
 }

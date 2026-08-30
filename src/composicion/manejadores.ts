@@ -62,7 +62,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
   const indicadores = new ServicioIndicadores(
     ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos,
-    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.usuarios
+    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.usuarios, infra.categorias
   );
   const atributos = new ServicioAtributos(ctx, infra.atributos, infra.reglas, infra.automatizaciones, infra.indicadores);
   const listas = new ServicioListas(
@@ -82,14 +82,14 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   );
   const recoleccion = new ServicioRecoleccion(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion, infra.periodicidades, infra.reglas, tipos,
-    infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen, infra.usuarios
+    infra.automatizaciones, infra.origenesAutomaticos, infra.atributos, infra.conectorOrigen, infra.usuarios, infra.categorias
   );
   const seguimiento = new ServicioSeguimiento(
     ctx, infra.indicadores, infra.listas, infra.resultados, infra.configuracion,
     infra.periodicidades, infra.usuarios, infra.categorias, infra.equipos, infra.atributos, reglasFechaLimite,
     infra.metas
   );
-  const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos, infra.indicadores, infra.usuarios);
+  const adjuntos = new ServicioAdjuntos(ctx, infra.adjuntos, infra.archivos, infra.indicadores, infra.usuarios, infra.categorias);
   const automatizacion = new ServicioAutomatizacionIndicador(
     ctx, infra.automatizaciones, infra.indicadores, infra.origenesAutomaticos, infra.atributos,
     infra.listas, infra.periodicidades, infra.conectorOrigen

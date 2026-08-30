@@ -46,6 +46,11 @@ export class ServicioRoles extends ServicioBase {
     if (anterior?.esSistema && anterior.nombre !== rol.nombre) {
       errores.push('No se puede renombrar un rol del sistema.');
     }
+    // 'categoria' es un ámbito de PERMISO válido (RBAC granular), pero nunca de ROL —
+    // ese ámbito solo se concede vía usuarios_permisos_categoria, ver docstring de `AmbitoPermiso`.
+    if (rol.ambito === 'categoria') {
+      errores.push('Un rol no puede tener ámbito "categoría" — ese ámbito solo se concede por usuario y categoría.');
+    }
     // El ámbito es inmutable una vez creado (no solo para roles del sistema): cambiarlo
     // dejaría huérfanas las referencias existentes (Usuario.rolGeneralId/rolEquipoId
     // apuntando a un rol que ya no es del ámbito que ese campo espera).

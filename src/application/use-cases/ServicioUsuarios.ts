@@ -1,16 +1,21 @@
-import { puedeAdministrarCatalogos, puedeCambiarWorkspace, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
+import { ambitoDePermiso, puedeAdministrarCatalogos, puedeCambiarWorkspace, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
 import type { Usuario } from '@domain/index';
 import { ID_ROL_ADMINISTRADOR, NOMBRE_ROL_VISITANTE, permisoValido } from '@domain/index';
 import type {
   ICredencialGeneradaRepository, IEquipoRepository, IIndicadorRepository, IPasswordHasher,
-  IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository, IWorkspaceRepository
+  IPermisoCategoriaRepository, IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository,
+  IUsuarioRepository, IWorkspaceRepository
 } from '@application/ports/index';
 import { permisosActuales, workspaceActual } from './contextoUsuario';
 import { referenciasDeUsuario } from './referencias';
 import type { IClock, IIdGenerator } from '@application/ports/index';
 
 /** Datos públicos de un usuario: nunca se expone `passwordHash` fuera de esta capa. */
-export type UsuarioPublico = Omit<Usuario, 'passwordHash'> & { permisosExcepcionales: string[] };
+export type UsuarioPublico = Omit<Usuario, 'passwordHash'> & {
+  permisosExcepcionales: string[];
+  /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`) — todas las categorías del usuario, cada una con sus permisos. */
+  permisosPorCategoria: Array<{ categoriaId: string; permisos: string[] }>;
+};
 
 /** Credencial temporal recién generada, para mostrar al administrador una única vez. */
 export interface CredencialPendiente {
@@ -40,6 +45,8 @@ export class ServicioUsuarios {
     private readonly hasher: IPasswordHasher,
     private readonly rolesRepo: IRolRepository,
     private readonly permisosExcepcionalesRepo: IPermisoExcepcionalRepository,
+    /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+    private readonly permisosCategoriaRepo: IPermisoCategoriaRepository,
     private readonly equiposRepo: IEquipoRepository,
     private readonly indicadoresRepo: IIndicadorRepository,
     private readonly credencialesRepo: ICredencialGeneradaRepository,
@@ -51,7 +58,17 @@ export class ServicioUsuarios {
   ) {}
 
   private async aPublico(usuario: Usuario): Promise<UsuarioPublico> {
-    const permisosExcepcionales = await this.permisosExcepcionalesRepo.listarPorUsuario(usuario.id);
+    const [permisosExcepcionales, categoria] = await Promise.all([
+      this.permisosExcepcionalesRepo.listarPorUsuario(usuario.id),
+      this.permisosCategoriaRepo.listarPorUsuario(usuario.id)
+    ]);
+    const porCategoria = new Map<string, string[]>();
+    for (const p of categoria) {
+      const lista = porCategoria.get(p.categoriaId) ?? [];
+      lista.push(p.permiso);
+      porCategoria.set(p.categoriaId, lista);
+    }
+    const permisosPorCategoria = [...porCategoria.entries()].map(([categoriaId, permisos]) => ({ categoriaId, permisos }));
     return {
       id: usuario.id,
       nombreUsuario: usuario.nombreUsuario,
@@ -67,7 +84,8 @@ export class ServicioUsuarios {
       eliminado: usuario.eliminado,
       creadoEn: usuario.creadoEn,
       actualizadoEn: usuario.actualizadoEn,
-      permisosExcepcionales
+      permisosExcepcionales,
+      permisosPorCategoria
     };
   }
 
@@ -233,6 +251,22 @@ export class ServicioUsuarios {
     const invalidos = permisos.filter((p) => !permisoValido(p));
     if (invalidos.length > 0) throw new ValidacionError(`Permiso(s) inválido(s): ${invalidos.join(', ')}`);
     await this.permisosExcepcionalesRepo.establecer(id, [...new Set(permisos)]);
+  }
+
+  /**
+   * RBAC granular por categoría (ver docstring de `AmbitoPermiso` en
+   * `Permiso.ts`): reemplaza el conjunto de permisos del usuario PARA
+   * `categoriaId` — no toca sus permisos en otras categorías (ver
+   * `IPermisoCategoriaRepository.establecerParaCategoria`). Cada `permiso`
+   * debe existir en el catálogo Y ser de ámbito `'categoria'` — un
+   * permiso general/equipo no tiene sentido acá, ese se concede vía
+   * `establecerPermisosExcepcionales` o un `Rol`.
+   */
+  async establecerPermisosCategoria(id: string, categoriaId: string, permisos: string[]): Promise<void> {
+    await this.obtenerOFallar(id);
+    const invalidos = permisos.filter((p) => ambitoDePermiso(p) !== 'categoria');
+    if (invalidos.length > 0) throw new ValidacionError(`Permiso(s) inválido(s) para categoría: ${invalidos.join(', ')}`);
+    await this.permisosCategoriaRepo.establecerParaCategoria(id, categoriaId, [...new Set(permisos)]);
   }
 
   /**

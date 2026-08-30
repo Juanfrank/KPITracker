@@ -304,6 +304,26 @@ export interface IPermisoExcepcionalRepository {
   establecer(usuarioId: string, permisos: string[]): Promise<void>;
 }
 
+/**
+ * RBAC granular por categoría (ver docstring de `AmbitoPermiso` en
+ * `Permiso.ts`): un permiso concedido a un usuario para UNA categoría
+ * concreta, fuera de su rol nativo y fuera de `permisosExcepcionales`
+ * (que son globales) — paralelo a `PermisoExcepcional` pero con una
+ * `categoriaId` adicional.
+ */
+export interface PermisoCategoria {
+  usuarioId: string;
+  categoriaId: string;
+  permiso: string;
+}
+
+export interface IPermisoCategoriaRepository {
+  /** Todos los permisos de categoría del usuario, en cualquier categoría. */
+  listarPorUsuario(usuarioId: string): Promise<PermisoCategoria[]>;
+  /** Reemplaza el conjunto completo de permisos del usuario PARA esa categoría (borra los que no vengan en `permisos`; no toca otras categorías). */
+  establecerParaCategoria(usuarioId: string, categoriaId: string, permisos: string[]): Promise<void>;
+}
+
 export interface ISesionRepository {
   obtener(id: string): Promise<Sesion | null>;
   guardar(sesion: Sesion): Promise<void>;

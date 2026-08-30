@@ -16,6 +16,7 @@ function ctx(parcial: Partial<ContextoPermisos> = {}): ContextoPermisos {
     permisosEquipo: new Set(),
     permisosExcepcionales: new Set(),
     permisosGlobales: new Set(),
+    permisosPorCategoria: new Map(),
     ...parcial
   };
 }
@@ -65,6 +66,22 @@ describe('puedeSobreIndicador', () => {
     expect(puedeSobreIndicador(contexto, 'ver', INDICADOR_EQUIPO_A)).toBe(false);
     expect(puedeSobreIndicador(contexto, 'registrar', INDICADOR_EQUIPO_A)).toBe(false);
     expect(puedeSobreIndicador(contexto, 'validar', INDICADOR_EQUIPO_A)).toBe(false);
+  });
+
+  it('un permiso de categoría (RBAC granular) alcanza sobre CUALQUIER id de categoriasEfectivas (herencia de subcategoría)', () => {
+    const contexto = ctx({ permisosPorCategoria: new Map([['cat-salud', new Set(['resultados.validar.categoria'])]]) });
+    const indicadorEnSubcategoria = { equipoEfectivoId: null, responsable: null, categoriasEfectivas: ['cat-salud-sub', 'cat-salud'] };
+    expect(puedeSobreIndicador(contexto, 'validar', indicadorEnSubcategoria)).toBe(true);
+    // Sin la categoría en la cadena, no aplica.
+    expect(puedeSobreIndicador(contexto, 'validar', { equipoEfectivoId: null, responsable: null, categoriasEfectivas: ['cat-educacion'] }))
+      .toBe(false);
+    // El permiso de categoría es específico de la ACCIÓN — 'ver' no queda cubierto por un permiso de 'validar'.
+    expect(puedeSobreIndicador(contexto, 'ver', indicadorEnSubcategoria)).toBe(false);
+  });
+
+  it('sin categoriasEfectivas (parámetro omitido), el chequeo de categoría simplemente no aplica — no revienta', () => {
+    const contexto = ctx({ permisosPorCategoria: new Map([['cat-salud', new Set(['resultados.ver.categoria'])]]) });
+    expect(puedeSobreIndicador(contexto, 'ver', INDICADOR_EQUIPO_A)).toBe(false);
   });
 });
 

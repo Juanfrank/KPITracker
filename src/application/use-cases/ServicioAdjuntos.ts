@@ -1,6 +1,8 @@
-import type { AccionResultado, Adjunto, EntidadAdjunto } from '@domain/index';
-import { EntidadNoEncontradaError, ValidacionError, equipoEfectivo, puedeSobreIndicador } from '@domain/index';
-import type { IAdjuntoRepository, IArchivoService, IIndicadorRepository, IUsuarioRepository } from '@application/ports/index';
+import type { AccionResultado, Adjunto, Categoria, EntidadAdjunto } from '@domain/index';
+import { EntidadNoEncontradaError, ValidacionError, cadenaAncestros, equipoEfectivo, puedeSobreIndicador } from '@domain/index';
+import type {
+  IAdjuntoRepository, IArchivoService, ICatalogoRepository, IIndicadorRepository, IUsuarioRepository
+} from '@application/ports/index';
 import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { permisosActuales } from './contextoUsuario';
@@ -24,7 +26,9 @@ export class ServicioAdjuntos extends ServicioBase {
     private readonly repo: IAdjuntoRepository,
     private readonly archivos: IArchivoService,
     private readonly indicadores: IIndicadorRepository,
-    private readonly usuarios: IUsuarioRepository
+    private readonly usuarios: IUsuarioRepository,
+    /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+    private readonly categoriasRepo: ICatalogoRepository<Categoria>
   ) {
     super(ctx);
   }
@@ -39,10 +43,14 @@ export class ServicioAdjuntos extends ServicioBase {
     const indicadorId = entidadId.split(':')[0] ?? entidadId;
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
-    const responsable = indicador.responsable ? await this.usuarios.obtener(indicador.responsable) : null;
+    const [responsable, categorias] = await Promise.all([
+      indicador.responsable ? this.usuarios.obtener(indicador.responsable) : Promise.resolve(null),
+      this.categoriasRepo.listar()
+    ]);
     const usuariosPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
     const equipoEfectivoId = equipoEfectivo(indicador, usuariosPorId);
-    if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable })) {
+    const categoriasEfectivas = indicador.categoria ? cadenaAncestros(indicador.categoria, categorias) : [];
+    if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable, categoriasEfectivas })) {
       throw new ValidacionError('No tiene permiso para acceder a los adjuntos de este levantamiento.');
     }
   }

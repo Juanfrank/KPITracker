@@ -53,7 +53,8 @@ const PERMISOS_SIN_RESTRICCION: ContextoPermisos = {
   permisosGenerales: new Set(),
   permisosEquipo: new Set(),
   permisosExcepcionales: new Set(),
-  permisosGlobales: new Set()
+  permisosGlobales: new Set(),
+  permisosPorCategoria: new Map()
 };
 
 export function permisosActuales(): ContextoPermisos {

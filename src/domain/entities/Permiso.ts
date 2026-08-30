@@ -11,7 +11,18 @@
  * del equipo"). Un `Rol` solo puede listar permisos de su propio ámbito —
  * ver `ServicioRoles.guardar`.
  */
-export type AmbitoPermiso = 'general' | 'equipo';
+/**
+ * `'categoria'` (nuevo): igual que `'equipo'` pero acotado a una categoría
+ * (y sus subcategorías) en vez de al equipo del usuario — a diferencia de
+ * `'general'`/`'equipo'`, un permiso de este ámbito NUNCA se asigna vía
+ * `Rol` (que solo admite listar permisos de `'general'`/`'equipo'`, ver
+ * `ServicioRoles.guardar`): se concede usuario-por-usuario, cada concesión
+ * atada a UNA categoría concreta, en la tabla `usuarios_permisos_categoria`
+ * (ver `IPermisoCategoriaRepository`) — mismo espíritu que los "permisos
+ * excepcionales" ya existentes, pero con una categoría como parámetro
+ * adicional en vez de aplicar sin distinguir ámbito.
+ */
+export type AmbitoPermiso = 'general' | 'equipo' | 'categoria';
 
 export interface DefinicionPermiso {
   readonly id: string;
@@ -61,8 +72,18 @@ export const CATALOGO_PERMISOS: readonly DefinicionPermiso[] = [
    * usuario, pero nunca el flag `esAdministrador` en sí (eso sigue siendo exclusivo de un administrador,
    * ver `usuariosRouter.establecerAdministrador` en `usuarios.ts`, siempre `adminProcedure`).
    */
-  { id: 'roles.administrar', ambito: 'general', etiqueta: 'Administrar roles (asignar/desasignar, salvo Administrador)' }
+  { id: 'roles.administrar', ambito: 'general', etiqueta: 'Administrar roles (asignar/desasignar, salvo Administrador)' },
+
+  // --- RBAC granular por categoría: ver docstring de `AmbitoPermiso` arriba.
+  // Nunca aparecen en un `Rol` — solo se conceden vía `usuarios_permisos_categoria`,
+  // uno por (usuario, categoría) concreta, desde `SeccionUsuarios`.
+  { id: 'resultados.ver.categoria', ambito: 'categoria', etiqueta: 'Ver resultados de indicadores de la categoría' },
+  { id: 'resultados.registrar.categoria', ambito: 'categoria', etiqueta: 'Registrar resultados de indicadores de la categoría' },
+  { id: 'resultados.validar.categoria', ambito: 'categoria', etiqueta: 'Validar resultados de indicadores de la categoría' }
 ];
+
+/** Los 3 permisos concedibles por categoría (ver docstring de `AmbitoPermiso`) — el "menú" del selector en `SeccionUsuarios`. */
+export const PERMISOS_POR_CATEGORIA: readonly DefinicionPermiso[] = CATALOGO_PERMISOS.filter((p) => p.ambito === 'categoria');
 
 const IDS_VALIDOS = new Set(CATALOGO_PERMISOS.map((p) => p.id));
 const AMBITO_POR_ID = new Map(CATALOGO_PERMISOS.map((p) => [p.id, p.ambito] as const));

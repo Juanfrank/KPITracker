@@ -4,8 +4,8 @@ import type {
 } from '@domain/index';
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
-  construirContextoIndicador, equipoEfectivo, explicarCondicion, puedeAdministrarCatalogos, puedeAsignarIndicadoresEquipo,
-  puedeVerIndicador, redondear2, signosAgrupacionBalanceados, sinCiclo
+  cadenaAncestros, construirContextoIndicador, equipoEfectivo, explicarCondicion, puedeAdministrarCatalogos,
+  puedeAsignarIndicadoresEquipo, puedeVerIndicador, redondear2, signosAgrupacionBalanceados, sinCiclo
 } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
@@ -80,18 +80,26 @@ export class ServicioIndicadores extends ServicioBase {
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly tipos: TypeRegistry,
     private readonly defaults: DefaultsClasificacion,
-    private readonly usuariosRepo: IUsuarioRepository
+    private readonly usuariosRepo: IUsuarioRepository,
+    /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+    private readonly categoriasRepo: ICatalogoRepository<Categoria>
   ) {
     super(ctx);
   }
 
   /** Filtra a los indicadores que el usuario en curso puede ver (Batch T) — ver `puedeVerIndicador`. */
   async listar(): Promise<Indicador[]> {
-    const [indicadores, usuarios] = await Promise.all([this.repo.listar(), this.usuariosRepo.listar()]);
+    const [indicadores, usuarios, categorias] = await Promise.all([
+      this.repo.listar(), this.usuariosRepo.listar(), this.categoriasRepo.listar()
+    ]);
     const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     return indicadores.filter((i) =>
-      puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
+      puedeVerIndicador(permisos, {
+        equipoEfectivoId: equipoEfectivo(i, usuariosPorId),
+        responsable: i.responsable,
+        categoriasEfectivas: i.categoria ? cadenaAncestros(i.categoria, categorias) : []
+      })
     );
   }
 

@@ -4,9 +4,13 @@ import { CATALOGO_PERMISOS, agruparPermisosParaGrid } from '@domain/entities/Per
 describe('agruparPermisosParaGrid', () => {
   const filas = agruparPermisosParaGrid();
 
-  it('cada permiso del catálogo aparece exactamente una vez, en la columna de su ámbito', () => {
+  it('cada permiso del catálogo de ámbito general/equipo aparece exactamente una vez, en la columna de su ámbito', () => {
+    // El grid tiene 2 columnas (General/Equipo) — los permisos de ámbito 'categoria' (RBAC granular
+    // por categoría, ver AmbitoPermiso en Permiso.ts) tienen su propio selector en SeccionUsuarios,
+    // no aparecen acá.
     const idsEnGrid = filas.flatMap((f) => [f.general?.id, f.equipo?.id]).filter((id): id is string => !!id);
-    expect(idsEnGrid.sort()).toEqual(CATALOGO_PERMISOS.map((p) => p.id).sort());
+    const idsEsperados = CATALOGO_PERMISOS.filter((p) => p.ambito !== 'categoria').map((p) => p.id);
+    expect(idsEnGrid.sort()).toEqual(idsEsperados.sort());
     for (const fila of filas) {
       if (fila.general) expect(fila.general.ambito).toBe('general');
       if (fila.equipo) expect(fila.equipo.ambito).toBe('equipo');

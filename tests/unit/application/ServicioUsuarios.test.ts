@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ID_ROL_ADMINISTRADOR, ID_WORKSPACE_DEFAULT, ValidacionError } from '@domain/index';
 import type { Equipo, Indicador, Rol, RolGlobal, Usuario, Workspace } from '@domain/index';
 import type {
-  ICatalogoRepository, ICredencialGeneradaRepository, IIndicadorRepository, IPermisoExcepcionalRepository,
-  IRolGlobalRepository, IRolRepository, IUsuarioRepository
+  ICatalogoRepository, ICredencialGeneradaRepository, IIndicadorRepository, IPermisoCategoriaRepository,
+  IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository, PermisoCategoria
 } from '@application/ports/index';
 import { ServicioUsuarios } from '@application/use-cases/ServicioUsuarios';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
@@ -68,6 +68,20 @@ class PermisoExcepcionalRepositoryMemoria implements IPermisoExcepcionalReposito
   async establecer(usuarioId: string, permisos: string[]): Promise<void> { this.porUsuario.set(usuarioId, permisos); }
 }
 
+class PermisoCategoriaRepositoryMemoria implements IPermisoCategoriaRepository {
+  private readonly filas: PermisoCategoria[] = [];
+  async listarPorUsuario(usuarioId: string): Promise<PermisoCategoria[]> {
+    return this.filas.filter((f) => f.usuarioId === usuarioId);
+  }
+  async establecerParaCategoria(usuarioId: string, categoriaId: string, permisos: string[]): Promise<void> {
+    for (let i = this.filas.length - 1; i >= 0; i--) {
+      const f = this.filas[i];
+      if (f && f.usuarioId === usuarioId && f.categoriaId === categoriaId) this.filas.splice(i, 1);
+    }
+    for (const permiso of permisos) this.filas.push({ usuarioId, categoriaId, permiso });
+  }
+}
+
 class EquipoRepositoryMemoria implements ICatalogoRepository<Equipo> {
   private readonly filas = new Map<string, Equipo>();
   constructor() {
@@ -115,13 +129,14 @@ function construir() {
   const hasher = new ProveedorPassword(repo);
   const roles = new RolRepositoryMemoria();
   const permisosExcepcionales = new PermisoExcepcionalRepositoryMemoria();
+  const permisosCategoria = new PermisoCategoriaRepositoryMemoria();
   const equipos = new EquipoRepositoryMemoria();
   const indicadores = new IndicadorRepositoryMemoria();
   const credenciales = new CredencialGeneradaRepositoryMemoria();
   const rolesGlobales = new RolGlobalRepositoryMemoria();
   const workspaces = new WorkspaceRepositoryMemoria();
   const servicio = new ServicioUsuarios(
-    repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales,
+    repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales, permisosCategoria,
     equipos, indicadores, credenciales, EQUIPO_GENERAL_ID, rolesGlobales, workspaces
   );
   return { servicio, repo, roles, equipos, indicadores, credenciales, rolesGlobales, workspaces };

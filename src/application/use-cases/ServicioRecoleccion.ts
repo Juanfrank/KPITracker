@@ -1,12 +1,12 @@
 import {
   CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
-  ProductoCartesiano, TipoDato, ValidacionError, calcularAgregadosCaptura, claveATexto, crearClave,
+  ProductoCartesiano, TipoDato, ValidacionError, cadenaAncestros, calcularAgregadosCaptura, claveATexto, crearClave,
   equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, puedeSobreIndicador,
   redondear2, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
-  AccionResultado, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico, Periodo,
-  Resultado, ResultadoHistorial, TypeRegistry
+  AccionResultado, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico,
+  Periodo, Resultado, ResultadoHistorial, TypeRegistry
 } from '@domain/index';
 import type {
   IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, IConectorOrigen,
@@ -98,7 +98,9 @@ export class ServicioRecoleccion extends ServicioBase {
     private readonly origenesAutomaticos: ICatalogoRepository<OrigenAutomatico>,
     private readonly atributosRepo: IAtributoRepository,
     private readonly conector: IConectorOrigen,
-    private readonly usuariosRepo: IUsuarioRepository
+    private readonly usuariosRepo: IUsuarioRepository,
+    /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
+    private readonly categoriasRepo: ICatalogoRepository<Categoria>
   ) {
     super(ctx);
   }
@@ -114,10 +116,14 @@ export class ServicioRecoleccion extends ServicioBase {
   private async indicadorConPermiso(indicadorId: string, accion: AccionResultado): Promise<Indicador> {
     const indicador = await this.indicadores.obtener(indicadorId);
     if (!indicador) throw new EntidadNoEncontradaError('Indicador', indicadorId);
-    const responsable = indicador.responsable ? await this.usuariosRepo.obtener(indicador.responsable) : null;
+    const [responsable, categorias] = await Promise.all([
+      indicador.responsable ? this.usuariosRepo.obtener(indicador.responsable) : Promise.resolve(null),
+      this.categoriasRepo.listar()
+    ]);
     const usuariosPorId = new Map(responsable ? [[responsable.id, { equipoId: responsable.equipoId }] as const] : []);
     const equipoEfectivoId = equipoEfectivo(indicador, usuariosPorId);
-    if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable })) {
+    const categoriasEfectivas = indicador.categoria ? cadenaAncestros(indicador.categoria, categorias) : [];
+    if (!puedeSobreIndicador(permisosActuales(), accion, { equipoEfectivoId, responsable: indicador.responsable, categoriasEfectivas })) {
       throw new ValidacionError('No tiene permiso para esta acción sobre este indicador.');
     }
     return indicador;

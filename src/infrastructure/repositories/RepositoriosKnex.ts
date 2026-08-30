@@ -11,8 +11,9 @@ import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
   IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICorteMedicionRepository,
   ICredencialGeneradaRepository, IIndicadorRepository, IListaRepository, IMedicionCategoriaRepository,
-  IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository, IRolGlobalRepository,
-  IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
+  IMetaRepository, IPermisoCategoriaRepository, IPermisoExcepcionalRepository, IReglaRepository,
+  IResultadoRepository, IRolGlobalRepository, IRolRepository, ISesionRepository, IUsuarioRepository,
+  PermisoCategoria, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
@@ -562,6 +563,25 @@ export class PermisoExcepcionalRepositoryKnex extends RepositorioBase implements
       const ahora = new Date().toISOString();
       await trx('usuarios_permisos_excepcionales').insert(
         permisos.map((permiso) => ({ id: randomUUID(), usuario_id: usuarioId, permiso, creado_en: ahora }))
+      );
+    });
+  }
+}
+
+export class PermisoCategoriaRepositoryKnex extends RepositorioBase implements IPermisoCategoriaRepository {
+  async listarPorUsuario(usuarioId: string): Promise<PermisoCategoria[]> {
+    const filas = await this.knex('usuarios_permisos_categoria').where({ usuario_id: usuarioId }).select('categoria_id', 'permiso');
+    return filas.map((f) => ({ usuarioId, categoriaId: String(f.categoria_id), permiso: String(f.permiso) }));
+  }
+
+  async establecerParaCategoria(usuarioId: string, categoriaId: string, permisos: string[]): Promise<void> {
+    // Reemplazo completo transaccional, pero acotado a ESTA categoría — no toca los permisos del usuario en otras categorías.
+    await this.knex.transaction(async (trx) => {
+      await trx('usuarios_permisos_categoria').where({ usuario_id: usuarioId, categoria_id: categoriaId }).delete();
+      if (permisos.length === 0) return;
+      const ahora = new Date().toISOString();
+      await trx('usuarios_permisos_categoria').insert(
+        permisos.map((permiso) => ({ id: randomUUID(), usuario_id: usuarioId, categoria_id: categoriaId, permiso, creado_en: ahora }))
       );
     });
   }

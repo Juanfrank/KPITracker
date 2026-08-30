@@ -77,3 +77,26 @@ export function sinCiclo(id: string, padreId: string | null, todos: ReadonlyArra
   }
   return true;
 }
+
+/**
+ * Cadena de ancestros de `id` (incluido el propio `id` primero), recorriendo
+ * `padreId` hacia la raíz — misma forma de árbol (id + padreId) que
+ * `sinCiclo`, con el mismo tope defensivo ante un ciclo preexistente en los
+ * datos. Usada para resolver permisos "por categoría" (RBAC): un permiso
+ * concedido sobre una categoría padre aplica también a sus subcategorías, así
+ * que el chequeo busca el permiso en CUALQUIER elemento de esta cadena, no
+ * solo en la categoría exacta del indicador.
+ */
+export function cadenaAncestros(id: string, todos: ReadonlyArray<{ readonly id: string; padreId: string | null }>): string[] {
+  const porId = new Map(todos.map((t) => [t.id, t] as const));
+  const cadena: string[] = [id];
+  let actual: string | null = porId.get(id)?.padreId ?? null;
+  let pasos = 0;
+  while (actual !== null) {
+    if (cadena.includes(actual)) break; // ciclo preexistente en los datos: cortar, no agravar
+    cadena.push(actual);
+    if (++pasos > todos.length + 1) break;
+    actual = porId.get(actual)?.padreId ?? null;
+  }
+  return cadena;
+}

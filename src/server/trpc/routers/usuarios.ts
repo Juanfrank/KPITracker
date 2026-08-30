@@ -59,6 +59,17 @@ export const usuariosRouter = router({
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.establecerPermisosExcepcionales(input.id, input.permisos))),
 
   /**
+   * RBAC granular por categoría (ver docstring de `AmbitoPermiso` en
+   * `Permiso.ts`) — mismo criterio que `establecerPermisosExcepcionales`
+   * (exclusivo del administrador, nunca delegable vía `roles.administrar`).
+   */
+  establecerPermisosCategoria: adminProcedure
+    .input(z.object({ id: z.string(), categoriaId: z.string(), permisos: z.array(z.string()) }))
+    .mutation(({ ctx, input }) =>
+      invocar(() => ctx.aplicacion.usuarios.establecerPermisosCategoria(input.id, input.categoriaId, input.permisos))
+    ),
+
+  /**
    * Batch AX (fundación SaaS): asigna/quita el rol GLOBAL de un usuario —
    * siempre `adminProcedure`, nunca delegable (es el tier más alto, por
    * encima de cualquier Workspace), mismo criterio que

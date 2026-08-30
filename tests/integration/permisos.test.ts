@@ -342,6 +342,125 @@ describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / valida
   });
 });
 
+describe('RBAC granular por categoría (permisos por usuario+categoría, ver AmbitoPermiso en Permiso.ts)', () => {
+  it('un permiso concedido sobre la categoría PADRE alcanza a sus subcategorías, pero no a una categoría ajena', async () => {
+    const admin = await clienteAdmin();
+
+    const categoriaPadre = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Salud', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const subcategoria = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Vacunación', descripcion: '', activo: true, eliminado: false, padreId: categoriaPadre.id, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const categoriaAjena = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Educación', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const equipoGeneral = (await admin.equipos.listar.query()).find((e) => e.nombre === 'General')!;
+
+    const indicadorEnSubcategoria = await admin.indicadores.guardar.mutate({
+      indicador: {
+        id: '', codigo: 'VAC-1', nombre: 'Cobertura de vacunación', definicion: 'def', formaCalculo: null,
+        periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
+        metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: subcategoria.id,
+        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+      },
+      valores: []
+    });
+    const indicadorAjeno = await admin.indicadores.guardar.mutate({
+      indicador: {
+        id: '', codigo: 'EDU-1', nombre: 'Matrícula escolar', definicion: 'def', formaCalculo: null,
+        periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
+        metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoriaAjena.id,
+        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+      },
+      valores: []
+    });
+
+    // Usuario nuevo: rol general/equipo por defecto sin ningún permiso (Batch Z, "Visitante") — la
+    // única visibilidad que tendrá viene enteramente del permiso de categoría que se le conceda.
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'saludista', nombreCompleto: 'Persona de Salud', password: 'contrasenaSegura1' });
+    const usuarioPublico = (await admin.usuarios.listar.query()).find((u) => u.nombreUsuario === 'saludista')!;
+    await admin.usuarios.establecerPermisosCategoria.mutate({
+      id: usuarioPublico.id, categoriaId: categoriaPadre.id, permisos: ['resultados.ver.categoria', 'resultados.registrar.categoria']
+    });
+
+    const cliente = crearCliente(fetchConCookies());
+    await cliente.auth.login.mutate({ nombreUsuario: 'saludista', password: 'contrasenaSegura1' });
+
+    // Ve el indicador de la SUBcategoría (herencia del permiso concedido en el padre), no el de la categoría ajena.
+    const tablero = await cliente.seguimiento.tablero.query();
+    expect(tablero.map((f) => f.indicadorId)).toEqual([indicadorEnSubcategoria.id]);
+
+    const [periodo] = await cliente.recoleccion.periodos.query({ indicadorId: indicadorEnSubcategoria.id });
+    await cliente.recoleccion.fechaCorte.mutate({
+      indicadorId: indicadorEnSubcategoria.id, periodoId: periodo!.id, fechaCorte: '2026-01-31'
+    });
+    await expect(cliente.recoleccion.guardarCelda.mutate({
+      indicadorId: indicadorEnSubcategoria.id, periodoId: periodo!.id, claveDesagregacion: 'GENERAL', valorCrudo: '42'
+    })).resolves.not.toThrow();
+
+    // Sin permiso de "validar" por categoría, no puede validar aunque sí registre.
+    const codigoValidar = await codigoError(cliente.recoleccion.validar.mutate({
+      indicadorId: indicadorEnSubcategoria.id, periodoId: periodo!.id, claveDesagregacion: 'GENERAL'
+    }));
+    expect(codigoValidar).toBe('BAD_REQUEST');
+
+    // El indicador de la categoría ajena está totalmente fuera de alcance — ni siquiera períodos.
+    const codigoAjeno = await codigoError(cliente.recoleccion.periodos.query({ indicadorId: indicadorAjeno.id }));
+    expect(codigoAjeno).toBe('BAD_REQUEST');
+
+    // Ampliar el permiso a validar (misma categoría padre) habilita recoleccion.validar.
+    await admin.usuarios.establecerPermisosCategoria.mutate({
+      id: usuarioPublico.id, categoriaId: categoriaPadre.id,
+      permisos: ['resultados.ver.categoria', 'resultados.registrar.categoria', 'resultados.validar.categoria']
+    });
+    await expect(cliente.recoleccion.validar.mutate({
+      indicadorId: indicadorEnSubcategoria.id, periodoId: periodo!.id, claveDesagregacion: 'GENERAL'
+    })).resolves.toBeUndefined();
+  });
+
+  it('establecerPermisosCategoria rechaza un permiso que no es de ámbito "categoria"', async () => {
+    const admin = await clienteAdmin();
+    const categoria = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Cualquiera', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'mal.permiso', nombreCompleto: 'Mal Permiso', password: 'contrasenaSegura1' });
+    const usuario = (await admin.usuarios.listar.query()).find((u) => u.nombreUsuario === 'mal.permiso')!;
+    const codigo = await codigoError(admin.usuarios.establecerPermisosCategoria.mutate({
+      id: usuario.id, categoriaId: categoria.id, permisos: ['resultados.ver.equipo']
+    }));
+    expect(codigo).toBe('BAD_REQUEST');
+  });
+
+  it('un permiso concedido en OTRA categoría (sin relación de ancestro) no da acceso — establecerParaCategoria no toca otras categorías', async () => {
+    const admin = await clienteAdmin();
+    const categoriaA = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Categoría A', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const categoriaB = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Categoría B', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    await admin.usuarios.crear.mutate({ nombreUsuario: 'dos.categorias', nombreCompleto: 'Dos Categorías', password: 'contrasenaSegura1' });
+    const usuario = (await admin.usuarios.listar.query()).find((u) => u.nombreUsuario === 'dos.categorias')!;
+
+    await admin.usuarios.establecerPermisosCategoria.mutate({
+      id: usuario.id, categoriaId: categoriaA.id, permisos: ['resultados.ver.categoria']
+    });
+    await admin.usuarios.establecerPermisosCategoria.mutate({
+      id: usuario.id, categoriaId: categoriaB.id, permisos: []
+    });
+
+    const publico = (await admin.usuarios.listar.query()).find((u) => u.nombreUsuario === 'dos.categorias')!;
+    expect(publico.permisosPorCategoria).toEqual([{ categoriaId: categoriaA.id, permisos: ['resultados.ver.categoria'] }]);
+  });
+});
+
 describe('Orígenes automáticos — origenes.listar redacta credenciales sin "origenes.administrar" (audit de seguridad, HIGH-2)', () => {
   it('un usuario sin permiso alguno recibe la configuración SIN la contraseña; quien administra orígenes (o el admin) la recibe completa', async () => {
     const admin = await clienteAdmin();
