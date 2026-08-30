@@ -1006,7 +1006,12 @@ export function SeguimientoPage(): React.JSX.Element {
                 {punto?.metaPeriodo ?? '—'}
               </span>
               <span className="valor-porcentaje" data-testid={`historico-${h.nombre}-${c.periodoId}-pct`}>
-                {punto?.cumplimientoPct != null ? `${Math.round(punto.cumplimientoPct)}%` : <span className="texto-suave">—</span>}
+                {/* Redondeo a 2 decimales (pedido explícito del usuario, coherente con celdasSubtotal/
+                    la columna de corte de arriba) — antes redondeaba al entero, lo que hacía parecer que
+                    el subtotal de la categoría "no coincidía" con el promedio a ojo de estas celdas. */}
+                {punto?.cumplimientoPct != null
+                  ? `${Math.round(punto.cumplimientoPct * 100) / 100}%`
+                  : <span className="texto-suave">—</span>}
               </span>
             </div>
           </td>
