@@ -1,8 +1,8 @@
 import {
-  CLAVE_GENERAL, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos, Periodicidad,
-  ProductoCartesiano, TipoDato, ValidacionError, cadenaAncestros, calcularAgregadosCaptura, claveATexto, crearClave,
-  equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol, puedeSobreIndicador,
-  redondear2, resolverParametrosGenerales, sustituirTokens
+  CLAVE_GENERAL, ConflictoConcurrenciaError, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos,
+  Periodicidad, ProductoCartesiano, TipoDato, ValidacionError, cadenaAncestros, calcularAgregadosCaptura,
+  claveATexto, crearClave, equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol,
+  puedeSobreIndicador, redondear2, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
 import type {
   AccionResultado, Categoria, DefinicionPeriodicidad, ElementoLista, Indicador, Levantamiento, OrigenAutomatico,
@@ -261,13 +261,23 @@ export class ServicioRecoleccion extends ServicioBase {
    * Decimal del TypeRegistry. Retorna, además del valor persistido, las
    * advertencias de validación cruzada recalculadas sobre el levantamiento.
    */
+  /**
+   * `versionEsperada` (bloqueo optimista, opcional): el `Resultado.actualizadoEn`
+   * que el cliente vio la última vez que cargó esta celda (`null` si nunca
+   * había un resultado). Cuando se pasa (distinto de `undefined`) y no
+   * coincide con el vigente, se rechaza con `ConflictoConcurrenciaError` en
+   * vez de sobrescribir — ver docstring de esa clase. Se omite (`undefined`)
+   * desde `obtenerResultadoAutomatico`/deshacer-rehacer, que deliberadamente
+   * no lo chequean (ver `persistirValorCelda`).
+   */
   async guardarCelda(
     indicadorId: string,
     periodoId: string,
     claveDesagregacion: string,
     valorCrudo: string,
-    observacion: string | null = null
-  ): Promise<{ valor: number | null; advertencias: string[] }> {
+    observacion: string | null = null,
+    versionEsperada?: string | null
+  ): Promise<{ valor: number | null; advertencias: string[]; actualizadoEn: string | null }> {
     const indicadorActual = await this.indicadorConPermiso(indicadorId, 'registrar');
     if (indicadorActual.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene automáticamente de la fórmula y no admite captura manual.');
@@ -283,11 +293,17 @@ export class ServicioRecoleccion extends ServicioBase {
     // que el valor devuelto al llamador coincida con lo realmente persistido.
     const valor = valorParseado == null ? null : redondear2(valorParseado);
 
-    await this.persistirValorCelda(indicadorId, periodoId, claveDesagregacion, valor, observacion);
+    await this.persistirValorCelda(indicadorId, periodoId, claveDesagregacion, valor, observacion, 'Manual', versionEsperada);
     this.sincronizarExport();
 
     const captura = await this.obtenerCaptura(indicadorId, periodoId);
-    return { valor, advertencias: captura.advertencias };
+    // El `actualizadoEn` REAL (el que quedó persistido, con el reloj del servidor) — nunca uno
+    // adivinado por el cliente, que es exactamente el bug que el bloqueo optimista debe evitar:
+    // si el cliente estimara su propia marca de tiempo en vez de leer la vigente, la SIGUIENTE
+    // escritura mandaría una `versionEsperada` que nunca coincide, y todo guardado subsiguiente
+    // se rechazaría como conflicto falso.
+    const actualizadoEn = captura.filas.find((f) => f.claveDesagregacion === claveDesagregacion)?.actualizadoEn ?? null;
+    return { valor, advertencias: captura.advertencias, actualizadoEn };
   }
 
   /**
@@ -435,12 +451,26 @@ export class ServicioRecoleccion extends ServicioBase {
     claveDesagregacion: string,
     valorCrudo: number | null,
     observacion: string | null,
-    origen: 'Manual' | 'Automatico' = 'Manual'
+    origen: 'Manual' | 'Automatico' = 'Manual',
+    versionEsperada?: string | null
   ): Promise<void> {
     const valor = valorCrudo == null ? null : redondear2(valorCrudo);
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
     const anterior = existentes.find((r) => r.claveDesagregacion === claveDesagregacion) ?? null;
     const ahora = this.ctx.reloj.ahoraIso();
+
+    // Bloqueo optimista (concurrencia): `versionEsperada === undefined` significa "no chequear"
+    // (obtención automática, deshacer/rehacer) — ver docstring de `guardarCelda`. Cuando SÍ se
+    // pasa, debe coincidir exactamente con el `actualizadoEn` vigente (o ambos `null`, celda
+    // nunca guardada) o se rechaza sin escribir nada.
+    if (versionEsperada !== undefined && versionEsperada !== (anterior?.actualizadoEn ?? null)) {
+      throw new ConflictoConcurrenciaError(
+        'Este valor fue modificado por otra persona mientras tanto. Recargue la celda antes de volver a intentar.',
+        anterior?.capturadoPor ?? null,
+        anterior?.capturadoEn ?? ahora,
+        anterior?.valor ?? null
+      );
+    }
 
     if (anterior) {
       await this.registrarVersionAnterior(indicadorId, periodoId, claveDesagregacion, anterior.valor, anterior.observacion, anterior.actualizadoEn);
@@ -530,7 +560,7 @@ export class ServicioRecoleccion extends ServicioBase {
     periodoId: string,
     claveDesagregacion: string,
     version: number
-  ): Promise<{ valor: number | null; advertencias: string[] }> {
+  ): Promise<{ valor: number | null; advertencias: string[]; actualizadoEn: string | null }> {
     await this.indicadorConPermiso(indicadorId, 'registrar');
     const historial = await this.resultados.obtenerHistorial(indicadorId, periodoId, claveDesagregacion);
     const objetivo = historial.find((h) => h.version === version);
@@ -542,7 +572,11 @@ export class ServicioRecoleccion extends ServicioBase {
     this.sincronizarExport();
 
     const captura = await this.obtenerCaptura(indicadorId, periodoId);
-    return { valor: objetivo.valor, advertencias: captura.advertencias };
+    // Mismo criterio que `guardarCelda` — nunca adivinar el timestamp del lado del cliente
+    // (ver ese docstring), para que una edición posterior de esta misma celda mande la
+    // `versionEsperada` correcta y no dispare un conflicto falso.
+    const actualizadoEn = captura.filas.find((f) => f.claveDesagregacion === claveDesagregacion)?.actualizadoEn ?? null;
+    return { valor: objetivo.valor, advertencias: captura.advertencias, actualizadoEn };
   }
 
   /**

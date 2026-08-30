@@ -17,7 +17,9 @@ export const recoleccionRouter = router({
         periodoId: z.string(),
         claveDesagregacion: z.string(),
         valorCrudo: z.string(),
-        observacion: z.string().nullish()
+        observacion: z.string().nullish(),
+        /** Bloqueo optimista (concurrencia) — ver docstring de `ServicioRecoleccion.guardarCelda`. */
+        versionEsperada: z.string().nullish()
       })
     )
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['recoleccion:guardarCelda'](input))),

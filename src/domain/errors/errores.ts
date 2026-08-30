@@ -25,3 +25,24 @@ export class EntidadNoEncontradaError extends DominioError {
     super(`${entidad} con id "${id}" no existe.`);
   }
 }
+
+/**
+ * Escritura rechazada por bloqueo optimista: el cliente editó una celda a
+ * partir de una versión (`Resultado.actualizadoEn`) que ya no es la vigente
+ * — alguien más la cambió mientras tanto. Deliberadamente "detectar y
+ * bloquear" (no fusionar valores ni quedarse con "el último que escribe
+ * gana" en silencio, decisión confirmada con el usuario): el llamador debe
+ * recargar la celda antes de poder reintentar. Carga la identidad y el
+ * valor vigentes para que la UI pueda mostrar "Fulano cambió este valor a
+ * X hace unos minutos" sin una segunda consulta.
+ */
+export class ConflictoConcurrenciaError extends DominioError {
+  constructor(
+    mensaje: string,
+    public readonly capturadoPor: string | null,
+    public readonly capturadoEn: string,
+    public readonly valorActual: number | null
+  ) {
+    super(mensaje);
+  }
+}

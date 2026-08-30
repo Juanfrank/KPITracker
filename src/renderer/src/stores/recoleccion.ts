@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Indicador, Periodo } from '@domain/index';
 import type { DatosCaptura } from '@application/use-cases/ServicioRecoleccion';
+import type { ErrorConflicto } from '../api';
 import { invocar } from '../api';
 
 export type EstadoCelda = 'guardando' | 'guardada' | 'error';
@@ -20,6 +21,14 @@ interface EstadoRecoleccion {
   /** Estado visual de autoguardado por celda. */
   estadoCeldas: Map<string, EstadoCelda>;
   erroresCeldas: Map<string, string>;
+  /**
+   * Concurrencia (bloqueo optimista): celdas cuyo último intento de guardado
+   * fue rechazado porque otra persona cambió el valor mientras tanto (ver
+   * `ConflictoConcurrenciaError`, dominio). Distinto de `erroresCeldas` —
+   * la UI ofrece "Recargar" en vez de solo mostrar el mensaje, porque
+   * reintentar con el mismo valor viejo va a volver a fallar.
+   */
+  conflictosCeldas: Map<string, ErrorConflicto>;
   pilaDeshacer: CambioCelda[];
   pilaRehacer: CambioCelda[];
   /** Mensaje de la última obtención automática intentada (éxito o error), para mostrar en la UI. */
@@ -51,6 +60,13 @@ interface EstadoRecoleccion {
   seleccionarIndicador(indicadorId: string, periodoId?: string): Promise<void>;
   seleccionarPeriodo(periodoId: string): Promise<void>;
   guardarCelda(claveDesagregacion: string, valorCrudo: string, opciones?: { desdeHistorial?: boolean }): Promise<void>;
+  /**
+   * Concurrencia: descarta el conflicto de `claveDesagregacion` y recarga la
+   * grilla completa (más simple y seguro que parchear una sola celda —
+   * cualquier otra puede haber cambiado también) para que la próxima edición
+   * parta del valor realmente vigente.
+   */
+  recargarTrasConflicto(claveDesagregacion: string): Promise<void>;
   deshacer(): Promise<void>;
   rehacer(): Promise<void>;
   establecerFechaCorte(fechaCorte: string | null): Promise<void>;
@@ -87,6 +103,7 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   captura: null,
   estadoCeldas: new Map(),
   erroresCeldas: new Map(),
+  conflictosCeldas: new Map(),
   pilaDeshacer: [],
   pilaRehacer: [],
   mensajeAutomatico: null,
@@ -139,7 +156,10 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
     const { indicadorId } = get();
     if (!indicadorId) return;
     const captura = await invocar('recoleccion:captura', { indicadorId, periodoId });
-    set({ periodoId, captura, estadoCeldas: new Map(), erroresCeldas: new Map(), pilaDeshacer: [], pilaRehacer: [] });
+    set({
+      periodoId, captura, estadoCeldas: new Map(), erroresCeldas: new Map(), conflictosCeldas: new Map(),
+      pilaDeshacer: [], pilaRehacer: []
+    });
   },
 
   async guardarCelda(claveDesagregacion, valorCrudo, opciones = {}) {
@@ -162,8 +182,12 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
 
     marcar('guardando');
     try {
-      const { valor, advertencias } = await invocar('recoleccion:guardarCelda', {
-        indicadorId, periodoId, claveDesagregacion, valorCrudo
+      const { valor, advertencias, actualizadoEn } = await invocar('recoleccion:guardarCelda', {
+        indicadorId, periodoId, claveDesagregacion, valorCrudo,
+        // Bloqueo optimista: se omite en deshacer/rehacer (ver docstring de la acción) — ahí el
+        // objetivo es restaurar el valor de todas formas, no volver a chequear concurrencia sobre
+        // una edición que la propia persona acaba de hacer un segundo antes.
+        versionEsperada: opciones.desdeHistorial ? undefined : (fila?.actualizadoEn ?? null)
       });
       set((s) => ({
         captura: s.captura && {
@@ -172,10 +196,15 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
           filas: s.captura.filas.map((f) =>
             f.claveDesagregacion === claveDesagregacion
               // Batch T: editar el valor reinicia la validación a Pendiente (mismo criterio que el servidor).
-              ? { ...f, valor, actualizadoEn: new Date().toISOString(), estadoValidacion: 'Pendiente', comentarioValidacion: null }
+              // `actualizadoEn` viene del servidor (nunca adivinado acá, ver docstring de
+              // `ServicioRecoleccion.guardarCelda`) — es la `versionEsperada` de la PRÓXIMA edición.
+              ? { ...f, valor, actualizadoEn, estadoValidacion: 'Pendiente', comentarioValidacion: null }
               : f
           )
         },
+        conflictosCeldas: s.conflictosCeldas.has(claveDesagregacion)
+          ? (() => { const m = new Map(s.conflictosCeldas); m.delete(claveDesagregacion); return m; })()
+          : s.conflictosCeldas,
         pilaDeshacer: opciones.desdeHistorial
           ? s.pilaDeshacer
           : [...s.pilaDeshacer, { claveDesagregacion, valorAnterior, valorNuevo: valorCrudo }],
@@ -190,8 +219,22 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
         });
       }, 1200);
     } catch (error) {
-      marcar('error', (error as Error).message);
+      const err = error as Error & { codigo?: string; conflicto?: ErrorConflicto };
+      if (err.codigo === 'CONFLICT' && err.conflicto) {
+        marcar('error', err.message);
+        set((s) => ({ conflictosCeldas: new Map(s.conflictosCeldas).set(claveDesagregacion, err.conflicto!) }));
+      } else {
+        marcar('error', err.message);
+      }
     }
+  },
+
+  async recargarTrasConflicto(claveDesagregacion) {
+    // `seleccionarPeriodo` recarga la grilla completa y ya limpia `conflictosCeldas` — el
+    // parámetro solo documenta la intención en el call-site (qué celda disparó el recargo).
+    void claveDesagregacion;
+    const { periodoId } = get();
+    if (periodoId) await get().seleccionarPeriodo(periodoId);
   },
 
   async deshacer() {
@@ -237,15 +280,17 @@ export const useRecoleccion = create<EstadoRecoleccion>((set, get) => ({
   async restaurarVersion(claveDesagregacion, version) {
     const { indicadorId, periodoId } = get();
     if (!indicadorId || !periodoId) return;
-    const { valor, advertencias } = await invocar('recoleccion:restaurarVersion', {
+    const { valor, advertencias, actualizadoEn } = await invocar('recoleccion:restaurarVersion', {
       indicadorId, periodoId, claveDesagregacion, version
     });
     set((s) => ({
       captura: s.captura && {
         ...s.captura,
         advertencias,
+        // `actualizadoEn` del servidor (nunca adivinado, ver `guardarCelda`) — evita un conflicto
+        // falso en la siguiente edición manual de esta misma celda.
         filas: s.captura.filas.map((f) =>
-          f.claveDesagregacion === claveDesagregacion ? { ...f, valor, actualizadoEn: new Date().toISOString() } : f
+          f.claveDesagregacion === claveDesagregacion ? { ...f, valor, actualizadoEn } : f
         )
       }
     }));

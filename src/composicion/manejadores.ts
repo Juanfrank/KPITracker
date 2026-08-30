@@ -184,8 +184,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
 
     'recoleccion:periodos': ({ indicadorId }) => recoleccion.periodosDisponibles(indicadorId),
     'recoleccion:captura': ({ indicadorId, periodoId }) => recoleccion.obtenerCaptura(indicadorId, periodoId),
-    'recoleccion:guardarCelda': ({ indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion }) =>
-      recoleccion.guardarCelda(indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion ?? null),
+    'recoleccion:guardarCelda': ({ indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion, versionEsperada }) =>
+      recoleccion.guardarCelda(indicadorId, periodoId, claveDesagregacion, valorCrudo, observacion ?? null, versionEsperada),
     'recoleccion:fechaCorte': ({ indicadorId, periodoId, fechaCorte }) =>
       recoleccion.establecerFechaCorte(indicadorId, periodoId, fechaCorte),
     'recoleccion:comentario': ({ indicadorId, periodoId, comentario }) =>

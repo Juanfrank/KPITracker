@@ -741,6 +741,24 @@ table.tabla tfoot td {
   box-shadow: inset 0 0 0 1px var(--peligro);
 }
 
+/* Concurrencia (bloqueo optimista): reemplaza el input de la celda mientras el conflicto no se recarga. */
+.conflicto-concurrencia {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--peligro-suave);
+  box-shadow: inset 0 0 0 1px var(--peligro);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.conflicto-concurrencia .boton {
+  align-self: flex-start;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
 .grilla-captura tr.fila-general {
   font-weight: 700;
   background: var(--superficie-2);

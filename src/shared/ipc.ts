@@ -136,8 +136,13 @@ export interface CanalesIpc {
   'recoleccion:periodos': { req: { indicadorId: string }; res: Periodo[] };
   'recoleccion:captura': { req: { indicadorId: string; periodoId: string }; res: DatosCaptura };
   'recoleccion:guardarCelda': {
-    req: { indicadorId: string; periodoId: string; claveDesagregacion: string; valorCrudo: string; observacion?: string | null };
-    res: { valor: number | null; advertencias: string[] };
+    req: {
+      indicadorId: string; periodoId: string; claveDesagregacion: string; valorCrudo: string; observacion?: string | null;
+      /** Bloqueo optimista (concurrencia) — ver docstring de `ServicioRecoleccion.guardarCelda`. */
+      versionEsperada?: string | null;
+    };
+    /** `actualizadoEn`: el REAL (persistido), nunca uno adivinado por el cliente — es la próxima `versionEsperada`. */
+    res: { valor: number | null; advertencias: string[]; actualizadoEn: string | null };
   };
   'recoleccion:fechaCorte': { req: { indicadorId: string; periodoId: string; fechaCorte: string | null }; res: void };
   'recoleccion:comentario': { req: { indicadorId: string; periodoId: string; comentario: string | null }; res: void };
@@ -148,7 +153,7 @@ export interface CanalesIpc {
   };
   'recoleccion:restaurarVersion': {
     req: { indicadorId: string; periodoId: string; claveDesagregacion: string; version: number };
-    res: { valor: number | null; advertencias: string[] };
+    res: { valor: number | null; advertencias: string[]; actualizadoEn: string | null };
   };
   /** Restaura TODAS las desagregaciones del período al estado vigente en un punto en el tiempo (Batch U10) — alcance: solo este período. */
   'recoleccion:restaurarPeriodo': {

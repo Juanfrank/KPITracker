@@ -293,6 +293,7 @@ export function RecoleccionPage(): React.JSX.Element {
                 const fila = entrada.fila;
                 const estado = vm.estadoCeldas.get(fila.claveDesagregacion);
                 const error = vm.erroresCeldas.get(fila.claveDesagregacion);
+                const conflicto = vm.conflictosCeldas.get(fila.claveDesagregacion);
                 const colapsada = colapsadas.has(fila.claveDesagregacion);
                 const clases = [fila.esGeneral ? 'fila-general' : '', fila.esSubtotal ? 'fila-subtotal' : ''].filter(Boolean).join(' ');
                 return (
@@ -326,9 +327,28 @@ export function RecoleccionPage(): React.JSX.Element {
                     )}
                     <td
                       className={`celda-editable ${estado ?? ''} ${error ? 'error' : ''}`}
-                      title={error}
+                      title={conflicto ? undefined : error}
                     >
-                      {indicadorSeleccionado?.esCalculado ? (
+                      {conflicto ? (
+                        // Concurrencia (bloqueo optimista): alguien más cambió este valor mientras se
+                        // editaba — se bloquea la escritura y se ofrece recargar, en vez de sobrescribir
+                        // en silencio ("última escritura gana") o fusionar valores.
+                        <div className="conflicto-concurrencia" data-testid={`conflicto-${fila.claveDesagregacion}`}>
+                          <span>
+                            Cambiado por {conflicto.capturadoPor ?? 'otra persona'} el{' '}
+                            {new Date(conflicto.capturadoEn).toLocaleString('es')} — ahora es{' '}
+                            {conflicto.valorActual ?? '(vacío)'}.
+                          </span>
+                          <button
+                            type="button"
+                            className="boton sutil"
+                            onClick={() => void vm.recargarTrasConflicto(fila.claveDesagregacion)}
+                            data-testid={`recargar-${fila.claveDesagregacion}`}
+                          >
+                            Recargar
+                          </button>
+                        </div>
+                      ) : indicadorSeleccionado?.esCalculado ? (
                         <span data-testid={`celda-${fila.claveDesagregacion}`}>{fila.valor ?? '—'}</span>
                       ) : (
                         <CeldaValor

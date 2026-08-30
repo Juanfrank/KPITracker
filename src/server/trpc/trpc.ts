@@ -5,7 +5,7 @@ import {
   puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
   puedeAdministrarRolesGlobales, puedeAdministrarWorkspaces, puedeCambiarWorkspace, puedeCrearWorkspaces,
   puedeEliminarWorkspaces,
-  EntidadNoEncontradaError, NoImplementadoError, ValidacionError
+  ConflictoConcurrenciaError, EntidadNoEncontradaError, NoImplementadoError, ValidacionError
 } from '@domain/index';
 import type { ContextoPermisos } from '@domain/index';
 import { conPermisos, conUsuario, conWorkspace, permisosActuales } from '@application/use-cases/contextoUsuario';
@@ -15,12 +15,18 @@ import type { Context } from './context';
  * Instancia raíz de tRPC. El `errorFormatter` preserva, sobre el cable, el
  * mismo sobre `{ error, detalles }` que ya usaba `RespuestaIpc` (ver
  * `src/shared/ipc.ts`) — el cliente web lee `error.data.detalles` donde
- * antes leía `error.detalles` del IPC.
+ * antes leía `error.detalles` del IPC. `conflicto` (concurrencia,
+ * `ConflictoConcurrenciaError`) sigue el mismo patrón: solo se adjunta
+ * cuando aplica, para que la UI (`RecoleccionPage`) distinga "rechazado por
+ * validación" de "rechazado por bloqueo optimista" sin parsear el mensaje.
  */
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
     const detalles = error.cause instanceof ValidacionError ? error.cause.detalles : undefined;
-    return { ...shape, data: { ...shape.data, detalles } };
+    const conflicto = error.cause instanceof ConflictoConcurrenciaError
+      ? { capturadoPor: error.cause.capturadoPor, capturadoEn: error.cause.capturadoEn, valorActual: error.cause.valorActual }
+      : undefined;
+    return { ...shape, data: { ...shape.data, detalles, conflicto } };
   }
 });
 
@@ -159,6 +165,7 @@ export const rolesGlobalesAdminProcedure = procedureConPermiso(puedeAdministrarR
  */
 export function invocar<T>(fn: () => Promise<T>): Promise<T> {
   return fn().catch((error: unknown) => {
+    if (error instanceof ConflictoConcurrenciaError) throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
     if (error instanceof ValidacionError) throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error });
     if (error instanceof EntidadNoEncontradaError) throw new TRPCError({ code: 'NOT_FOUND', message: error.message, cause: error });
     if (error instanceof NoImplementadoError) throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: error.message, cause: error });

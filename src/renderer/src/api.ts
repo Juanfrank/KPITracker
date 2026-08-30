@@ -135,8 +135,18 @@ function resolverProcedimiento(router: string, procedimiento: string): Procedimi
  * necesitó tocarse. Reconstruye el mismo `Error` con `.detalles` que ya
  * esperaban esos call-sites (antes venía de `RespuestaIpc.detalles`, ahora
  * de `TRPCClientError.data.detalles` — mismo `errorFormatter`, ver
- * `src/server/trpc/trpc.ts`).
+ * `src/server/trpc/trpc.ts`). `.codigo` (`error.data.code`, p. ej.
+ * `'CONFLICT'`) y `.conflicto` (bloqueo optimista — quién/cuándo/qué valor
+ * quedó vigente) se reconstruyen con el mismo criterio, para que
+ * `stores/recoleccion.ts` distinga un conflicto de concurrencia de
+ * cualquier otro rechazo sin parsear el mensaje.
  */
+export interface ErrorConflicto {
+  capturadoPor: string | null;
+  capturadoEn: string;
+  valorActual: number | null;
+}
+
 export async function invocar<C extends NombreCanal>(
   canal: C,
   payload: CanalesIpc[C]['req']
@@ -154,8 +164,11 @@ export async function invocar<C extends NombreCanal>(
     return resultado as CanalesIpc[C]['res'];
   } catch (error) {
     if (error instanceof TRPCClientError) {
-      const reconstruido = new Error(error.message) as Error & { detalles?: string[] };
-      reconstruido.detalles = (error.data as { detalles?: string[] } | undefined)?.detalles;
+      const datos = error.data as { code?: string; detalles?: string[]; conflicto?: ErrorConflicto } | undefined;
+      const reconstruido = new Error(error.message) as Error & { detalles?: string[]; codigo?: string; conflicto?: ErrorConflicto };
+      reconstruido.detalles = datos?.detalles;
+      reconstruido.codigo = datos?.code;
+      reconstruido.conflicto = datos?.conflicto;
       throw reconstruido;
     }
     throw error;
