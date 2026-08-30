@@ -376,3 +376,20 @@ describe('Orígenes automáticos — origenes.listar redacta credenciales sin "o
     expect(comoAdmin!.configuracion.contrasena).toBe('SuperSecreta123');
   });
 });
+
+describe('Guardias de forma en las mutaciones "guardar" (audit de seguridad, LOW-1)', () => {
+  it('un payload que no es un objeto (string/array/null) se rechaza con BAD_REQUEST antes de llegar al servicio', async () => {
+    const admin = await clienteAdmin();
+    // z.any() aceptaba literalmente cualquier valor; objetoConId (ver src/server/trpc/schemas.ts) exige un objeto con "id".
+    expect(await codigoError(admin.categorias.guardar.mutate('no soy un objeto' as never))).toBe('BAD_REQUEST');
+    expect(await codigoError(admin.categorias.guardar.mutate(['tampoco'] as never))).toBe('BAD_REQUEST');
+    expect(await codigoError(admin.categorias.guardar.mutate(null as never))).toBe('BAD_REQUEST');
+    expect(await codigoError(admin.categorias.guardar.mutate({ nombre: 'Sin id' } as never))).toBe('BAD_REQUEST');
+
+    // Un objeto con forma razonable sigue funcionando exactamente igual que antes.
+    const categoria = await admin.categorias.guardar.mutate({
+      id: '', nombre: 'Forma válida', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
+    });
+    expect(categoria.id).not.toBe('');
+  });
+});

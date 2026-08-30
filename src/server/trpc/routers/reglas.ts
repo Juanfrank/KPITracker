@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ReglaNegocio } from '@domain/index';
 import { reglasModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 export const reglasRouter = router({
   listar: protectedProcedure
@@ -8,7 +9,7 @@ export const reglasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['reglas:listar'](input))),
 
   guardar: reglasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['reglas:guardar'](input as ReglaNegocio))),
 
   eliminar: reglasModificarProcedure

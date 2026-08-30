@@ -459,6 +459,15 @@ export class CredencialGeneradaRepositoryKnex extends RepositorioBase implements
     await this.knex('credenciales_generadas').del();
     return filas.map((f) => ({ usuarioId: f.usuario_id, nombreUsuario: f.nombre_usuario, passwordTexto: f.password_texto }));
   }
+
+  async existePendiente(usuarioId: string): Promise<boolean> {
+    const fila = await this.knex('credenciales_generadas').where({ usuario_id: usuarioId }).first();
+    return fila != null;
+  }
+
+  async limpiarPendiente(usuarioId: string): Promise<void> {
+    await this.knex('credenciales_generadas').where({ usuario_id: usuarioId }).del();
+  }
 }
 
 export class RolRepositoryKnex extends RepositorioBase implements IRolRepository {

@@ -237,6 +237,17 @@ export interface ICredencialGeneradaRepository {
   registrar(usuarioId: string, passwordTexto: string): Promise<void>;
   /** Lee TODAS las credenciales pendientes (con el nombre de usuario ya resuelto) y las borra en la misma operación — "se muestran una sola vez". */
   consumirTodas(): Promise<Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>>;
+  /**
+   * `true` si `usuarioId` tiene una credencial generada pendiente de
+   * mostrar/consumir — SIN consumirla (a diferencia de `consumirTodas`).
+   * Usado por `protectedProcedure` (audit de seguridad, MEDIUM) para forzar
+   * el cambio de contraseña del administrador sembrado en el primer
+   * arranque antes de dejarlo hacer cualquier otra mutación — ver
+   * `asegurarAdminInicial` en `composicionServidor.ts`.
+   */
+  existePendiente(usuarioId: string): Promise<boolean>;
+  /** Borra la credencial pendiente de `usuarioId`, si existe — llamado tras `ServicioUsuarios.cambiarPassword` (ya no es "la contraseña generada"). No-op si no había ninguna. */
+  limpiarPendiente(usuarioId: string): Promise<void>;
 }
 
 /**
@@ -297,6 +308,23 @@ export interface ISesionRepository {
   obtener(id: string): Promise<Sesion | null>;
   guardar(sesion: Sesion): Promise<void>;
   eliminar(id: string): Promise<void>;
+}
+
+/**
+ * Freno de fuerza bruta sobre `auth.login` (audit de seguridad, MEDIUM):
+ * antes no existía ningún límite a los intentos de adivinar una contraseña.
+ * `clave` es un identificador normalizado del intento (hoy, el nombre de
+ * usuario en minúsculas) — deliberadamente NO combina IP, para no requerir
+ * threading el request hasta `ServicioAutenticacion`; ver
+ * `LimitadorIntentosLoginMemoria` para la única implementación.
+ */
+export interface ILimitadorIntentos {
+  /** `true` si `clave` acumuló demasiados fallos recientes y debe rechazarse sin intentar autenticar. */
+  estaBloqueado(clave: string, ahora: Date): boolean;
+  /** Registra un intento fallido — cuenta hacia el bloqueo. */
+  registrarFallo(clave: string, ahora: Date): void;
+  /** Limpia el historial de `clave` — se llama tras un login exitoso. */
+  limpiar(clave: string): void;
 }
 
 /**

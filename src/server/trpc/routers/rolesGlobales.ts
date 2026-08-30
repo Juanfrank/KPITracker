@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { RolGlobal } from '@domain/index';
 import { invocar, protectedProcedure, rolesGlobalesAdminProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 /**
  * Catálogo de roles GLOBALES (Batch AX, fundación SaaS) — mismo criterio de
@@ -12,7 +13,7 @@ export const rolesGlobalesRouter = router({
   listar: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.rolesGlobales.listar())),
 
   guardar: rolesGlobalesAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.rolesGlobales.guardar(input as RolGlobal))),
 
   eliminar: rolesGlobalesAdminProcedure

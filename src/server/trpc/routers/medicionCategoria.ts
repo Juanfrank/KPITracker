@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ConfiguracionMedicionCategoria } from '@domain/index';
 import { categoriasAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConCategoriaId } from '../schemas';
 
 /** Medición por categoría/subcategoría (Batch Y) — mismo gating que Categorías (`puedeAdministrarCategorias`). */
 export const medicionCategoriaRouter = router({
@@ -9,7 +10,7 @@ export const medicionCategoriaRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['medicionCategoria:obtener'](input))),
 
   guardar: categoriasAdminProcedure
-    .input(z.any())
+    .input(objetoConCategoriaId)
     .mutation(({ ctx, input }) =>
       invocar(() => ctx.aplicacion.manejadores['medicionCategoria:guardar'](input as ConfiguracionMedicionCategoria))
     ),

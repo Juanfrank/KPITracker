@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { componerAplicacionServidor } from './composicionServidor';
@@ -45,6 +46,7 @@ export async function crearApp(opciones: OpcionesApp): Promise<AppConstruida> {
 
   const app = express();
   app.disable('x-powered-by');
+  app.use(cabecerasSeguridad);
   app.use(cookieParser(secretoCookie()));
 
   app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext: crearContextFactory(aplicacion) }));
@@ -70,6 +72,36 @@ export async function crearApp(opciones: OpcionesApp): Promise<AppConstruida> {
   }
 
   return { app, aplicacion, cerrar: () => aplicacion.cerrar() };
+}
+
+/**
+ * Cabeceras de hardening (audit de seguridad, MEDIUM): antes de este cambio
+ * solo `x-powered-by` estaba deshabilitada — sin CSP por header (el `<meta>`
+ * de `index.html` no cubre `frame-ancestors`, que la especificación CSP
+ * prohíbe declarar vía `<meta>`), sin `X-Frame-Options` (la app podía
+ * embeberse en un `<iframe>` de cualquier origen — clickjacking), sin
+ * `X-Content-Type-Options` ni `Referrer-Policy`. Aplica a TODA respuesta
+ * (API incluida, no solo la SPA) — barato y sin efecto observable en el uso
+ * normal, ya que la política ya es efectivamente same-origin (mismo origen
+ * sirve la SPA y `/api/*`, ver comentario de `crearApp`). HSTS solo en
+ * producción, mismo criterio que la cookie `secure` (ver `authRouter.login`)
+ * — en HTTP plano el navegador la ignora igual, pero fijarla sin TLS de por
+ * medio no aporta nada y podría confundir a quien inspeccione las cabeceras
+ * en desarrollo.
+ */
+function cabecerasSeguridad(_req: Request, res: Response, next: NextFunction): void {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+      "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+  );
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  next();
 }
 
 /** Secreto para firmar la cookie de sesión — obligatorio en producción, con un valor de desarrollo predecible fuera de ella. */

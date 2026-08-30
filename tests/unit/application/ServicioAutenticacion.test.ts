@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ValidacionError } from '@domain/index';
 import type { Sesion, Usuario } from '@domain/index';
 import type { ISesionRepository, IUsuarioRepository } from '@application/ports/index';
-import { ServicioAutenticacion } from '@application/use-cases/ServicioAutenticacion';
+import { HORAS_EXPIRACION_SESION, ServicioAutenticacion } from '@application/use-cases/ServicioAutenticacion';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
+import { LimitadorIntentosLoginMemoria } from '@infrastructure/auth/LimitadorIntentosLoginMemoria';
 import { GeneradorUuid, RelojSistema } from '@infrastructure/soporte/servicios';
 
 /**
@@ -52,6 +53,27 @@ async function construir() {
   });
 
   return { servicio, usuarios, sesiones, ids, reloj };
+}
+
+/** Igual que `construir()`, pero con el freno de fuerza bruta (audit de seguridad, MEDIUM) enganchado. */
+async function construirConLimitador() {
+  const usuarios = new UsuarioRepositoryMemoria();
+  const sesiones = new SesionRepositoryMemoria();
+  const authProvider = new ProveedorPassword(usuarios);
+  const ids = new GeneradorUuid();
+  const reloj = new RelojSistema();
+  const limitador = new LimitadorIntentosLoginMemoria();
+  const servicio = new ServicioAutenticacion(authProvider, usuarios, sesiones, ids, reloj, HORAS_EXPIRACION_SESION, limitador);
+
+  const passwordHash = await authProvider.hashear('correcta123');
+  const ahora = reloj.ahoraIso();
+  await usuarios.guardar({
+    id: 'u1', nombreUsuario: 'jperez', nombreCompleto: 'Juan Pérez', correo: null, passwordHash,
+    esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, rolGlobalId: null, workspaceActualId: 'workspace-default',
+    activo: true, eliminado: false, creadoEn: ahora, actualizadoEn: ahora
+  });
+
+  return { servicio, limitador };
 }
 
 describe('ServicioAutenticacion', () => {
@@ -115,5 +137,46 @@ describe('ServicioAutenticacion', () => {
     expect(a.sesionId).not.toBe(b.sesionId);
     expect(await servicio.validarSesion(a.sesionId)).not.toBeNull();
     expect(await servicio.validarSesion(b.sesionId)).not.toBeNull();
+  });
+
+  it('sin limitador (parámetro opcional omitido) sigue funcionando exactamente igual — compatibilidad hacia atrás', async () => {
+    const { servicio } = await construir();
+    for (let i = 0; i < 6; i++) {
+      await expect(servicio.iniciarSesion('jperez', 'incorrecta')).rejects.toThrow('Usuario o contraseña incorrectos.');
+    }
+    // Ningún bloqueo — sin limitador, el login correcto sigue pasando incluso tras más de 5 fallos.
+    await expect(servicio.iniciarSesion('jperez', 'correcta123')).resolves.toBeTruthy();
+  });
+});
+
+describe('ServicioAutenticacion — freno de fuerza bruta (audit de seguridad, MEDIUM)', () => {
+  it('bloquea tras 5 intentos fallidos, incluso con la contraseña correcta en el 6to intento', async () => {
+    const { servicio } = await construirConLimitador();
+    for (let i = 0; i < 5; i++) {
+      await expect(servicio.iniciarSesion('jperez', 'incorrecta')).rejects.toThrow('Usuario o contraseña incorrectos.');
+    }
+    await expect(servicio.iniciarSesion('jperez', 'correcta123')).rejects.toThrow('Demasiados intentos fallidos');
+  });
+
+  it('un login exitoso limpia el contador — los fallos previos no se acumulan hacia un bloqueo futuro', async () => {
+    const { servicio } = await construirConLimitador();
+    for (let i = 0; i < 3; i++) {
+      await expect(servicio.iniciarSesion('jperez', 'incorrecta')).rejects.toThrow('Usuario o contraseña incorrectos.');
+    }
+    await expect(servicio.iniciarSesion('jperez', 'correcta123')).resolves.toBeTruthy();
+    // 3 fallos más tras el éxito — lejos de los 5 necesarios para bloquear, porque el contador se reinició.
+    for (let i = 0; i < 3; i++) {
+      await expect(servicio.iniciarSesion('jperez', 'incorrecta')).rejects.toThrow('Usuario o contraseña incorrectos.');
+    }
+    await expect(servicio.iniciarSesion('jperez', 'correcta123')).resolves.toBeTruthy();
+  });
+
+  it('el bloqueo es por usuario (normalizado a minúsculas) — un nombre de usuario distinto no se ve afectado', async () => {
+    const { servicio, limitador } = await construirConLimitador();
+    for (let i = 0; i < 5; i++) {
+      await expect(servicio.iniciarSesion('JPeREZ', 'incorrecta')).rejects.toThrow('Usuario o contraseña incorrectos.');
+    }
+    expect(limitador.estaBloqueado('jperez', new Date())).toBe(true);
+    expect(limitador.estaBloqueado('otro.usuario', new Date())).toBe(false);
   });
 });

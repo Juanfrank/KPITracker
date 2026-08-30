@@ -106,6 +106,8 @@ class CredencialGeneradaRepositoryMemoria implements ICredencialGeneradaReposito
     this.pendientes.clear();
     return resultado;
   }
+  async existePendiente(usuarioId: string): Promise<boolean> { return this.pendientes.has(usuarioId); }
+  async limpiarPendiente(usuarioId: string): Promise<void> { this.pendientes.delete(usuarioId); }
 }
 
 function construir() {

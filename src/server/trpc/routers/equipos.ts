@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Equipo } from '@domain/index';
 import { equiposAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 /**
  * Alta/edición/borrado del EQUIPO en sí (no de sus miembros) exige
@@ -15,7 +16,7 @@ export const equiposRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['equipos:listar'](input))),
 
   guardar: equiposAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['equipos:guardar'](input as Equipo))),
 
   eliminar: equiposAdminProcedure

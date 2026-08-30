@@ -21,6 +21,7 @@ import { CambiarWorkspacePage } from './modulos/servicio/CambiarWorkspacePage';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import type { IdentidadConPermisos } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
+import { CambiarPasswordObligatoria } from './auth/CambiarPasswordObligatoria';
 import {
   puedeAdministrarCatalogos, puedeAdministrarRolesGlobales, puedeCambiarWorkspace, puedeModificarAtributos,
   puedeModificarIndicadores, puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
@@ -264,13 +265,21 @@ function Shell(): React.JSX.Element {
   );
 }
 
-/** Guard de sesión: sin `usuario` redirige a `/login` conservando la ruta de origen (`state.from`, ver `LoginPage`). */
+/**
+ * Guard de sesión: sin `usuario` redirige a `/login` conservando la ruta de
+ * origen (`state.from`, ver `LoginPage`). `debeCambiarPassword` (audit de
+ * seguridad, MEDIUM) bloquea con `CambiarPasswordObligatoria` en vez de
+ * `Shell` — el servidor igual rechazaría cualquier mutación mientras esté
+ * pendiente (`protectedProcedure`, `trpc.ts`), esto solo evita que la app
+ * parezca funcionar con un backend que rechaza todo silenciosamente.
+ */
 function RequireAuth(): React.JSX.Element {
   const { usuario, cargando } = useAuth();
   const location = useLocation();
 
   if (cargando) return <div className="vacio" />;
   if (!usuario) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (usuario.debeCambiarPassword) return <CambiarPasswordObligatoria />;
   return <Shell />;
 }
 

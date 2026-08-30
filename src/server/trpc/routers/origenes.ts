@@ -3,6 +3,7 @@ import type { OrigenAutomatico } from '@domain/index';
 import { puedeAdministrarOrigenes } from '@domain/index';
 import { permisosActuales } from '@application/use-cases/contextoUsuario';
 import { origenesAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 /**
  * Hallazgo del audit de seguridad (HIGH-2): `listar` la usan pantallas como
@@ -31,7 +32,7 @@ export const origenesRouter = router({
     }),
 
   guardar: origenesAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['origenes:guardar'](input as OrigenAutomatico))),
 
   eliminar: origenesAdminProcedure
@@ -44,11 +45,11 @@ export const origenesRouter = router({
 
   /** No muta datos propios, pero abre conexión de red saliente — se trata como mutation, no query cacheable. */
   probar: origenesAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['origenes:probar'](input as OrigenAutomatico))),
 
   probarCodigo: origenesAdminProcedure
-    .input(z.object({ origen: z.any(), script: z.string() }))
+    .input(z.object({ origen: objetoConId, script: z.string() }))
     .mutation(({ ctx, input }) =>
       invocar(() => ctx.aplicacion.manejadores['origenes:probarCodigo']({ origen: input.origen as OrigenAutomatico, script: input.script }))
     )

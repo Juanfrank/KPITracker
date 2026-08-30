@@ -29,6 +29,13 @@ interface EstadoAuth {
   salirSimulacion(): Promise<void>;
   /** Batch AX (fundación SaaS): cambia el workspace de la sesión actual — refresca `usuario` al resolver. */
   cambiarWorkspace(workspaceId: string): Promise<void>;
+  /**
+   * Re-consulta `auth.yo`/`simulacion.actual` sin pasar por login — usado
+   * por `CambiarPasswordObligatoria` (audit de seguridad, MEDIUM) tras
+   * `usuarios.cambiarPassword`, para que `usuario.debeCambiarPassword` deje
+   * de bloquear el resto de la app sin forzar un F5.
+   */
+  refrescar(): Promise<void>;
 }
 
 const ContextoAuth = createContext<EstadoAuth | null>(null);
@@ -87,7 +94,7 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
 
   return (
     <ContextoAuth.Provider
-      value={{ usuario, cargando, simulando, login, logout, verComo, salirSimulacion, cambiarWorkspace }}
+      value={{ usuario, cargando, simulando, login, logout, verComo, salirSimulacion, cambiarWorkspace, refrescar }}
     >
       {children}
     </ContextoAuth.Provider>

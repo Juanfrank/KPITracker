@@ -55,6 +55,15 @@ export function CambiarWorkspacePage(): React.JSX.Element {
         descripcion="Elija a cuál workspace cambiar — determina en qué catálogo de roles opera su sesión."
       />
       <div className="tarjeta">
+        {/* Nota de alcance (audit de seguridad, LOW-3): "workspace" hoy solo aísla el
+            catálogo de Roles — indicadores, resultados, categorías, equipos y el resto de
+            los datos son compartidos por todos los workspaces. Se aclara acá para no dar
+            a entender un aislamiento de datos que todavía no existe. */}
+        <div className="aviso" style={{ marginBottom: 16 }}>
+          Cambiar de workspace solo cambia en qué <strong>catálogo de roles</strong> opera su sesión. Los
+          indicadores, resultados y demás datos son compartidos por todos los workspaces — todavía no hay
+          aislamiento de datos entre ellos.
+        </div>
         {error && <div className="aviso error">{error}</div>}
         {cargando ? (
           <Vacio mensaje="Cargando…" />

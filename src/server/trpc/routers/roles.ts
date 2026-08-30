@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Rol } from '@domain/index';
 import { invocar, protectedProcedure, rolesAdminProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 /**
  * Catálogo de roles (Batch T) — lectura abierta a cualquier sesión (la
@@ -15,7 +16,7 @@ export const rolesRouter = router({
   listar: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['roles:listar']())),
 
   guardar: rolesAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['roles:guardar'](input as Rol))),
 
   eliminar: rolesAdminProcedure

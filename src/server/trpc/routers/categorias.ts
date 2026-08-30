@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Categoria } from '@domain/index';
 import { categoriasAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 export const categoriasRouter = router({
   listar: protectedProcedure
@@ -8,7 +9,7 @@ export const categoriasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['categorias:listar'](input))),
 
   guardar: categoriasAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['categorias:guardar'](input as Categoria))),
 
   eliminar: categoriasAdminProcedure

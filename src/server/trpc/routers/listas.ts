@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AliasDesagregacionOrigen, ElementoLista, Lista } from '@domain/index';
 import { listasModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 export const listasRouter = router({
   listar: protectedProcedure
@@ -8,7 +9,7 @@ export const listasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:listar'](input))),
 
   guardar: listasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardar'](input as Lista))),
 
   eliminar: listasModificarProcedure
@@ -24,7 +25,7 @@ export const listasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:elementos'](input))),
 
   guardarElemento: listasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardarElemento'](input as ElementoLista))),
 
   eliminarElemento: listasModificarProcedure
@@ -40,7 +41,7 @@ export const listasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:aliasPorOrigen'](input))),
 
   guardarAliasOrigen: listasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['listas:guardarAliasOrigen'](input as AliasDesagregacionOrigen))),
 
   eliminarAliasOrigen: listasModificarProcedure

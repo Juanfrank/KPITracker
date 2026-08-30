@@ -1,13 +1,14 @@
-import { z } from 'zod';
 import type { ConfiguracionGeneral } from '@domain/index';
 import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoLibre } from '../schemas';
 
 /**
  * Traslado mecánico de `config:*` (ver `src/shared/ipc.ts`): cada
  * procedimiento delega en `ctx.aplicacion.manejadores[canal]`, que ya hace
- * toda la validación de negocio — el `input` se acepta como opaco (`z.any`)
- * y se castea al tipo exacto del canal, igual que hacía el `payload: unknown`
- * de `ipcMain.handle` en la app de escritorio.
+ * toda la validación de negocio — `guardar` solo exige un objeto plano
+ * (`objetoLibre`, ver `../schemas`, audit de seguridad LOW-1) y se castea al
+ * tipo exacto del canal, igual que hacía el `payload: unknown` de
+ * `ipcMain.handle` en la app de escritorio.
  */
 export const configRouter = router({
   obtener: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['config:obtener']())),
@@ -19,7 +20,7 @@ export const configRouter = router({
    * servidor, ocultar el módulo en el sidebar habría sido solo cosmético.
    */
   guardar: catalogosAdminProcedure
-    .input(z.any())
+    .input(objetoLibre)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['config:guardar'](input as ConfiguracionGeneral))),
 
   reglasFechaLimite: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['config:reglasFechaLimite']()))

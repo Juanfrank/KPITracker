@@ -1,6 +1,7 @@
 import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { Router } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
 import type { EntidadAdjunto } from '@domain/index';
 import { ValidacionError } from '@domain/index';
@@ -8,7 +9,50 @@ import type { AplicacionServidor } from '../composicionServidor';
 import { requireAuth } from './authMiddleware';
 import { responderError } from './errores';
 
-const subida = multer({ dest: tmpdir(), limits: { fileSize: 100 * 1024 * 1024 } });
+/**
+ * Lista blanca de extensiones para evidencias adjuntas (audit de seguridad,
+ * LOW-2): antes, cualquier tipo de archivo pasaba sin ningún filtro (solo el
+ * tope de 100MB). No es la única defensa — el nombre en disco se sanea y
+ * randomiza (`ArchivoServiceWeb.guardarAdjunto`) y la descarga siempre va
+ * con `Content-Disposition: attachment` (`res.download`, nunca inline) — es
+ * defensa en profundidad adicional, acotando qué puede llegar a subirse en
+ * primer lugar a los tipos de evidencia esperables.
+ */
+const EXTENSIONES_PERMITIDAS = new Set([
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'txt',
+  'jpg', 'jpeg', 'png', 'gif', 'webp'
+]);
+
+function extensionPermitida(nombreArchivo: string): boolean {
+  const punto = nombreArchivo.lastIndexOf('.');
+  if (punto < 0) return false;
+  return EXTENSIONES_PERMITIDAS.has(nombreArchivo.slice(punto + 1).toLowerCase());
+}
+
+const subida = multer({
+  dest: tmpdir(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!extensionPermitida(file.originalname)) {
+      cb(new ValidacionError(
+        `Tipo de archivo no permitido ("${file.originalname}"). Formatos aceptados: ${[...EXTENSIONES_PERMITIDAS].sort().join(', ')}.`
+      ));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
+/** `multer` reporta un `fileFilter` rechazado (u otro error, p. ej. tamaño excedido) vía el callback de error de Express — sin este wrapper, caería al manejador de error genérico de Express (HTML), no al sobre JSON `{ error, detalles }` que espera el cliente. */
+function subirArchivoMiddleware(req: Request, res: Response, next: NextFunction): void {
+  subida.single('archivo')(req, res, (error: unknown) => {
+    if (error) {
+      responderError(res, error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    next();
+  });
+}
 
 /**
  * Reemplaza `adjuntos:subir` (subía vía diálogo nativo, ver plan §5) y
@@ -21,7 +65,7 @@ export function crearRouterAdjuntos(aplicacion: AplicacionServidor): Router {
   const router = Router();
   router.use(requireAuth(aplicacion));
 
-  router.post('/', subida.single('archivo'), async (req, res) => {
+  router.post('/', subirArchivoMiddleware, async (req, res) => {
     const archivo = req.file;
     try {
       if (!archivo) throw new ValidacionError('No se recibió ningún archivo.');

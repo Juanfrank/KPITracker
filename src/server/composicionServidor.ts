@@ -5,7 +5,8 @@ import type { IClock, IIdGenerator, IPasswordHasher } from '@application/ports/i
 import type { Usuario, Workspace } from '@domain/index';
 import { ID_EQUIPO_GENERAL, ID_ROL_GLOBAL_SUPER_ADMINISTRADOR, ID_WORKSPACE_DEFAULT } from '@domain/index';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
-import { ServicioAutenticacion } from '@application/use-cases/ServicioAutenticacion';
+import { LimitadorIntentosLoginMemoria } from '@infrastructure/auth/LimitadorIntentosLoginMemoria';
+import { ServicioAutenticacion, HORAS_EXPIRACION_SESION } from '@application/use-cases/ServicioAutenticacion';
 import { ServicioCatalogoGenerico } from '@application/use-cases/ServicioCatalogoGenerico';
 import { ServicioPermisos } from '@application/use-cases/ServicioPermisos';
 import { ServicioRolesGlobales } from '@application/use-cases/ServicioRolesGlobales';
@@ -46,7 +47,11 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
   const { manejadores, servicios } = componerManejadores(infra);
 
   const hasher = new ProveedorPassword(infra.usuarios);
-  const autenticacion = new ServicioAutenticacion(hasher, infra.usuarios, infra.sesiones, infra.ids, infra.reloj);
+  // Freno de fuerza bruta en auth.login (audit de seguridad, MEDIUM) — ver docstring de ServicioAutenticacion.iniciarSesion.
+  const limitadorIntentos = new LimitadorIntentosLoginMemoria();
+  const autenticacion = new ServicioAutenticacion(
+    hasher, infra.usuarios, infra.sesiones, infra.ids, infra.reloj, HORAS_EXPIRACION_SESION, limitadorIntentos
+  );
   const usuarios = new ServicioUsuarios(
     infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales,
     infra.equipos, infra.indicadores, infra.credencialesGeneradas, ID_EQUIPO_GENERAL,
@@ -60,7 +65,7 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
   );
   const rolesGlobales = new ServicioRolesGlobales(ctxAplicacion, infra.rolesGlobales, infra.usuarios);
 
-  await asegurarAdminInicial(infra.usuarios, hasher, infra.ids, infra.reloj);
+  await asegurarAdminInicial(infra.usuarios, hasher, infra.ids, infra.reloj, infra.credencialesGeneradas);
 
   return {
     infra,
@@ -91,7 +96,8 @@ async function asegurarAdminInicial(
   usuarios: { listar(): Promise<unknown[]>; guardar(u: Usuario): Promise<void> },
   hasher: IPasswordHasher,
   ids: IIdGenerator,
-  reloj: IClock
+  reloj: IClock,
+  credencialesRepo: { registrar(usuarioId: string, passwordTexto: string): Promise<void> }
 ): Promise<void> {
   if ((await usuarios.listar()).length > 0) return;
 
@@ -99,9 +105,10 @@ async function asegurarAdminInicial(
   const passwordConfigurada = process.env.ADMIN_INICIAL_PASSWORD;
   const password = passwordConfigurada ?? 'admin1234';
   const ahora = reloj.ahoraIso();
+  const id = ids.nuevoId();
 
   await usuarios.guardar({
-    id: ids.nuevoId(),
+    id,
     nombreUsuario,
     nombreCompleto: 'Administrador',
     correo: null,
@@ -117,6 +124,12 @@ async function asegurarAdminInicial(
     creadoEn: ahora,
     actualizadoEn: ahora
   });
+
+  // Audit de seguridad (MEDIUM): con la contraseña por defecto ("admin1234"), no basta con la
+  // advertencia en consola — se registra como credencial pendiente (mismo mecanismo que ya usa
+  // ServicioUsuarios para cuentas auto-creadas, ver `ICredencialGeneradaRepository`), y
+  // `protectedProcedure` (trpc.ts) bloquea toda mutación de este admin hasta que la cambie.
+  if (!passwordConfigurada) await credencialesRepo.registrar(id, password);
 
   console.warn(
     `[KPITracker] No había usuarios — se creó el administrador inicial "${nombreUsuario}".` +

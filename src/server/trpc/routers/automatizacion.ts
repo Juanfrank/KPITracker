@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AutomatizacionIndicador, ParametroDinamico } from '@domain/index';
 import { catalogosAdminProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId, objetoLibre } from '../schemas';
 
 export const automatizacionRouter = router({
   obtener: protectedProcedure
@@ -8,7 +9,7 @@ export const automatizacionRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:obtener'](input))),
 
   guardar: catalogosAdminProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['automatizacion:guardar'](input as AutomatizacionIndicador))),
 
   eliminar: catalogosAdminProcedure
@@ -21,7 +22,7 @@ export const automatizacionRouter = router({
         indicadorId: z.string(),
         periodoId: z.string(),
         origenAutomaticoId: z.string(),
-        parametrosDinamicos: z.array(z.any()),
+        parametrosDinamicos: z.array(objetoLibre),
         script: z.string()
       })
     )

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Meta } from '@domain/index';
 import { metasModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 export const metasRouter = router({
   listar: protectedProcedure
@@ -8,7 +9,7 @@ export const metasRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['metas:listar'](input))),
 
   guardar: metasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['metas:guardar'](input as Meta))),
 
   eliminar: metasModificarProcedure

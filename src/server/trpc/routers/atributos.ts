@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Atributo } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { atributosModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId, objetoLibre } from '../schemas';
 
 export const atributosRouter = router({
   listar: protectedProcedure
@@ -9,7 +10,7 @@ export const atributosRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:listar'](input))),
 
   guardar: atributosModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:guardar'](input as Atributo))),
 
   eliminar: atributosModificarProcedure
@@ -25,6 +26,6 @@ export const atributosRouter = router({
     .query(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:valores'](input))),
 
   guardarValor: atributosModificarProcedure
-    .input(z.any())
+    .input(objetoLibre)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['atributos:guardarValor'](input as ValorAtributoEntidad)))
 });

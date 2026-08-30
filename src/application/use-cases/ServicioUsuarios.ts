@@ -141,6 +141,10 @@ export class ServicioUsuarios {
     if (passwordNueva.length < 8) throw new ValidacionError('La contraseña debe tener al menos 8 caracteres.');
     const usuario = await this.obtenerOFallar(id);
     await this.repo.guardar({ ...usuario, passwordHash: await this.hasher.hashear(passwordNueva), actualizadoEn: this.reloj.ahoraIso() });
+    // Audit de seguridad (MEDIUM): si `id` tenía una credencial generada pendiente (típicamente el
+    // admin sembrado con la contraseña por defecto, ver `asegurarAdminInicial`), ya no es vigente —
+    // levanta el bloqueo de `protectedProcedure` (trpc.ts) sobre este usuario.
+    await this.credencialesRepo.limpiarPendiente(id);
   }
 
   /** Verifica que, tras el cambio propuesto sobre `usuarioId`, quede al menos un administrador activo. */

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { CorteMedicion } from '@domain/index';
 import { metasModificarProcedure, invocar, protectedProcedure, router } from '../trpc';
+import { objetoConId } from '../schemas';
 
 /**
  * "Cortes de medición" (Batch Y) — mismo gating que Metas
@@ -11,7 +12,7 @@ export const cortesMedicionRouter = router({
   listar: protectedProcedure.query(({ ctx }) => invocar(() => ctx.aplicacion.manejadores['cortesMedicion:listar']())),
 
   guardar: metasModificarProcedure
-    .input(z.any())
+    .input(objetoConId)
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.manejadores['cortesMedicion:guardar'](input as CorteMedicion))),
 
   eliminar: metasModificarProcedure

@@ -37,6 +37,13 @@ export const publicProcedure = t.procedure;
 const RUTAS_EXENTAS_DE_SIMULACION = new Set(['simulacion.terminar', 'auth.logout']);
 
 /**
+ * Rutas exentas del bloqueo por "cambio de contraseña pendiente" (ver más
+ * abajo) — sin esta excepción, un administrador con contraseña por defecto
+ * quedaría atrapado sin poder cambiarla ni cerrar sesión.
+ */
+const RUTAS_EXENTAS_DE_PASSWORD_PENDIENTE = new Set(['usuarios.cambiarPassword', 'auth.logout']);
+
+/**
  * Exige una sesión válida (`ctx.usuario` no nulo) y establece esa identidad
  * como "usuario ambiente" (`conUsuario`, ver `contextoUsuario.ts`) para toda
  * la auditoría que dispare el resolver — el mismo mecanismo que hoy usa la
@@ -50,12 +57,28 @@ const RUTAS_EXENTAS_DE_SIMULACION = new Set(['simulacion.terminar', 'auth.logout
  * se le atribuye una acción a alguien que no la realizó. Toda mutación se
  * rechaza mientras la simulación esté activa (salvo la que la termina),
  * dejando la simulación puramente de lectura.
+ *
+ * Audit de seguridad (MEDIUM): además, si el administrador en curso tiene
+ * una credencial generada pendiente (hoy, solo ocurre con el admin
+ * sembrado en el primer arranque cuando se usó la contraseña por defecto
+ * "admin1234" — ver `asegurarAdminInicial`), toda mutación se rechaza salvo
+ * `usuarios.cambiarPassword`/`auth.logout` — fuerza el cambio antes de
+ * dejarlo hacer cualquier otra cosa. Deliberadamente acotado a
+ * `esAdministrador`: `usuarios.cambiarPassword` es `adminProcedure` (solo un
+ * administrador puede cambiar contraseñas), así que aplicar este bloqueo a
+ * un usuario NO-admin con una credencial pendiente (p. ej. una cuenta
+ * recién creada) lo dejaría sin ninguna forma de cambiarla él mismo.
  */
 export const protectedProcedure = t.procedure.use(async ({ ctx, next, type, path }) => {
   if (!ctx.usuario) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Se requiere iniciar sesión.' });
   const usuario = ctx.usuario;
   if (ctx.usuarioSimulado && type === 'mutation' && !RUTAS_EXENTAS_DE_SIMULACION.has(path)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Modo simulación ("Ver como"): solo lectura. Salga de la simulación para modificar datos.' });
+  }
+  if (usuario.esAdministrador && type === 'mutation' && !RUTAS_EXENTAS_DE_PASSWORD_PENDIENTE.has(path)) {
+    if (await ctx.aplicacion.infra.credencialesGeneradas.existePendiente(usuario.id)) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Debe cambiar su contraseña antes de continuar.' });
+    }
   }
   // Batch T: además de la identidad (conUsuario, para auditoría), resuelve y planta el
   // ContextoPermisos ambiente que consumen los Servicio* para filtrar/gatear por permiso.

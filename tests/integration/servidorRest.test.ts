@@ -163,6 +163,21 @@ describe('Rutas REST — /api/adjuntos', () => {
     expect(descarga.status).toBe(200);
     expect(await descarga.text()).toBe('contenido de prueba');
   });
+
+  it('rechaza un tipo de archivo fuera de la lista blanca (audit de seguridad, LOW-2)', async () => {
+    await iniciarSesionAdmin();
+    const admin = clienteTrpc({ valor: cookieSesion });
+    const { entidadId } = await crearLevantamiento(admin, 'ADJ-3');
+
+    const formulario = new FormData();
+    formulario.set('entidad', 'Levantamiento');
+    formulario.set('entidadId', entidadId);
+    formulario.set('archivo', new Blob(['#!/bin/sh\necho hola']), 'script.sh');
+
+    const subida = await fetch(`${baseUrl}/api/adjuntos`, { method: 'POST', headers: { cookie: cookieSesion! }, body: formulario });
+    expect(subida.status).toBe(400);
+    expect((await subida.json()) as { error: string }).toMatchObject({ error: expect.stringContaining('script.sh') });
+  });
 });
 
 describe('Rutas REST/tRPC — adjuntos exigen permiso sobre el indicador del levantamiento (audit de seguridad, HIGH-1)', () => {
@@ -270,5 +285,18 @@ describe('Rutas REST — /api/importacion', () => {
       { nombre: 'Uno', codigo: 'U1' },
       { nombre: 'Dos', codigo: 'U2' }
     ]);
+  });
+});
+
+describe('Cabeceras de hardening (audit de seguridad, MEDIUM)', () => {
+  it('toda respuesta (API incluida) trae CSP/X-Frame-Options/X-Content-Type-Options/Referrer-Policy', async () => {
+    const respuesta = await fetch(`${baseUrl}/api/adjuntos/x/descarga`); // 401 sin cookie — igual debe traer las cabeceras
+    expect(respuesta.headers.get('x-frame-options')).toBe('DENY');
+    expect(respuesta.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(respuesta.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    const csp = respuesta.headers.get('content-security-policy');
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("default-src 'self'");
+    expect(respuesta.headers.get('x-powered-by')).toBeNull();
   });
 });

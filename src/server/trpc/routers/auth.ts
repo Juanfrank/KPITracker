@@ -13,10 +13,23 @@ import { COOKIE_SESION, COOKIE_SIMULACION } from '../context';
  * (ocultar botones/secciones), la aplicación real de cada permiso vive en
  * el servidor.
  */
-async function conPermisos(aplicacion: AplicacionServidor, identidad: IdentidadSesion) {
+/**
+ * `debeCambiarPassword` (audit de seguridad, MEDIUM): refleja exactamente lo
+ * que bloquea `protectedProcedure` (trpc.ts) — una credencial generada
+ * pendiente para un administrador (hoy, solo el admin sembrado en el primer
+ * arranque con la contraseña por defecto). El renderer usa esto para
+ * mostrar una pantalla de cambio de contraseña obligatoria, en vez de dejar
+ * que el usuario descubra el bloqueo mutación por mutación.
+ */
+async function debeCambiarPassword(aplicacion: AplicacionServidor, identidad: IdentidadSesion): Promise<boolean> {
+  return identidad.esAdministrador && (await aplicacion.infra.credencialesGeneradas.existePendiente(identidad.id));
+}
+
+async function conPermisos(aplicacion: AplicacionServidor, identidad: IdentidadSesion, sesionReal: IdentidadSesion) {
   const permisos = await aplicacion.permisos.resolver(identidad.id);
   return {
     ...identidad,
+    debeCambiarPassword: await debeCambiarPassword(aplicacion, sesionReal),
     permisos: {
       generales: [...permisos.permisosGenerales],
       equipoId: permisos.equipoId,
@@ -50,7 +63,7 @@ export const authRouter = router({
         secure: process.env.NODE_ENV === 'production',
         maxAge: HORAS_EXPIRACION_SESION * 60 * 60 * 1000
       });
-      return conPermisos(ctx.aplicacion, identidad);
+      return conPermisos(ctx.aplicacion, identidad, identidad);
     }),
 
   logout: protectedProcedure.mutation(async ({ ctx }) => {
@@ -72,6 +85,6 @@ export const authRouter = router({
    */
   yo: publicProcedure.query(({ ctx }) => {
     if (!ctx.usuario) return null;
-    return conPermisos(ctx.aplicacion, ctx.usuarioSimulado ?? ctx.usuario);
+    return conPermisos(ctx.aplicacion, ctx.usuarioSimulado ?? ctx.usuario, ctx.usuario);
   })
 });
