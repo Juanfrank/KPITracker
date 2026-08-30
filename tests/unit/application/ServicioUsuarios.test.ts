@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ID_ROL_ADMINISTRADOR, ValidacionError } from '@domain/index';
-import type { Equipo, Indicador, Rol, Usuario } from '@domain/index';
+import { ID_ROL_ADMINISTRADOR, ID_WORKSPACE_DEFAULT, ValidacionError } from '@domain/index';
+import type { Equipo, Indicador, Rol, RolGlobal, Usuario, Workspace } from '@domain/index';
 import type {
   ICatalogoRepository, ICredencialGeneradaRepository, IIndicadorRepository, IPermisoExcepcionalRepository,
-  IRolRepository, IUsuarioRepository
+  IRolGlobalRepository, IRolRepository, IUsuarioRepository
 } from '@application/ports/index';
 import { ServicioUsuarios } from '@application/use-cases/ServicioUsuarios';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
@@ -29,10 +29,37 @@ class UsuarioRepositoryMemoria implements IUsuarioRepository {
 
 class RolRepositoryMemoria implements IRolRepository {
   private readonly filas = new Map<string, Rol>();
-  async listar(): Promise<Rol[]> { return [...this.filas.values()]; }
+  async listar(workspaceId: string): Promise<Rol[]> {
+    return [...this.filas.values()].filter((r) => r.workspaceId === workspaceId);
+  }
   async obtener(id: string): Promise<Rol | null> { return this.filas.get(id) ?? null; }
   async guardar(rol: Rol): Promise<void> { this.filas.set(rol.id, rol); }
   async eliminar(id: string): Promise<void> { this.filas.delete(id); }
+}
+
+class RolGlobalRepositoryMemoria implements IRolGlobalRepository {
+  private readonly filas = new Map<string, RolGlobal>();
+  async listar(): Promise<RolGlobal[]> { return [...this.filas.values()]; }
+  async obtener(id: string): Promise<RolGlobal | null> { return this.filas.get(id) ?? null; }
+  async guardar(rol: RolGlobal): Promise<void> { this.filas.set(rol.id, rol); }
+  async eliminar(id: string): Promise<void> { this.filas.delete(id); }
+}
+
+class WorkspaceRepositoryMemoria implements ICatalogoRepository<Workspace> {
+  private readonly filas = new Map<string, Workspace>();
+  constructor() {
+    this.filas.set(ID_WORKSPACE_DEFAULT, {
+      id: ID_WORKSPACE_DEFAULT, nombre: 'General', activo: true, eliminado: false,
+      creadoEn: '2026-01-01', actualizadoEn: '2026-01-01'
+    });
+  }
+  async listar(): Promise<Workspace[]> { return [...this.filas.values()]; }
+  async obtener(id: string): Promise<Workspace | null> { return this.filas.get(id) ?? null; }
+  async guardar(item: Workspace): Promise<void> { this.filas.set(item.id, item); }
+  async marcarEliminado(id: string, eliminado: boolean): Promise<void> {
+    const item = this.filas.get(id);
+    if (item) this.filas.set(id, { ...item, eliminado });
+  }
 }
 
 class PermisoExcepcionalRepositoryMemoria implements IPermisoExcepcionalRepository {
@@ -89,11 +116,13 @@ function construir() {
   const equipos = new EquipoRepositoryMemoria();
   const indicadores = new IndicadorRepositoryMemoria();
   const credenciales = new CredencialGeneradaRepositoryMemoria();
+  const rolesGlobales = new RolGlobalRepositoryMemoria();
+  const workspaces = new WorkspaceRepositoryMemoria();
   const servicio = new ServicioUsuarios(
     repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales,
-    equipos, indicadores, credenciales, EQUIPO_GENERAL_ID
+    equipos, indicadores, credenciales, EQUIPO_GENERAL_ID, rolesGlobales, workspaces
   );
-  return { servicio, repo, roles, equipos, indicadores, credenciales };
+  return { servicio, repo, roles, equipos, indicadores, credenciales, rolesGlobales, workspaces };
 }
 
 describe('ServicioUsuarios', () => {

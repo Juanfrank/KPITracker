@@ -21,7 +21,10 @@ async function conPermisos(aplicacion: AplicacionServidor, identidad: IdentidadS
       generales: [...permisos.permisosGenerales],
       equipoId: permisos.equipoId,
       equipo: [...permisos.permisosEquipo],
-      excepcionales: [...permisos.permisosExcepcionales]
+      excepcionales: [...permisos.permisosExcepcionales],
+      // Batch AX (fundación SaaS): permisos GLOBALES (sobre los Workspaces mismos) — el renderer
+      // los usa para el gating de "Workspaces"/"Roles globales" y el selector de cambio de workspace.
+      global: [...permisos.permisosGlobales]
     }
   };
 }

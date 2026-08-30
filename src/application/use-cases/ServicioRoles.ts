@@ -6,15 +6,25 @@ import { ServicioBase } from './base';
 import type { ContextoAplicacion } from './base';
 import { referenciasDeRol } from './referencias';
 import type { DepsReferenciasRol } from './referencias';
+import { workspaceActual } from './contextoUsuario';
 
 /**
  * CRUD de roles (Batch T): nombre + lista de `permisos`, todos del mismo
  * `ambito` que el rol (`CATALOGO_PERMISOS` es fijo en código, ver
  * `Permiso.ts` — este servicio solo valida que los ids elegidos existan y
- * coincidan de ámbito). Los 4 roles semilla (`esSistema: true`) no se pueden
+ * coincidan de ámbito). Los roles semilla (`esSistema: true`) no se pueden
  * borrar ni renombrar, pero sus permisos sí son editables — es lo que hace
  * "configurable" al rol Líder de equipo/Colaborador/Visor, tal como se
  * confirmó con el usuario para este batch.
+ *
+ * Batch AX (fundación SaaS): cada `Rol` pertenece a un Workspace
+ * (`Rol.workspaceId`), resuelto de forma ambiente vía `workspaceActual()`
+ * (ver su docstring en `contextoUsuario.ts`) — ni el constructor ni la
+ * firma pública de este servicio cambiaron para evitar tocar cada llamador
+ * existente (`manejadores.ts`, `roles.ts`). `listar()` solo devuelve los
+ * roles del Workspace ambiente; `guardar()` fuerza ese mismo Workspace en
+ * un rol nuevo e impide cambiarlo en uno ya existente (mismo criterio que
+ * `ambito`, ambos inmutables una vez creado).
  */
 export class ServicioRoles extends ServicioBase {
   constructor(
@@ -26,7 +36,7 @@ export class ServicioRoles extends ServicioBase {
   }
 
   listar(): Promise<Rol[]> {
-    return this.repo.listar();
+    return this.repo.listar(workspaceActual());
   }
 
   async guardar(rol: Rol): Promise<Rol> {
@@ -46,16 +56,20 @@ export class ServicioRoles extends ServicioBase {
     if (permisosInvalidos.length > 0) {
       errores.push(`Permiso(s) inválido(s) o de otro ámbito: ${permisosInvalidos.join(', ')}`);
     }
-    const otros = await this.repo.listar();
+    // Workspace inmutable (Batch AX): un rol nuevo siempre nace en el Workspace ambiente,
+    // sin importar qué haya venido en el objeto — evita que el cliente "cree" un rol en un
+    // Workspace ajeno solo con enviar otro id. Editar uno existente nunca lo mueve de Workspace.
+    const workspaceId = anterior ? anterior.workspaceId : workspaceActual();
+    const otros = await this.repo.listar(workspaceId);
     if (otros.some((r) => r.id !== rol.id && r.nombre.trim().toLowerCase() === rol.nombre.trim().toLowerCase())) {
-      errores.push(`Ya existe un rol con el nombre "${rol.nombre.trim()}".`);
+      errores.push(`Ya existe un rol con el nombre "${rol.nombre.trim()}" en este workspace.`);
     }
     if (errores.length > 0) throw new ValidacionError('Rol inválido.', errores);
 
     const ahora = this.ctx.reloj.ahoraIso();
     const guardado: Rol = anterior
-      ? { ...rol, esSistema: anterior.esSistema, creadoEn: anterior.creadoEn, actualizadoEn: ahora }
-      : { ...rol, id: rol.id || this.ctx.ids.nuevoId(), esSistema: false, creadoEn: ahora, actualizadoEn: ahora };
+      ? { ...rol, esSistema: anterior.esSistema, workspaceId, creadoEn: anterior.creadoEn, actualizadoEn: ahora }
+      : { ...rol, id: rol.id || this.ctx.ids.nuevoId(), esSistema: false, workspaceId, creadoEn: ahora, actualizadoEn: ahora };
     await this.repo.guardar(guardado);
     await this.auditar(anterior ? 'Modificar' : 'Crear', 'Rol', guardado.id, null, null, guardado.nombre);
     return guardado;

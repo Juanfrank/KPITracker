@@ -11,6 +11,7 @@ import * as medicion from './20261015000000_medicion';
 import * as rolVisitante from './20261020000000_rol_visitante';
 import * as cortesMedicionPeriodicidad from './20261101000000_cortes_medicion_periodicidad';
 import * as capturaResultado from './20261110000000_captura_resultado';
+import * as workspaces from './20261120000000_workspaces';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -29,7 +30,8 @@ const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20261015000000_medicion', modulo: medicion },
   { nombre: '20261020000000_rol_visitante', modulo: rolVisitante },
   { nombre: '20261101000000_cortes_medicion_periodicidad', modulo: cortesMedicionPeriodicidad },
-  { nombre: '20261110000000_captura_resultado', modulo: capturaResultado }
+  { nombre: '20261110000000_captura_resultado', modulo: capturaResultado },
+  { nombre: '20261120000000_workspaces', modulo: workspaces }
 ];
 
 /**

@@ -2,16 +2,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
   AmbitoPermiso, Categoria, ConfiguracionMedicionCategoria, Equipo, FuenteParametroGeneral, Indicador,
-  OrigenAutomatico, ParametroGeneral, Rol, TipoAgregacion, TipoOrigenAutomatico, TratamientoIndicadorMedicion
+  OrigenAutomatico, ParametroGeneral, Rol, RolGlobal, TipoAgregacion, TipoOrigenAutomatico,
+  TratamientoIndicadorMedicion, Workspace
 } from '@domain/index';
-import { ETIQUETAS_AGREGACION, OPCIONES_AGREGACION, agruparPermisosParaGrid, ejemploParaFuente, equipoEfectivo, sinCiclo } from '@domain/index';
+import {
+  CATALOGO_PERMISOS_GLOBALES, ETIQUETAS_AGREGACION, OPCIONES_AGREGACION, agruparPermisosParaGrid,
+  ejemploParaFuente, equipoEfectivo, sinCiclo
+} from '@domain/index';
 import type { ResultadoPruebaCodigo } from '@shared/ipc';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
 import { useAuth } from '../../auth/AuthContext';
 import {
   puedeAdministrarCategorias, puedeAdministrarEquipos, puedeAdministrarOrigenes, puedeAdministrarRoles,
-  puedeImportarExportarRespaldo
+  puedeAdministrarRolesGlobales, puedeAdministrarWorkspaces, puedeCrearWorkspaces, puedeEliminarWorkspaces,
+  puedeImportarExportarRespaldo, puedeVerWorkspaces
 } from '../../auth/permisosNav';
 import { Campo, Encabezado, PanelLateral, Vacio } from '../../componentes/basicos';
 import { Icono } from '../../componentes/Icono';
@@ -1210,7 +1215,9 @@ function GridPermisos({
 }
 
 function rolVacio(ambito: AmbitoPermiso): Rol {
-  return { id: '', nombre: '', ambito, permisos: [], esSistema: false, creadoEn: '', actualizadoEn: '' };
+  // `workspaceId` lo fuerza el servidor al Workspace ambiente al guardar (Batch AX) — el valor
+  // acá es un placeholder sin efecto, solo para satisfacer el tipo.
+  return { id: '', nombre: '', ambito, permisos: [], esSistema: false, workspaceId: '', creadoEn: '', actualizadoEn: '' };
 }
 
 /**
@@ -1356,6 +1363,284 @@ function SeccionRoles(): React.JSX.Element {
   );
 }
 
+function rolGlobalVacio(): RolGlobal {
+  return { id: '', nombre: '', permisos: [], esSistema: false, creadoEn: '', actualizadoEn: '' };
+}
+
+/**
+ * Catálogo de roles GLOBALES (Batch AX, fundación SaaS) — mismo patrón que
+ * `SeccionRoles`, sin ámbito (un único catálogo, ver `RolGlobal`): gobiernan
+ * la administración de los Workspaces mismos, no lo que hay DENTRO de uno.
+ */
+function SeccionRolesGlobales(): React.JSX.Element {
+  const [items, setItems] = useState<RolGlobal[]>([]);
+  const [editando, setEditando] = useState<RolGlobal | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setItems(await trpcClient.rolesGlobales.listar.query());
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const guardar = async (): Promise<void> => {
+    if (!editando) return;
+    setError(null);
+    try {
+      await trpcClient.rolesGlobales.guardar.mutate(editando);
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el rol global.');
+    }
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    setError(null);
+    try {
+      await trpcClient.rolesGlobales.eliminar.mutate({ id });
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar el rol global.');
+    }
+  };
+
+  const alternarPermiso = (permiso: string): void => {
+    if (!editando) return;
+    setEditando({
+      ...editando,
+      permisos: editando.permisos.includes(permiso)
+        ? editando.permisos.filter((p) => p !== permiso)
+        : [...editando.permisos, permiso]
+    });
+  };
+
+  return (
+    <div className="tarjeta">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Roles globales</h3>
+        <div className="separador" />
+        <button className="boton primario" onClick={() => setEditando(rolGlobalVacio())} data-testid="nuevo-rol-global">
+          <Icono nombre="mas" /> Rol global
+        </button>
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Permisos</th>
+              <th style={{ width: 90 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((r) => (
+              <tr key={r.id} onClick={() => setEditando(r)} style={{ cursor: 'pointer' }} data-testid={`rol-global-${r.nombre}`}>
+                <td>{r.nombre} {r.esSistema && <span className="texto-suave">(sistema)</span>}</td>
+                <td className="texto-suave">{r.permisos.length} permiso{r.permisos.length === 1 ? '' : 's'}</td>
+                <td />
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={3}><Vacio mensaje="Sin roles globales" /></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {editando && (
+        <PanelLateral
+          titulo={editando.id ? `Editar rol global — ${editando.nombre}` : 'Nuevo rol global'}
+          alCerrar={() => { setEditando(null); setError(null); }}
+          pie={
+            <>
+              {editando.id && !editando.esSistema && (
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>
+              )}
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-rol-global">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Nombre" obligatorio>
+            <input
+              type="text"
+              value={editando.nombre}
+              onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
+              autoFocus
+              disabled={editando.esSistema}
+              data-testid="rol-global-nombre"
+            />
+            {editando.esSistema && <span className="texto-suave">Los roles del sistema no se pueden renombrar.</span>}
+          </Campo>
+          <Campo etiqueta="Permisos">
+            {CATALOGO_PERMISOS_GLOBALES.map((p) => (
+              <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 'auto' }}
+                  checked={editando.permisos.includes(p.id)}
+                  onChange={() => alternarPermiso(p.id)}
+                  data-testid={`rol-global-permiso-${p.id}`}
+                />
+                {p.etiqueta}
+              </label>
+            ))}
+          </Campo>
+        </PanelLateral>
+      )}
+    </div>
+  );
+}
+
+function workspaceVacio(): Workspace {
+  return { id: '', nombre: '', activo: true, eliminado: false, creadoEn: '', actualizadoEn: '' };
+}
+
+/**
+ * Workspaces (Batch AX, fundación SaaS): la unidad de aislamiento de más
+ * alto nivel — cada uno tiene su propio catálogo de `Rol` (ver
+ * `SeccionRoles`, que siempre opera sobre "el workspace actual" del
+ * usuario, no sobre todos). Solo visible a quien tenga algún permiso
+ * GLOBAL puntual (`puedeVerWorkspaces`) — la enorme mayoría de los usuarios,
+ * que opera en un único Workspace compartido, nunca la ve. El Workspace por
+ * defecto del sistema no se puede eliminar (bloqueado en el servidor,
+ * `referenciasDeWorkspace`).
+ */
+function SeccionWorkspaces(): React.JSX.Element {
+  const { usuario } = useAuth();
+  const [items, setItems] = useState<Workspace[]>([]);
+  const [editando, setEditando] = useState<Workspace | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async (): Promise<void> => {
+    setItems(await trpcClient.workspaces.listar.query());
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const guardar = async (): Promise<void> => {
+    if (!editando) return;
+    setError(null);
+    try {
+      if (editando.id) {
+        await trpcClient.workspaces.renombrar.mutate({ id: editando.id, nombre: editando.nombre });
+        await trpcClient.workspaces.establecerActivo.mutate({ id: editando.id, activo: editando.activo });
+      } else {
+        await trpcClient.workspaces.crear.mutate({ nombre: editando.nombre });
+      }
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el workspace.');
+    }
+  };
+
+  const eliminar = async (id: string): Promise<void> => {
+    setError(null);
+    try {
+      await trpcClient.workspaces.eliminar.mutate({ id });
+      setEditando(null);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar el workspace.');
+    }
+  };
+
+  if (!usuario || !puedeVerWorkspaces(usuario)) return <></>;
+
+  return (
+    <div className="tarjeta">
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Workspaces</h3>
+        <div className="separador" />
+        {puedeCrearWorkspaces(usuario) && (
+          <button className="boton primario" onClick={() => setEditando(workspaceVacio())} data-testid="nuevo-workspace">
+            <Icono nombre="mas" /> Workspace
+          </button>
+        )}
+      </div>
+      <div className="tabla-envoltura">
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Estado</th>
+              <th style={{ width: 90 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((w) => (
+              <tr
+                key={w.id}
+                onClick={() => (puedeAdministrarWorkspaces(usuario) ? setEditando(w) : undefined)}
+                style={{ cursor: puedeAdministrarWorkspaces(usuario) ? 'pointer' : undefined }}
+                data-testid={`workspace-${w.nombre}`}
+              >
+                <td>{w.nombre}</td>
+                <td className="texto-suave">{w.activo ? 'Activo' : 'Inactivo'}</td>
+                <td />
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={3}><Vacio mensaje="Sin workspaces" /></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {editando && (
+        <PanelLateral
+          titulo={editando.id ? `Editar workspace — ${editando.nombre}` : 'Nuevo workspace'}
+          alCerrar={() => { setEditando(null); setError(null); }}
+          pie={
+            <>
+              {editando.id && puedeEliminarWorkspaces(usuario) && (
+                <button className="boton peligro" onClick={() => void eliminar(editando.id)}>Eliminar</button>
+              )}
+              <span style={{ flex: 1 }} />
+              <button className="boton" onClick={() => { setEditando(null); setError(null); }}>Cancelar</button>
+              <button className="boton primario" onClick={() => void guardar()} data-testid="guardar-workspace">Guardar</button>
+            </>
+          }
+        >
+          {error && <div className="aviso error">{error}</div>}
+          <Campo etiqueta="Nombre" obligatorio>
+            <input
+              type="text"
+              value={editando.nombre}
+              onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
+              autoFocus
+              data-testid="workspace-nombre"
+            />
+          </Campo>
+          {editando.id && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto' }}
+                checked={editando.activo}
+                onChange={(e) => setEditando({ ...editando, activo: e.target.checked })}
+                data-testid="workspace-activo"
+              />
+              Activo
+            </label>
+          )}
+        </PanelLateral>
+      )}
+    </div>
+  );
+}
+
 interface UsuarioFila {
   id: string;
   nombreUsuario: string;
@@ -1365,6 +1650,8 @@ interface UsuarioFila {
   rolGeneralId: string | null;
   equipoId: string | null;
   rolEquipoId: string | null;
+  /** Batch AX (fundación SaaS): rol GLOBAL — independiente de `rolGeneralId`/`rolEquipoId`, ver `RolGlobal`. */
+  rolGlobalId: string | null;
   activo: boolean;
   eliminado: boolean;
   permisosExcepcionales: string[];
@@ -1397,6 +1684,7 @@ function SeccionUsuarios(): React.JSX.Element {
   const navigate = useNavigate();
   const [items, setItems] = useState<UsuarioFila[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
+  const [rolesGlobales, setRolesGlobales] = useState<RolGlobal[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [mostrarEliminados, setMostrarEliminados] = useState(false);
   const [creando, setCreando] = useState<ReturnType<typeof usuarioNuevoVacio> | null>(null);
@@ -1410,14 +1698,16 @@ function SeccionUsuarios(): React.JSX.Element {
   >([]);
 
   const cargar = useCallback(async (): Promise<void> => {
-    const [usuarios, listaRoles, listaEquipos] = await Promise.all([
+    const [usuarios, listaRoles, listaEquipos, listaRolesGlobales] = await Promise.all([
       trpcClient.usuarios.listar.query({ incluirEliminados: mostrarEliminados }),
       trpcClient.roles.listar.query(),
-      invocar('equipos:listar', undefined)
+      invocar('equipos:listar', undefined),
+      trpcClient.rolesGlobales.listar.query()
     ]);
     setItems(usuarios);
     setRoles(listaRoles);
     setEquipos(listaEquipos);
+    setRolesGlobales(listaRolesGlobales);
   }, [mostrarEliminados]);
 
   useEffect(() => {
@@ -1462,6 +1752,8 @@ function SeccionUsuarios(): React.JSX.Element {
       await trpcClient.usuarios.establecerEquipo.mutate({ id: editando.id, equipoId: editando.equipoId, rolEquipoId: editando.rolEquipoId });
       await trpcClient.usuarios.establecerPermisosExcepcionales.mutate({ id: editando.id, permisos: editando.permisosExcepcionales });
       await trpcClient.usuarios.establecerActivo.mutate({ id: editando.id, activo: editando.activo });
+      // Batch AX: siempre `adminProcedure` — mismo criterio que `establecerPermisosExcepcionales`.
+      await trpcClient.usuarios.establecerRolGlobal.mutate({ id: editando.id, rolGlobalId: editando.rolGlobalId });
       setEditando(null);
       await cargar();
     } catch (e) {
@@ -1786,6 +2078,19 @@ function SeccionUsuarios(): React.JSX.Element {
               </select>
             </Campo>
           )}
+          <Campo etiqueta="Rol global">
+            <select
+              value={editando.rolGlobalId ?? ''}
+              onChange={(e) => setEditando({ ...editando, rolGlobalId: e.target.value || null })}
+              data-testid="usuario-rol-global"
+            >
+              <option value="">— (ninguno) —</option>
+              {rolesGlobales.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+            </select>
+            <span className="texto-suave">
+              Independiente del rol general/de equipo (Batch AX): da permisos sobre los workspaces mismos — crearlos, administrarlos, cambiar entre ellos.
+            </span>
+          </Campo>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -1857,6 +2162,8 @@ export function AdminPage(): React.JSX.Element {
           que sí abrió Batch X (establecerRolGeneral) con otras que siguen siendo admin-only (crear cuentas,
           contraseñas, esAdministrador, permisos excepcionales) — mostrarla completa a un no-admin expondría
           botones que igual rechazaría el servidor. Queda como límite conocido de esta ronda. */}
+      {usuario && puedeVerWorkspaces(usuario) && <SeccionWorkspaces />}
+      {usuario && puedeAdministrarRolesGlobales(usuario) && <SeccionRolesGlobales />}
       {usuario && puedeAdministrarRoles(usuario) && <SeccionRoles />}
       {usuario?.esAdministrador && <SeccionUsuarios />}
     </>

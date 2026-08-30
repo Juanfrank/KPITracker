@@ -17,6 +17,13 @@ export interface ContextoPermisos {
   permisosEquipo: ReadonlySet<string>;
   /** Permisos concedidos individualmente, fuera del rol nativo — aplican como si fueran generales O de equipo (ver `puedeSobreIndicador`). */
   permisosExcepcionales: ReadonlySet<string>;
+  /**
+   * Permisos de `CATALOGO_PERMISOS_GLOBALES` (Batch AX) — ámbito de
+   * Workspaces, no de indicadores/resultados. Resueltos desde
+   * `Usuario.rolGlobalId`, ver `ServicioPermisos.resolver` y
+   * `PoliticaPermisosGlobal.ts`.
+   */
+  permisosGlobales: ReadonlySet<string>;
 }
 
 export type AccionResultado = 'ver' | 'registrar' | 'validar';

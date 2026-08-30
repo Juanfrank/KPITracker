@@ -21,8 +21,10 @@ import type {
   Resultado,
   ResultadoHistorial,
   Rol,
+  RolGlobal,
   Sesion,
-  Usuario
+  Usuario,
+  Workspace
 } from '@domain/index';
 
 /**
@@ -237,13 +239,32 @@ export interface ICredencialGeneradaRepository {
   consumirTodas(): Promise<Array<{ usuarioId: string; nombreUsuario: string; passwordTexto: string }>>;
 }
 
-/** Catálogo de roles (Batch T) — sin borrado lógico (catálogo pequeño, bloqueado por referencias en la capa de aplicación). */
+/**
+ * Catálogo de roles (Batch T) — sin borrado lógico (catálogo pequeño,
+ * bloqueado por referencias en la capa de aplicación). Batch AX: `listar`
+ * exige un `workspaceId` explícito (cada Workspace tiene su propio catálogo
+ * de roles, ver `Rol.workspaceId`) — quien no conoce el Workspace ambiente
+ * de la request (`ServicioRoles`, ver `workspaceActual()`) lo resuelve
+ * antes de llamar; `referenciasDeWorkspace` lo pasa explícito porque
+ * necesita consultar un Workspace que puede no ser el ambiente.
+ */
 export interface IRolRepository {
-  listar(): Promise<Rol[]>;
+  listar(workspaceId: string): Promise<Rol[]>;
   obtener(id: string): Promise<Rol | null>;
   guardar(rol: Rol): Promise<void>;
   eliminar(id: string): Promise<void>;
 }
+
+/** Catálogo de roles GLOBALES (Batch AX) — mismo criterio que `IRolRepository`, sin partición por Workspace (es un único catálogo compartido). */
+export interface IRolGlobalRepository {
+  listar(): Promise<RolGlobal[]>;
+  obtener(id: string): Promise<RolGlobal | null>;
+  guardar(rol: RolGlobal): Promise<void>;
+  eliminar(id: string): Promise<void>;
+}
+
+/** Catálogo de Workspaces (Batch AX) — mismo shape que `Categoria`/`Equipo`, reutiliza `ICatalogoRepository`. */
+export type IWorkspaceRepository = ICatalogoRepository<Workspace>;
 
 /** Catálogo de "Cortes de medición" (Batch Y) — sin borrado lógico, catálogo pequeño de configuración. */
 export interface ICorteMedicionRepository {

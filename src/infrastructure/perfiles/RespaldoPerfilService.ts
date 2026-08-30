@@ -4,7 +4,7 @@ import type {
   IReglaRepository, IResultadoRepository, IRolRepository
 } from '@application/ports/index';
 import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico } from '@domain/index';
-import { ValidacionError } from '@domain/index';
+import { ID_WORKSPACE_DEFAULT, ValidacionError } from '@domain/index';
 import type {
   ArchivoRespaldo, CategoriaRespaldo, CategoriaResumen, ItemRespaldo, ResultadoImportacionRespaldo, ResumenRespaldo,
   SeleccionRespaldo
@@ -57,7 +57,10 @@ export class RespaldoPerfilService {
         this.repos.periodicidades.listar(true),
         this.repos.categorias.listar(true),
         this.repos.equipos.listar(true),
-        this.repos.roles.listar(),
+        // Batch AX (fundación SaaS, gap conocido y documentado — no silencioso): el respaldo
+        // sigue exportando solo el catálogo de roles del Workspace por defecto, ver mismo
+        // comentario en `ConfigPortableService.exportar`.
+        this.repos.roles.listar(ID_WORKSPACE_DEFAULT),
         this.repos.listas.listar(true),
         this.repos.atributos.listar(undefined, true),
         this.repos.origenesAutomaticos.listar(true),

@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico } from '@domain/index';
+import type { Categoria, DefinicionPeriodicidad, Equipo, OrigenAutomatico, Workspace } from '@domain/index';
 import type { IArchivoService } from '@application/ports/index';
 import { crearInstanciaKnex } from './db/knexInstance';
 import { RutasDataLake } from './parquet/RutasDataLake';
@@ -7,11 +7,11 @@ import {
   AdjuntoRepositoryKnex, AliasDesagregacionOrigenRepositoryKnex, AtributoRepositoryKnex,
   AuditoriaRepositoryKnex, AutomatizacionIndicadorRepositoryKnex, CatalogoRepositoryKnex, CorteMedicionRepositoryKnex,
   CredencialGeneradaRepositoryKnex, IndicadorRepositoryKnex, ListaRepositoryKnex, MedicionCategoriaRepositoryKnex,
-  MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex, RolRepositoryKnex,
-  SesionRepositoryKnex, UsuarioRepositoryKnex,
+  MetaRepositoryKnex, PermisoExcepcionalRepositoryKnex, ReglaRepositoryKnex, ResultadoRepositoryKnex,
+  RolGlobalRepositoryKnex, RolRepositoryKnex, SesionRepositoryKnex, UsuarioRepositoryKnex,
   crearRepositorioDefinicionesPeriodicidad, crearRepositorioEquipos, crearRepositorioOrigenesAutomaticos
 } from './repositories/RepositoriosKnex';
-import { aCategoria, deCategoria } from './repositories/mapeos';
+import { aCategoria, aWorkspace, deCategoria, deWorkspace } from './repositories/mapeos';
 import { ConfiguracionRepositoryJson } from './repositories/ConfiguracionRepositoryJson';
 import { ExportAnaliticoService } from './export/ExportAnaliticoService';
 import { ConfigPortableService } from './config-portable/ConfigPortableService';
@@ -44,6 +44,10 @@ export interface Infraestructura {
   usuarios: UsuarioRepositoryKnex;
   sesiones: SesionRepositoryKnex;
   roles: RolRepositoryKnex;
+  /** Batch AX (fundación SaaS): catálogo de roles GLOBALES (sobre los Workspaces mismos), distinto de `roles` (workspace-scoped). */
+  rolesGlobales: RolGlobalRepositoryKnex;
+  /** Batch AX (fundación SaaS): Workspaces — ver docstring de `Workspace.ts`. */
+  workspaces: CatalogoRepositoryKnex<Workspace>;
   cortesMedicion: CorteMedicionRepositoryKnex;
   medicionCategoria: MedicionCategoriaRepositoryKnex;
   permisosExcepcionales: PermisoExcepcionalRepositoryKnex;
@@ -104,6 +108,8 @@ export async function crearInfraestructura(
   const usuarios = new UsuarioRepositoryKnex(knex);
   const sesiones = new SesionRepositoryKnex(knex);
   const roles = new RolRepositoryKnex(knex);
+  const rolesGlobales = new RolGlobalRepositoryKnex(knex);
+  const workspaces = new CatalogoRepositoryKnex(knex, 'workspaces', aWorkspace, deWorkspace, true);
   const cortesMedicion = new CorteMedicionRepositoryKnex(knex);
   const medicionCategoria = new MedicionCategoriaRepositoryKnex(knex);
   const permisosExcepcionales = new PermisoExcepcionalRepositoryKnex(knex);
@@ -145,6 +151,8 @@ export async function crearInfraestructura(
     usuarios,
     sesiones,
     roles,
+    rolesGlobales,
+    workspaces,
     cortesMedicion,
     medicionCategoria,
     permisosExcepcionales,

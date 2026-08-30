@@ -1,6 +1,6 @@
 import { ID_ROL_ADMINISTRADOR } from '@domain/index';
 import type { ContextoPermisos } from '@domain/index';
-import type { IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository } from '@application/ports/index';
+import type { IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository } from '@application/ports/index';
 
 /**
  * Resuelve el `ContextoPermisos` (dominio, `PoliticaPermisos.ts`) de un
@@ -25,7 +25,9 @@ export class ServicioPermisos {
   constructor(
     private readonly usuarios: IUsuarioRepository,
     private readonly roles: IRolRepository,
-    private readonly permisosExcepcionales: IPermisoExcepcionalRepository
+    private readonly permisosExcepcionales: IPermisoExcepcionalRepository,
+    /** Batch AX (fundación SaaS): resuelve `Usuario.rolGlobalId` → `ContextoPermisos.permisosGlobales`. */
+    private readonly rolesGlobales: IRolGlobalRepository
   ) {}
 
   async resolver(usuarioId: string): Promise<ContextoPermisos> {
@@ -37,14 +39,16 @@ export class ServicioPermisos {
         equipoId: null,
         permisosGenerales: new Set(),
         permisosEquipo: new Set(),
-        permisosExcepcionales: new Set()
+        permisosExcepcionales: new Set(),
+        permisosGlobales: new Set()
       };
     }
 
-    const [rolGeneral, rolEquipo, excepcionales] = await Promise.all([
+    const [rolGeneral, rolEquipo, excepcionales, rolGlobal] = await Promise.all([
       usuario.rolGeneralId ? this.roles.obtener(usuario.rolGeneralId) : Promise.resolve(null),
       usuario.equipoId && usuario.rolEquipoId ? this.roles.obtener(usuario.rolEquipoId) : Promise.resolve(null),
-      this.permisosExcepcionales.listarPorUsuario(usuarioId)
+      this.permisosExcepcionales.listarPorUsuario(usuarioId),
+      usuario.rolGlobalId ? this.rolesGlobales.obtener(usuario.rolGlobalId) : Promise.resolve(null)
     ]);
 
     return {
@@ -53,7 +57,8 @@ export class ServicioPermisos {
       equipoId: usuario.equipoId,
       permisosGenerales: new Set(rolGeneral?.ambito === 'general' ? rolGeneral.permisos : []),
       permisosEquipo: new Set(rolEquipo?.ambito === 'equipo' ? rolEquipo.permisos : []),
-      permisosExcepcionales: new Set(excepcionales)
+      permisosExcepcionales: new Set(excepcionales),
+      permisosGlobales: new Set(rolGlobal?.permisos ?? [])
     };
   }
 }

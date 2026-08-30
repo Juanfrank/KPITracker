@@ -4,23 +4,24 @@ import { compararRoles } from '@domain/index';
 import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, ConfiguracionMedicionCategoria,
   CorteMedicion, DefinicionPeriodicidad, ElementoLista, EntidadAdjunto, Equipo, Indicador, Levantamiento, Lista,
-  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Rol, Sesion, Usuario
+  Meta, OrigenAutomatico, RegistroAuditoria, ReglaNegocio, Resultado, ResultadoHistorial, Rol, RolGlobal, Sesion,
+  Usuario
 } from '@domain/index';
 import type {
   FiltroAuditoria, IAdjuntoRepository, IAliasDesagregacionOrigenRepository, IAtributoRepository,
   IAuditoriaRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository, ICorteMedicionRepository,
   ICredencialGeneradaRepository, IIndicadorRepository, IListaRepository, IMedicionCategoriaRepository,
-  IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository, IRolRepository,
-  ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
+  IMetaRepository, IPermisoExcepcionalRepository, IReglaRepository, IResultadoRepository, IRolGlobalRepository,
+  IRolRepository, ISesionRepository, IUsuarioRepository, ResumenPeriodo, ValorAtributoEntidad
 } from '@application/ports/index';
 import { upsert } from '../db/upsert';
 import {
   aAdjunto, aAliasDesagregacionOrigen, aAtributo, aAuditoria, aAutomatizacionIndicador, aCorteMedicion,
   aDefinicionPeriodicidad, aElemento, aEquipo, aIndicador, aLevantamiento, aLista, aMedicionCategoria, aMeta,
-  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, aRol, aSesion, aUsuario,
+  aOrigenAutomatico, aRegla, aResultado, aResultadoHistorial, aRol, aRolGlobal, aSesion, aUsuario,
   deAdjunto, deAliasDesagregacionOrigen, deAtributo, deAuditoria, deAutomatizacionIndicador, deCorteMedicion,
   deDefinicionPeriodicidad, deElemento, deEquipo, deIndicador, deLevantamiento, deLista, deMedicionCategoria, deMeta,
-  deOrigenAutomatico, deRegla, deResultado, deResultadoHistorial, deRol, deSesion, deUsuario
+  deOrigenAutomatico, deRegla, deResultado, deResultadoHistorial, deRol, deRolGlobal, deSesion, deUsuario
 } from './mapeos';
 
 /**
@@ -461,10 +462,11 @@ export class CredencialGeneradaRepositoryKnex extends RepositorioBase implements
 }
 
 export class RolRepositoryKnex extends RepositorioBase implements IRolRepository {
-  async listar(): Promise<Rol[]> {
+  async listar(workspaceId: string): Promise<Rol[]> {
     // Orden por ámbito, luego `compararRoles` (Batch Y: orden fijo de los roles semilla,
-    // no alfabético — un ORDER BY de SQL no puede expresar ese orden explícito).
-    const filas = (await this.knex('roles').select('*').orderBy('ambito')).map(aRol);
+    // no alfabético — un ORDER BY de SQL no puede expresar ese orden explícito). Batch AX:
+    // filtrado por Workspace — cada uno tiene su propio catálogo de roles.
+    const filas = (await this.knex('roles').select('*').where({ workspace_id: workspaceId }).orderBy('ambito')).map(aRol);
     return filas.sort((a, b) => (a.ambito === b.ambito ? compararRoles(a, b) : a.ambito.localeCompare(b.ambito)));
   }
 
@@ -479,6 +481,27 @@ export class RolRepositoryKnex extends RepositorioBase implements IRolRepository
 
   async eliminar(id: string): Promise<void> {
     await this.knex('roles').where({ id }).delete();
+  }
+}
+
+/** Catálogo de roles GLOBALES (Batch AX) — sin partición por Workspace, orden semilla-primero + alfabético. */
+export class RolGlobalRepositoryKnex extends RepositorioBase implements IRolGlobalRepository {
+  async listar(): Promise<RolGlobal[]> {
+    const filas = await this.knex('roles_globales').select('*').orderBy([{ column: 'es_sistema', order: 'desc' }, { column: 'nombre', order: 'asc' }]);
+    return filas.map(aRolGlobal);
+  }
+
+  async obtener(id: string): Promise<RolGlobal | null> {
+    const fila = await this.knex('roles_globales').where({ id }).first();
+    return fila ? aRolGlobal(fila) : null;
+  }
+
+  async guardar(rol: RolGlobal): Promise<void> {
+    await upsert(this.knex, 'roles_globales', { id: rol.id }, deRolGlobal(rol));
+  }
+
+  async eliminar(id: string): Promise<void> {
+    await this.knex('roles_globales').where({ id }).delete();
   }
 }
 

@@ -23,6 +23,8 @@ import { rolesRouter } from './routers/roles';
 import { cortesMedicionRouter } from './routers/cortesMedicion';
 import { medicionCategoriaRouter } from './routers/medicionCategoria';
 import { simulacionRouter } from './routers/simulacion';
+import { workspacesRouter } from './routers/workspaces';
+import { rolesGlobalesRouter } from './routers/rolesGlobales';
 
 /**
  * Router raíz: un sub-router por prefijo de `CanalesIpc` (ver
@@ -54,7 +56,9 @@ export const appRouter = router({
   roles: rolesRouter,
   cortesMedicion: cortesMedicionRouter,
   medicionCategoria: medicionCategoriaRouter,
-  simulacion: simulacionRouter
+  simulacion: simulacionRouter,
+  workspaces: workspacesRouter,
+  rolesGlobales: rolesGlobalesRouter
 });
 
 export type AppRouter = typeof appRouter;

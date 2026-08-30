@@ -1,9 +1,11 @@
+import { ID_WORKSPACE_DEFAULT } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository,
   IAtributoRepository,
   IAutomatizacionIndicadorRepository,
   IIndicadorRepository,
   IReglaRepository,
+  IRolRepository,
   IUsuarioRepository
 } from '@application/ports/index';
 
@@ -168,6 +170,32 @@ export async function referenciasDeOrigen(deps: DepsReferenciasOrigen, origenId:
 
   const alias = await deps.aliasDesagregacionOrigen.listarPorOrigen(origenId);
   if (alias.length > 0) detalles.push(`Alias de desagregación (${alias.length})`);
+
+  return detalles;
+}
+
+export interface DepsReferenciasWorkspace {
+  usuarios: IUsuarioRepository;
+  roles: IRolRepository;
+}
+
+/**
+ * Bloquea el borrado de un Workspace (Batch AX): nunca el Workspace por
+ * defecto del sistema (`ID_WORKSPACE_DEFAULT` — todo usuario/rol existente
+ * antes de este batch vive ahí, ver la migración `20261120000000_workspaces.ts`),
+ * y ninguno en el que "viva" algún usuario (`workspaceActualId`) o que
+ * tenga algún `Rol` propio.
+ */
+export async function referenciasDeWorkspace(deps: DepsReferenciasWorkspace, workspaceId: string): Promise<string[]> {
+  if (workspaceId === ID_WORKSPACE_DEFAULT) return ['Es el workspace por defecto del sistema'];
+
+  const detalles: string[] = [];
+  const usuarios = await deps.usuarios.listar();
+  const enEsteWorkspace = usuarios.filter((u) => u.workspaceActualId === workspaceId);
+  if (enEsteWorkspace.length > 0) detalles.push(`Usuario(s) activos en este workspace (${enEsteWorkspace.length})`);
+
+  const roles = await deps.roles.listar(workspaceId);
+  if (roles.length > 0) detalles.push(`Rol(es) propios de este workspace (${roles.length})`);
 
   return detalles;
 }

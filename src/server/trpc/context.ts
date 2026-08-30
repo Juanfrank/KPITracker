@@ -51,7 +51,8 @@ export function crearContextFactory(aplicacion: AplicacionServidor) {
       if (simulado && !simulado.eliminado) {
         usuarioSimulado = {
           id: simulado.id, nombreUsuario: simulado.nombreUsuario, nombreCompleto: simulado.nombreCompleto,
-          esAdministrador: simulado.esAdministrador
+          esAdministrador: simulado.esAdministrador, rolGlobalId: simulado.rolGlobalId,
+          workspaceActualId: simulado.workspaceActualId
         };
       }
     }

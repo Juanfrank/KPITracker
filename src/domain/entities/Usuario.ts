@@ -48,6 +48,30 @@ export interface Usuario {
   equipoId: string | null;
   /** Rol de ámbito equipo (`Rol.ambito === 'equipo'`); solo aplica si `equipoId` no es null. */
   rolEquipoId: string | null;
+  /**
+   * Rol de ámbito GLOBAL (Batch AX, fundación SaaS) — independiente de
+   * `rolGeneralId`/`rolEquipoId` (que son siempre relativos al Workspace
+   * `workspaceActualId`). Da permisos sobre los Workspaces mismos (crear,
+   * administrar, eliminar, cambiar entre ellos), ver `RolGlobal`/
+   * `PoliticaPermisosGlobal.ts`. `null` = sin permisos globales (el caso
+   * común: la enorme mayoría de los usuarios solo opera dentro de su propio
+   * Workspace y nunca necesita este rol).
+   */
+  rolGlobalId: string | null;
+  /**
+   * Workspace en el que este usuario "vive" ahora mismo (Batch AX) — nunca
+   * `null` en la práctica (la migración `20261120000000_workspaces.ts`
+   * backfillea `ID_WORKSPACE_DEFAULT` a todo usuario existente, y
+   * `ServicioUsuarios.crear` hace lo mismo para los nuevos). Determina en
+   * qué catálogo de `Rol` viven `rolGeneralId`/`rolEquipoId`, y solo se
+   * puede cambiar (`ServicioUsuarios.cambiarWorkspaceActual`) con el
+   * permiso global `workspaces.cambiar` (o `esAdministrador`) — sin un
+   * concepto de "membresía" todavía (fuera del alcance de esta fundación,
+   * ver docstring de `Workspace`), cambiar de Workspace no reasigna
+   * `rolGeneralId`/`equipoId`/`rolEquipoId`: quedan tal cual hasta que un
+   * administrador de ESE Workspace se los asigne.
+   */
+  workspaceActualId: string;
   activo: boolean;
   /** Marca de borrado lógico (bloqueado si algún indicador lo referencia como responsable): distinta de `activo`, que se alterna manualmente para des/habilitar el login. */
   eliminado: boolean;

@@ -73,6 +73,43 @@ export function puedeAdministrarRoles(usuario: IdentidadConPermisos): boolean {
   return usuario.esAdministrador || tienePermisoGeneral(usuario, 'roles.administrar');
 }
 
+// --- Batch AX (fundación SaaS): espejo cliente de `PoliticaPermisosGlobal.ts` — permisos sobre
+// los Workspaces mismos, distintos de los de arriba (que son sobre lo que hay DENTRO de uno). ---
+
+function tienePermisoGlobal(usuario: IdentidadConPermisos, id: string): boolean {
+  return usuario.esAdministrador || usuario.permisos.global.includes(id);
+}
+
+export function puedeCrearWorkspaces(usuario: IdentidadConPermisos): boolean {
+  return tienePermisoGlobal(usuario, 'workspaces.crear');
+}
+
+export function puedeAdministrarWorkspaces(usuario: IdentidadConPermisos): boolean {
+  return tienePermisoGlobal(usuario, 'workspaces.administrar');
+}
+
+export function puedeEliminarWorkspaces(usuario: IdentidadConPermisos): boolean {
+  return tienePermisoGlobal(usuario, 'workspaces.eliminar');
+}
+
+export function puedeCambiarWorkspace(usuario: IdentidadConPermisos): boolean {
+  return tienePermisoGlobal(usuario, 'workspaces.cambiar');
+}
+
+export function puedeAdministrarRolesGlobales(usuario: IdentidadConPermisos): boolean {
+  return tienePermisoGlobal(usuario, 'rolesGlobales.administrar');
+}
+
+/** Visible en Administración si hay algo que hacer con Workspaces/roles globales: cualquiera de los de arriba. */
+export function puedeVerWorkspaces(usuario: IdentidadConPermisos): boolean {
+  return (
+    puedeCrearWorkspaces(usuario) ||
+    puedeAdministrarWorkspaces(usuario) ||
+    puedeEliminarWorkspaces(usuario) ||
+    puedeAdministrarRolesGlobales(usuario)
+  );
+}
+
 /** Visible en el nav "Administración" si hay algo que hacer ahí: cualquiera de las tarjetas de arriba. */
 export function puedeVerAdministracion(usuario: IdentidadConPermisos): boolean {
   return (
@@ -81,6 +118,7 @@ export function puedeVerAdministracion(usuario: IdentidadConPermisos): boolean {
     puedeAdministrarEquipos(usuario) ||
     puedeAdministrarOrigenes(usuario) ||
     puedeImportarExportarRespaldo(usuario) ||
-    puedeAdministrarRoles(usuario)
+    puedeAdministrarRoles(usuario) ||
+    puedeVerWorkspaces(usuario)
   );
 }

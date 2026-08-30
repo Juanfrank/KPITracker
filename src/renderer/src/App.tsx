@@ -19,9 +19,10 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import type { IdentidadConPermisos } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import {
-  puedeAdministrarCatalogos, puedeModificarAtributos, puedeModificarIndicadores, puedeModificarListas,
-  puedeModificarMetas, puedeModificarReglas, puedeVerAdministracion, puedeVerAuditoria
+  puedeAdministrarCatalogos, puedeCambiarWorkspace, puedeModificarAtributos, puedeModificarIndicadores,
+  puedeModificarListas, puedeModificarMetas, puedeModificarReglas, puedeVerAdministracion, puedeVerAuditoria
 } from './auth/permisosNav';
+import { trpcClient } from './trpc';
 
 interface ModuloDef {
   id: string;
@@ -59,6 +60,45 @@ const MODULOS: ModuloDef[] = [
 
 function modulosVisiblesPara(usuario: IdentidadConPermisos): ModuloDef[] {
   return MODULOS.filter((m) => !m.visible || m.visible(usuario));
+}
+
+/**
+ * Selector de workspace (Batch AX, fundación SaaS): solo se monta para quien
+ * tiene el permiso global `workspaces.cambiar` (o `esAdministrador`) — la
+ * enorme mayoría de los usuarios opera siempre en un único Workspace y nunca
+ * ve este control. Cambiar el workspace actual navega a Seguimiento (el
+ * mismo default que un login nuevo) porque el catálogo de roles/permisos
+ * cambia por completo — quedarse en una pantalla de administración del
+ * workspace anterior sería confuso.
+ */
+function SelectorWorkspace(): React.JSX.Element | null {
+  const { usuario, cambiarWorkspace } = useAuth();
+  const navigate = useNavigate();
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; nombre: string }>>([]);
+  const [cambiando, setCambiando] = useState(false);
+
+  useEffect(() => {
+    if (!usuario || !puedeCambiarWorkspace(usuario)) return;
+    void trpcClient.workspaces.listar.query().then(setWorkspaces);
+  }, [usuario]);
+
+  if (!usuario || !puedeCambiarWorkspace(usuario) || workspaces.length === 0) return null;
+
+  return (
+    <select
+      value={usuario.workspaceActualId}
+      disabled={cambiando}
+      title="Cambiar de workspace"
+      data-testid="selector-workspace"
+      onChange={(e) => {
+        const workspaceId = e.target.value;
+        setCambiando(true);
+        void cambiarWorkspace(workspaceId).then(() => navigate('/seguimiento')).finally(() => setCambiando(false));
+      }}
+    >
+      {workspaces.map((w) => <option key={w.id} value={w.id}>{w.nombre}</option>)}
+    </select>
+  );
 }
 
 /** Sidebar + contenido de la página activa (resuelta por `<Outlet/>`, ver `App`). Solo se monta con sesión válida. */
@@ -155,6 +195,7 @@ function Shell(): React.JSX.Element {
               ))}
             </div>
           ))}
+          <SelectorWorkspace />
           <div className="fila-usuario">
             <Icono nombre="usuario" tamano={15} />
             <span className="texto-suave etiqueta-nav" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

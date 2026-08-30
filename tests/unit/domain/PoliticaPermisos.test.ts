@@ -15,6 +15,7 @@ function ctx(parcial: Partial<ContextoPermisos> = {}): ContextoPermisos {
     permisosGenerales: new Set(),
     permisosEquipo: new Set(),
     permisosExcepcionales: new Set(),
+    permisosGlobales: new Set(),
     ...parcial
   };
 }

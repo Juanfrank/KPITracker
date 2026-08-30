@@ -3,10 +3,12 @@ import {
   puedeAdministrarCatalogos, puedeAdministrarCategorias, puedeAdministrarEquipos, puedeAdministrarOrigenes,
   puedeAdministrarRoles, puedeImportarExportarRespaldo, puedeModificarAtributos, puedeModificarIndicadores,
   puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
+  puedeAdministrarRolesGlobales, puedeAdministrarWorkspaces, puedeCambiarWorkspace, puedeCrearWorkspaces,
+  puedeEliminarWorkspaces,
   EntidadNoEncontradaError, NoImplementadoError, ValidacionError
 } from '@domain/index';
 import type { ContextoPermisos } from '@domain/index';
-import { conPermisos, conUsuario, permisosActuales } from '@application/use-cases/contextoUsuario';
+import { conPermisos, conUsuario, conWorkspace, permisosActuales } from '@application/use-cases/contextoUsuario';
 import type { Context } from './context';
 
 /**
@@ -58,7 +60,11 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next, type, path
   // Batch T: además de la identidad (conUsuario, para auditoría), resuelve y planta el
   // ContextoPermisos ambiente que consumen los Servicio* para filtrar/gatear por permiso.
   const permisos = await ctx.aplicacion.permisos.resolver(ctx.usuarioSimulado?.id ?? usuario.id);
-  return conPermisos(permisos, () => conUsuario(usuario.id, () => next({ ctx: { ...ctx, usuario } })));
+  // Batch AX: Workspace ambiente (ver `ServicioRoles.listar`) — siempre el de la sesión REAL, nunca
+  // el del usuario simulado (U2), mismo criterio que `conUsuario` abajo: la simulación nunca cambia
+  // "quién es" a efectos de nada que no sea la lectura filtrada por `ContextoPermisos`.
+  return conPermisos(permisos, () =>
+    conWorkspace(usuario.workspaceActualId, () => conUsuario(usuario.id, () => next({ ctx: { ...ctx, usuario } }))));
 });
 
 /** Además de sesión válida, exige `esAdministrador` — gestión de usuarios/roles y pantallas de administración. */
@@ -113,6 +119,13 @@ export const respaldoProcedure = procedureConPermiso(puedeImportarExportarRespal
 
 /** Administrar roles/permisos — deliberadamente NO cubierto por `catalogos.administrar`, ver `puedeAdministrarRoles`. */
 export const rolesAdminProcedure = procedureConPermiso(puedeAdministrarRoles, 'Requiere permiso para administrar roles.');
+
+/** Batch AX (fundación SaaS) — permisos GLOBALES, sobre los Workspaces mismos, ver `PoliticaPermisosGlobal.ts`. */
+export const workspacesCrearProcedure = procedureConPermiso(puedeCrearWorkspaces, 'Requiere permiso para crear workspaces.');
+export const workspacesAdministrarProcedure = procedureConPermiso(puedeAdministrarWorkspaces, 'Requiere permiso para administrar workspaces.');
+export const workspacesEliminarProcedure = procedureConPermiso(puedeEliminarWorkspaces, 'Requiere permiso para eliminar workspaces.');
+export const workspacesCambiarProcedure = procedureConPermiso(puedeCambiarWorkspace, 'Requiere permiso para cambiar de workspace.');
+export const rolesGlobalesAdminProcedure = procedureConPermiso(puedeAdministrarRolesGlobales, 'Requiere permiso para administrar roles globales.');
 
 /**
  * Ejecuta `fn` (normalmente una llamada a `ctx.aplicacion.manejadores[...]`)

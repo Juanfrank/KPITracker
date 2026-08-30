@@ -35,7 +35,7 @@ describe('ProveedorPassword', () => {
     const passwordHash = await proveedor.hashear('correcta123');
     await usuarios.guardar({
       id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash,
-      esAdministrador: true, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      esAdministrador: true, rolGeneralId: null, equipoId: null, rolEquipoId: null, rolGlobalId: null, workspaceActualId: 'workspace-default',
       activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     const resultado = await proveedor.autenticar('ana', 'correcta123');
@@ -47,7 +47,7 @@ describe('ProveedorPassword', () => {
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
       id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, rolGlobalId: null, workspaceActualId: 'workspace-default',
       activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('ana', 'otra-cosa')).toBeNull();
@@ -63,7 +63,7 @@ describe('ProveedorPassword', () => {
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
       id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, rolGlobalId: null, workspaceActualId: 'workspace-default',
       activo: false, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('ana', 'correcta123')).toBeNull();
@@ -74,7 +74,7 @@ describe('ProveedorPassword', () => {
     const proveedor = new ProveedorPassword(usuarios);
     await usuarios.guardar({
       id: 'u1', nombreUsuario: 'ana', nombreCompleto: 'Ana', correo: null, passwordHash: await proveedor.hashear('correcta123'),
-      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null,
+      esAdministrador: false, rolGeneralId: null, equipoId: null, rolEquipoId: null, rolGlobalId: null, workspaceActualId: 'workspace-default',
       activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
     });
     expect(await proveedor.autenticar('  ana  ', 'correcta123')).toEqual({ id: 'u1' });

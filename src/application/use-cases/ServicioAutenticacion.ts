@@ -10,6 +10,10 @@ export interface IdentidadSesion {
   nombreUsuario: string;
   nombreCompleto: string;
   esAdministrador: boolean;
+  /** Batch AX (fundación SaaS): rol GLOBAL del usuario, o `null` sin ninguno — ver `RolGlobal`. */
+  rolGlobalId: string | null;
+  /** Batch AX: Workspace en el que "vive" ahora mismo — ver `Usuario.workspaceActualId`. */
+  workspaceActualId: string;
 }
 
 /**
@@ -68,6 +72,8 @@ function aIdentidad(usuario: Usuario): IdentidadSesion {
     id: usuario.id,
     nombreUsuario: usuario.nombreUsuario,
     nombreCompleto: usuario.nombreCompleto,
-    esAdministrador: usuario.esAdministrador
+    esAdministrador: usuario.esAdministrador,
+    rolGlobalId: usuario.rolGlobalId,
+    workspaceActualId: usuario.workspaceActualId
   };
 }

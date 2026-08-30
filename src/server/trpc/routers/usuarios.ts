@@ -58,6 +58,16 @@ export const usuariosRouter = router({
     .input(z.object({ id: z.string(), permisos: z.array(z.string()) }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.establecerPermisosExcepcionales(input.id, input.permisos))),
 
+  /**
+   * Batch AX (fundación SaaS): asigna/quita el rol GLOBAL de un usuario —
+   * siempre `adminProcedure`, nunca delegable (es el tier más alto, por
+   * encima de cualquier Workspace), mismo criterio que
+   * `establecerPermisosExcepcionales`.
+   */
+  establecerRolGlobal: adminProcedure
+    .input(z.object({ id: z.string(), rolGlobalId: z.string().nullable() }))
+    .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.establecerRolGlobal(input.id, input.rolGlobalId))),
+
   eliminar: catalogosAdminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => invocar(() => ctx.aplicacion.usuarios.eliminar(input.id))),

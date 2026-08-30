@@ -2,7 +2,7 @@ import type {
   Adjunto, AliasDesagregacionOrigen, Atributo, AutomatizacionIndicador, Categoria, ConfiguracionMedicionCategoria,
   CorteMedicion, CortePeriodicidad, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Levantamiento, Lista,
   MapeoColumna, Meta, OrigenAutomatico, ParametroDinamico, ParametroGeneral, RegistroAuditoria, ReglaNegocio,
-  Resultado, ResultadoHistorial, Rol, Sesion, TratamientoIndicadorMedicion, Usuario
+  Resultado, ResultadoHistorial, Rol, RolGlobal, Sesion, TratamientoIndicadorMedicion, Usuario, Workspace
 } from '@domain/index';
 import type { Periodicidad } from '@domain/index';
 
@@ -394,6 +394,11 @@ export const aUsuario = (f: Fila): Usuario => ({
   rolGeneralId: sn(f.rol_general_id),
   equipoId: sn(f.equipo_id),
   rolEquipoId: sn(f.rol_equipo_id),
+  rolGlobalId: sn(f.rol_global_id),
+  // Batch AX: nunca debería llegar null en una fila ya migrada (la migración backfillea
+  // ID_WORKSPACE_DEFAULT a todo usuario existente) — el `s(...)` defensivo evita reventar
+  // si algún dato viejo lo tiene vacío, en vez de silenciosamente devolver `undefined`.
+  workspaceActualId: s(f.workspace_actual_id),
   activo: b(f.activo),
   eliminado: b(f.eliminado ?? false),
   creadoEn: s(f.creado_en),
@@ -404,7 +409,7 @@ export const deUsuario = (u: Usuario): Fila => ({
   id: u.id, nombre_usuario: u.nombreUsuario, nombre_completo: u.nombreCompleto, correo: u.correo,
   password_hash: u.passwordHash,
   es_administrador: u.esAdministrador, rol_general_id: u.rolGeneralId, equipo_id: u.equipoId,
-  rol_equipo_id: u.rolEquipoId,
+  rol_equipo_id: u.rolEquipoId, rol_global_id: u.rolGlobalId, workspace_actual_id: u.workspaceActualId,
   activo: u.activo, eliminado: u.eliminado ?? false, creado_en: u.creadoEn, actualizado_en: u.actualizadoEn
 });
 
@@ -414,12 +419,41 @@ export const aRol = (f: Fila): Rol => ({
   ambito: s(f.ambito) as Rol['ambito'],
   permisos: json<string[]>(f.permisos, []),
   esSistema: b(f.es_sistema),
+  workspaceId: s(f.workspace_id),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
 
 export const deRol = (r: Rol): Fila => ({
   id: r.id, nombre: r.nombre, ambito: r.ambito, permisos: JSON.stringify(r.permisos), es_sistema: r.esSistema,
+  workspace_id: r.workspaceId, creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
+});
+
+export const aWorkspace = (f: Fila): Workspace => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  activo: b(f.activo),
+  eliminado: b(f.eliminado ?? false),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deWorkspace = (w: Workspace): Fila => ({
+  id: w.id, nombre: w.nombre, activo: w.activo, eliminado: w.eliminado ?? false,
+  creado_en: w.creadoEn, actualizado_en: w.actualizadoEn
+});
+
+export const aRolGlobal = (f: Fila): RolGlobal => ({
+  id: s(f.id),
+  nombre: s(f.nombre),
+  permisos: json<string[]>(f.permisos, []),
+  esSistema: b(f.es_sistema),
+  creadoEn: s(f.creado_en),
+  actualizadoEn: s(f.actualizado_en)
+});
+
+export const deRolGlobal = (r: RolGlobal): Fila => ({
+  id: r.id, nombre: r.nombre, permisos: JSON.stringify(r.permisos), es_sistema: r.esSistema,
   creado_en: r.creadoEn, actualizado_en: r.actualizadoEn
 });
 

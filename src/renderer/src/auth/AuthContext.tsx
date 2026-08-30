@@ -27,6 +27,8 @@ interface EstadoAuth {
   verComo(usuarioId: string): Promise<void>;
   /** Termina la simulación activa — refresca `usuario`/`simulando` al resolver. */
   salirSimulacion(): Promise<void>;
+  /** Batch AX (fundación SaaS): cambia el workspace de la sesión actual — refresca `usuario` al resolver. */
+  cambiarWorkspace(workspaceId: string): Promise<void>;
 }
 
 const ContextoAuth = createContext<EstadoAuth | null>(null);
@@ -78,8 +80,15 @@ export function AuthProvider({ children }: PropsWithChildren): React.JSX.Element
     await refrescar();
   }, [refrescar]);
 
+  const cambiarWorkspace = useCallback(async (workspaceId: string): Promise<void> => {
+    await trpcClient.workspaces.cambiarActual.mutate({ workspaceId });
+    await refrescar();
+  }, [refrescar]);
+
   return (
-    <ContextoAuth.Provider value={{ usuario, cargando, simulando, login, logout, verComo, salirSimulacion }}>
+    <ContextoAuth.Provider
+      value={{ usuario, cargando, simulando, login, logout, verComo, salirSimulacion, cambiarWorkspace }}
+    >
       {children}
     </ContextoAuth.Provider>
   );

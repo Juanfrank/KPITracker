@@ -1,11 +1,11 @@
-import { puedeAdministrarCatalogos, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
+import { puedeAdministrarCatalogos, puedeCambiarWorkspace, puedeGestionarMiembrosEquipo, ValidacionError } from '@domain/index';
 import type { Usuario } from '@domain/index';
 import { ID_ROL_ADMINISTRADOR, NOMBRE_ROL_VISITANTE, permisoValido } from '@domain/index';
 import type {
   ICredencialGeneradaRepository, IEquipoRepository, IIndicadorRepository, IPasswordHasher,
-  IPermisoExcepcionalRepository, IRolRepository, IUsuarioRepository
+  IPermisoExcepcionalRepository, IRolGlobalRepository, IRolRepository, IUsuarioRepository, IWorkspaceRepository
 } from '@application/ports/index';
-import { permisosActuales } from './contextoUsuario';
+import { permisosActuales, workspaceActual } from './contextoUsuario';
 import { referenciasDeUsuario } from './referencias';
 import type { IClock, IIdGenerator } from '@application/ports/index';
 
@@ -43,7 +43,11 @@ export class ServicioUsuarios {
     private readonly equiposRepo: IEquipoRepository,
     private readonly indicadoresRepo: IIndicadorRepository,
     private readonly credencialesRepo: ICredencialGeneradaRepository,
-    private readonly equipoGeneralId: string
+    private readonly equipoGeneralId: string,
+    /** Batch AX (fundación SaaS): valida `rolGlobalId` en `establecerRolGlobal`. */
+    private readonly rolesGlobalesRepo: IRolGlobalRepository,
+    /** Batch AX: valida `workspaceId` en `cambiarWorkspaceActual`. */
+    private readonly workspacesRepo: IWorkspaceRepository
   ) {}
 
   private async aPublico(usuario: Usuario): Promise<UsuarioPublico> {
@@ -57,6 +61,8 @@ export class ServicioUsuarios {
       rolGeneralId: usuario.rolGeneralId,
       equipoId: usuario.equipoId,
       rolEquipoId: usuario.rolEquipoId,
+      rolGlobalId: usuario.rolGlobalId,
+      workspaceActualId: usuario.workspaceActualId,
       activo: usuario.activo,
       eliminado: usuario.eliminado,
       creadoEn: usuario.creadoEn,
@@ -78,7 +84,7 @@ export class ServicioUsuarios {
 
   /** Batch Z, pedido explícito del usuario: "Visitante" (sin permisos) es el nuevo rol por defecto de todo usuario sin rol explícito. */
   private async rolGeneralPorDefecto(): Promise<string | null> {
-    const roles = await this.rolesRepo.listar();
+    const roles = await this.rolesRepo.listar(workspaceActual());
     return roles.find((r) => r.esSistema && r.ambito === 'general' && r.nombre === NOMBRE_ROL_VISITANTE)?.id ?? null;
   }
 
@@ -111,6 +117,11 @@ export class ServicioUsuarios {
       rolGeneralId,
       equipoId: null,
       rolEquipoId: null,
+      // Batch AX: un usuario nuevo nace en el Workspace ambiente de quien lo crea (mismo criterio
+      // que ya aplica `ServicioRoles.guardar` a un rol nuevo) — nunca `rolGlobalId` (siempre
+      // exclusivo de `establecerRolGlobal`, gateado a `adminProcedure`).
+      rolGlobalId: null,
+      workspaceActualId: workspaceActual(),
       activo: true,
       eliminado: false,
       creadoEn: ahora,
@@ -218,6 +229,42 @@ export class ServicioUsuarios {
     const invalidos = permisos.filter((p) => !permisoValido(p));
     if (invalidos.length > 0) throw new ValidacionError(`Permiso(s) inválido(s): ${invalidos.join(', ')}`);
     await this.permisosExcepcionalesRepo.establecer(id, [...new Set(permisos)]);
+  }
+
+  /**
+   * Batch AX (fundación SaaS): asigna/quita el rol GLOBAL de un usuario —
+   * siempre `adminProcedure` a nivel de router (mismo criterio que
+   * `establecerPermisosExcepcionales`, nunca delegable vía un permiso
+   * puntual: es el tier más alto, por encima de cualquier Workspace).
+   */
+  async establecerRolGlobal(id: string, rolGlobalId: string | null): Promise<void> {
+    const usuario = await this.obtenerOFallar(id);
+    if (rolGlobalId) {
+      const rol = await this.rolesGlobalesRepo.obtener(rolGlobalId);
+      if (!rol) throw new ValidacionError('El rol global seleccionado no existe.');
+    }
+    await this.repo.guardar({ ...usuario, rolGlobalId, actualizadoEn: this.reloj.ahoraIso() });
+  }
+
+  /**
+   * Batch AX (fundación SaaS): cambia el Workspace en el que "vive" el
+   * propio usuario en curso (`usuarioId` siempre es el de la sesión —
+   * ningún llamador puede cambiar el Workspace de OTRO usuario, ver
+   * `workspacesRouter.cambiarActual`). Exige el permiso global
+   * `workspaces.cambiar` (o `esAdministrador`) — sin un concepto de
+   * "membresía" todavía (ver docstring de `Usuario.workspaceActualId`),
+   * cambiar de Workspace no reasigna `rolGeneralId`/`equipoId`/`rolEquipoId`:
+   * quedan tal cual hasta que un administrador de ESE Workspace se los
+   * asigne.
+   */
+  async cambiarWorkspaceActual(usuarioId: string, workspaceId: string): Promise<void> {
+    const usuario = await this.obtenerOFallar(usuarioId);
+    if (!puedeCambiarWorkspace(permisosActuales())) {
+      throw new ValidacionError('No tiene permiso para cambiar de workspace.');
+    }
+    const workspace = await this.workspacesRepo.obtener(workspaceId);
+    if (!workspace || workspace.eliminado) throw new ValidacionError('El workspace seleccionado no existe.');
+    await this.repo.guardar({ ...usuario, workspaceActualId: workspaceId, actualizadoEn: this.reloj.ahoraIso() });
   }
 
   async guardarDatos(id: string, datos: { nombreCompleto: string; correo?: string | null }): Promise<void> {

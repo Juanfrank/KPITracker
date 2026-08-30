@@ -8,7 +8,10 @@ import type { Rol } from '@domain/index';
 const ahora = '2026-01-01T00:00:00.000Z';
 
 function rol(id: string, nombre: string, ambito: Rol['ambito'] = 'equipo'): Rol {
-  return { id, nombre, ambito, permisos: [], esSistema: id !== 'custom', creadoEn: ahora, actualizadoEn: ahora };
+  return {
+    id, nombre, ambito, permisos: [], esSistema: id !== 'custom', workspaceId: 'workspace-default',
+    creadoEn: ahora, actualizadoEn: ahora
+  };
 }
 
 describe('compararRoles — orden de visualización (Batch Y)', () => {

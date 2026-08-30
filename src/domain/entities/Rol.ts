@@ -19,6 +19,16 @@ export interface Rol {
   /** Ids de `CATALOGO_PERMISOS`, todos del mismo `ambito` que este rol. */
   permisos: string[];
   esSistema: boolean;
+  /**
+   * Workspace al que pertenece este catálogo de rol (Batch AX, fundación
+   * SaaS) — cada Workspace tiene su propio conjunto de roles, aunque
+   * compartan nombre entre sí (la unicidad de nombre, ver
+   * `ServicioRoles.guardar`, es dentro de un mismo Workspace). Inmutable
+   * una vez creado, igual que `ambito`. Los roles ya existentes antes de
+   * este batch quedaron todos asignados a `ID_WORKSPACE_DEFAULT` por la
+   * migración `20261120000000_workspaces.ts`.
+   */
+  workspaceId: string;
   readonly creadoEn: string;
   actualizadoEn: string;
 }

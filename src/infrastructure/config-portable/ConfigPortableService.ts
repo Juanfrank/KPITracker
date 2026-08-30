@@ -4,7 +4,7 @@ import type {
   IListaRepository, IMetaRepository, IIndicadorRepository, IReglaRepository, IRolRepository
 } from '@application/ports/index';
 import type { Categoria, DefinicionPeriodicidad, Equipo } from '@domain/index';
-import { CONFIG_SCHEMA_VERSION } from '@domain/index';
+import { CONFIG_SCHEMA_VERSION, ID_WORKSPACE_DEFAULT } from '@domain/index';
 
 /**
  * Exportación/importación de TODA la configuración en un único JSON
@@ -109,7 +109,10 @@ export class ConfigPortableService implements IConfigPortableService {
       this.periodicidades.listar(),
       this.categorias.listar(),
       this.equipos.listar(),
-      this.roles.listar()
+      // Batch AX (fundación SaaS, gap conocido y documentado — no silencioso): la configuración
+      // portable sigue exportando solo el catálogo de roles del Workspace por defecto; roles
+      // creados en otros Workspaces quedan fuera hasta que este mecanismo se vuelva Workspace-aware.
+      this.roles.listar(ID_WORKSPACE_DEFAULT)
     ]);
     const elementos = (
       await Promise.all(listas.map((l) => this.listas.listarElementos(l.id)))

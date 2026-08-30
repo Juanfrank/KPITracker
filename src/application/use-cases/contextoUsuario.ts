@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ContextoPermisos } from '@domain/index';
+import { ID_WORKSPACE_DEFAULT } from '@domain/index';
 
 /**
  * Identidad del usuario autenticado "ambiente" para la cadena de llamadas
@@ -51,7 +52,8 @@ const PERMISOS_SIN_RESTRICCION: ContextoPermisos = {
   equipoId: null,
   permisosGenerales: new Set(),
   permisosEquipo: new Set(),
-  permisosExcepcionales: new Set()
+  permisosExcepcionales: new Set(),
+  permisosGlobales: new Set()
 };
 
 export function permisosActuales(): ContextoPermisos {
@@ -60,4 +62,26 @@ export function permisosActuales(): ContextoPermisos {
 
 export function conPermisos<T>(permisos: ContextoPermisos, fn: () => Promise<T>): Promise<T> {
   return almacenPermisos.run(permisos, fn);
+}
+
+/**
+ * Igual mecanismo (`AsyncLocalStorage`) que `usuarioActual`/`permisosActuales`,
+ * esta vez para el Workspace "actual" de la request (Batch AX, fundación
+ * SaaS) — lo puebla `protectedProcedure` a partir de
+ * `Usuario.workspaceActualId`. `ServicioRoles` lo lee para saber en qué
+ * catálogo de roles operar sin que ningún llamador (routers, manejadores)
+ * tenga que pasarlo a mano — mismo motivo documentado arriba: threadearlo
+ * como parámetro tocaría todos los sitios que llaman a `ServicioRoles` y a
+ * `roles:*` en `manejadores.ts`. Fuera de una llamada `conWorkspace` (tests
+ * de integración que invocan servicios/manejadores directo, tareas de
+ * arranque) se resuelve al Workspace por defecto del sistema.
+ */
+const almacenWorkspace = new AsyncLocalStorage<string>();
+
+export function workspaceActual(): string {
+  return almacenWorkspace.getStore() ?? ID_WORKSPACE_DEFAULT;
+}
+
+export function conWorkspace<T>(workspaceId: string, fn: () => Promise<T>): Promise<T> {
+  return almacenWorkspace.run(workspaceId, fn);
 }
