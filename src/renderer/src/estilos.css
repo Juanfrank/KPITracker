@@ -611,6 +611,12 @@ table.tabla td:not(:last-child) {
   border-right: 1px solid var(--borde);
 }
 
+/* Batch AW (pedido explícito del usuario): sin gridline entre el chevron de expandir/colapsar
+   y la columna de Categoría/Indicador — visualmente son una sola unidad. */
+table.tabla td.celda-arbol {
+  border-right: none;
+}
+
 /*
  * Batch Z/AA (grupos de corte, hoy en Seguimiento > Histórico): `.tabla-envoltura` vive dentro
  * de `main.contenido`, un contenedor flex en columna. Un hijo flex con `overflow: auto` tiene
@@ -789,11 +795,16 @@ table.tabla tfoot td {
   color: var(--info);
 }
 
-.columna-corte-miembro {
-  background: color-mix(in srgb, var(--info-suave) 55%, transparent);
-}
+/* Batch AW (pedido explícito del usuario, corrige regresión del Batch AN): las columnas de
+   PERÍODO dentro de un grupo de corte EXPANDIDO (`.columna-corte-miembro`) ya NO llevan ningún
+   resaltado propio — antes este fondo se aplicaba a la celda de cada fila normal dentro del
+   grupo, cuando el resaltado debe reservarse exclusivamente para la columna de Subtotal
+   (`.columna-corte-subtotal`, abajo). La clase se deja sin regla propia (sigue en el JSX como
+   marcador estructural, sin estilo asociado).
 
-.columna-corte-colapsada {
+   Única columna resaltada de un grupo de corte: la de Subtotal — ya sea la única columna
+   cuando el grupo está colapsado, o la columna final agregada cuando está expandido (Batch AW). */
+.columna-corte-subtotal {
   background: var(--info-suave);
   color: var(--info);
   text-align: center;

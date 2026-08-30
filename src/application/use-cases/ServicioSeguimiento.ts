@@ -64,6 +64,12 @@ export interface PuntoHistorico {
 export interface FilaHistorico {
   indicadorId: string;
   nombre: string;
+  /** Código propio del indicador (sin el prefijo de categoría — ver `etiquetaConPrefijo`). */
+  codigo: string;
+  /** Descripción/definición del indicador — para el tooltip de la celda de nombre (Batch AW). */
+  definicion: string;
+  /** Metodología de cálculo (opcional) — ídem. */
+  formaCalculo: string | null;
   lineaBase: number | null;
   metaGlobal: number | null;
   unidadMedida: string | null;
@@ -354,6 +360,9 @@ export class ServicioSeguimiento extends ServicioBase {
       filas.push({
         indicadorId: indicador.id,
         nombre: indicador.nombre,
+        codigo: indicador.codigo,
+        definicion: indicador.definicion,
+        formaCalculo: indicador.formaCalculo,
         lineaBase: indicador.lineaBase,
         metaGlobal: indicador.metaGlobal,
         unidadMedida: indicador.unidadMedida,

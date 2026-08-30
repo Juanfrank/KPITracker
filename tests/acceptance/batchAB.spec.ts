@@ -78,5 +78,9 @@ test('AB2: sin botón "Calcular" en Cortes; el valor agregado se ve, dinámico, 
   // Colapsado: la celda del grupo muestra el % de cumplimiento REAL (88/meta 100 = 88%),
   // calculado en vivo — no un placeholder ni un botón "Calcular" de por medio.
   const filaHistorico = pagina.getByTestId('historico-Indicador Dinámico AB');
-  await expect(filaHistorico.locator('td.columna-corte-colapsada')).toHaveText('88%');
+  // Batch AW: la clase se renombró a `columna-corte-subtotal` (ahora también cubre la columna
+  // de subtotal que aparece al final de un grupo EXPANDIDO, no solo la del colapsado) — con más
+  // de un trimestre cerrado puede haber varias columnas con esa clase, se apunta a la de T1 en
+  // particular por su `title`.
+  await expect(filaHistorico.locator(`td.columna-corte-subtotal[title="Valor agregado del corte para T1 ${anio}"]`)).toHaveText('88%');
 });

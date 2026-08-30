@@ -376,7 +376,7 @@ const VALOR_COLUMNA_HISTORICO: Record<string, (h: FilaHistorico) => string | num
 
 /** Encabezado clickeable: ciclo asc → desc → orden por defecto (`alternarOrden`), con una flecha indicando el estado activo. */
 function EncabezadoOrdenable({
-  columna, etiqueta, orden, alClic, rowSpan
+  columna, etiqueta, orden, alClic, rowSpan, extra
 }: {
   columna: string;
   etiqueta: string;
@@ -384,6 +384,8 @@ function EncabezadoOrdenable({
   alClic: (columna: string) => void;
   /** Batch AA: cuando el encabezado de Histórico pasa a dos filas (columnas de corte agrupadas), estas columnas fijas ocupan ambas. */
   rowSpan?: number;
+  /** Batch AW: contenido adicional (p. ej. el ícono de ocultar columnas) — no dispara `alClic` al hacer clic. */
+  extra?: React.ReactNode;
 }): React.JSX.Element {
   const activa = orden.columna === columna;
   return (
@@ -396,6 +398,7 @@ function EncabezadoOrdenable({
     >
       {etiqueta}
       {activa && <span style={{ marginLeft: 4 }}>{orden.direccion === 'asc' ? '▲' : '▼'}</span>}
+      {extra && <span onClick={(e) => e.stopPropagation()}>{extra}</span>}
     </th>
   );
 }
@@ -410,9 +413,18 @@ interface GrupoCorteHistorico {
   periodoIds: string[];
 }
 
+/**
+ * `colapsado: true` — el grupo entero está colapsado a esta única columna
+ * (comportamiento original). `colapsado: false` — el grupo está EXPANDIDO
+ * (sus columnas de período individuales ya se emiten aparte) y esta es la
+ * columna de SUBTOTAL que se agrega al final del grupo (pedido explícito
+ * del usuario: el subtotal del corte debe verse SIEMPRE, no solo al
+ * colapsar) — mismo valor agregado en ambos casos, solo cambia dónde y
+ * junto a qué se muestra.
+ */
 type ColumnaGrillaHistorico =
   | { tipo: 'periodo'; columna: { periodoId: string; etiqueta: string }; grupo?: GrupoCorteHistorico }
-  | { tipo: 'corte'; grupo: GrupoCorteHistorico };
+  | { tipo: 'corte'; grupo: GrupoCorteHistorico; colapsado: boolean };
 
 /**
  * Buckets de la periodicidad de `corte` que contienen al menos una de
@@ -444,8 +456,12 @@ function encabezadosGrupoCorte(columnas: ColumnaGrillaHistorico[], alternar: (id
   const grupoEmitido = new Set<string>();
   return columnas.map((col) => {
     if (col.tipo === 'corte') {
+      // Colapsado: una única columna con rowSpan 2 (el toggle vive acá mismo). Expandido: esta
+      // es la columna de SUBTOTAL al final del grupo — su `<th>` ya lo cubre el colSpan+1 de la
+      // rama de abajo (grupo.periodoIds.length + 1), así que acá no emite nada.
+      if (!col.colapsado) return null;
       return (
-        <th key={`c-${col.grupo.id}`} rowSpan={2} className="columna-corte-colapsada" data-testid={`grupo-corte-${col.grupo.etiqueta}`}>
+        <th key={`c-${col.grupo.id}`} rowSpan={2} className="columna-corte-subtotal" data-testid={`grupo-corte-${col.grupo.etiqueta}`}>
           <button type="button" className="boton-arbol" onClick={() => alternar(col.grupo.id)} title="Expandir" data-testid={`toggle-grupo-corte-${col.grupo.etiqueta}`}>
             <Icono nombre="flecha" />
           </button>
@@ -458,7 +474,8 @@ function encabezadosGrupoCorte(columnas: ColumnaGrillaHistorico[], alternar: (id
     if (grupoEmitido.has(grupo.id)) return null;
     grupoEmitido.add(grupo.id);
     return (
-      <th key={`g-${grupo.id}`} colSpan={grupo.periodoIds.length} className="encabezado-grupo-corte" data-testid={`grupo-corte-${grupo.etiqueta}`}>
+      // +1: cubre también la columna de Subtotal que se agrega al final del grupo expandido.
+      <th key={`g-${grupo.id}`} colSpan={grupo.periodoIds.length + 1} className="encabezado-grupo-corte" data-testid={`grupo-corte-${grupo.etiqueta}`}>
         <button type="button" className="boton-arbol expandido" onClick={() => alternar(grupo.id)} title="Colapsar" data-testid={`toggle-grupo-corte-${grupo.etiqueta}`}>
           <Icono nombre="flecha" />
         </button>
@@ -468,12 +485,14 @@ function encabezadosGrupoCorte(columnas: ColumnaGrillaHistorico[], alternar: (id
   });
 }
 
-/** Fila 2 del encabezado agrupado: solo las columnas individuales de los grupos EXPANDIDOS (las colapsadas ya emitieron su única `<th>` en la fila 1). */
+/** Fila 2 del encabezado agrupado: las columnas de período de los grupos EXPANDIDOS, más su columna de Subtotal al final (las colapsadas ya emitieron su única `<th>` en la fila 1). */
 function encabezadosMiembroCorte(columnas: ColumnaGrillaHistorico[]): React.JSX.Element[] {
   const miembros: React.JSX.Element[] = [];
   for (const col of columnas) {
     if (col.tipo === 'periodo' && col.grupo) {
       miembros.push(<th key={col.columna.periodoId} className="columna-corte-miembro" title={col.columna.periodoId}>{col.columna.etiqueta}</th>);
+    } else if (col.tipo === 'corte' && !col.colapsado) {
+      miembros.push(<th key={`sub-${col.grupo.id}`} className="columna-corte-subtotal" title="Subtotal del corte para este bucket">Subtotal</th>);
     }
   }
   return miembros;
@@ -559,7 +578,7 @@ function celdasSubtotal(
     if (col.tipo === 'corte') {
       return (
         <td
-          key={`c-${col.grupo.id}`} className="columna-corte-colapsada columna-valor" style={{ fontWeight: 600 }}
+          key={`c-${col.grupo.id}`} className="columna-corte-subtotal columna-valor" style={{ fontWeight: 600 }}
           title={titulo} data-testid={`subtotal-${testIdNodo}-${col.grupo.id}`}
         >
           {valor == null ? <span className="texto-suave">—</span> : `${valor}%`}
@@ -634,6 +653,10 @@ export function SeguimientoPage(): React.JSX.Element {
   // X4: orden por encabezado, solo aplicado a las vistas Lista (ver docstring de VALOR_COLUMNA_ESTADO).
   const [ordenEstado, setOrdenEstado] = useState<OrdenColumna>(ORDEN_POR_DEFECTO);
   const [ordenHistorico, setOrdenHistorico] = useState<OrdenColumna>(ORDEN_POR_DEFECTO);
+  // Batch AW (pedido explícito del usuario): oculta Responsable/Línea base/Meta global en las 3
+  // vistas de Histórico, dejando visibles solo las columnas de resultado — un único ícono en el
+  // encabezado de Categoría/Indicador alterna ambos sentidos.
+  const [columnasDescriptivasOcultas, setColumnasDescriptivasOcultas] = useState(false);
   const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
   const [colapsadasEquipo, setColapsadasEquipo] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
@@ -864,20 +887,46 @@ export function SeguimientoPage(): React.JSX.Element {
 
   const columnasGrillaHistorico: ColumnaGrillaHistorico[] = [];
   const corteColapsadoEmitidoHistorico = new Set<string>();
+  // Grupo EXPANDIDO cuyas columnas de período se vienen emitiendo — al terminar su racha
+  // contigua (o al final del recorrido) se le agrega su columna de Subtotal (pedido
+  // explícito del usuario: el subtotal debe verse SIEMPRE, no solo al colapsar el grupo).
+  let grupoAbierto: GrupoCorteHistorico | null = null;
   for (const columna of columnasHistorico) {
     const grupo = grupoPorPeriodoId.get(columna.periodoId);
+    if (grupoAbierto && grupo?.id !== grupoAbierto.id) {
+      columnasGrillaHistorico.push({ tipo: 'corte', grupo: grupoAbierto, colapsado: false });
+      grupoAbierto = null;
+    }
     if (!grupo) {
       columnasGrillaHistorico.push({ tipo: 'periodo', columna });
       continue;
     }
     if (expandidosCorteHistorico[grupo.id] ?? true) {
       columnasGrillaHistorico.push({ tipo: 'periodo', columna, grupo });
+      grupoAbierto = grupo;
     } else if (!corteColapsadoEmitidoHistorico.has(grupo.id)) {
-      columnasGrillaHistorico.push({ tipo: 'corte', grupo });
+      columnasGrillaHistorico.push({ tipo: 'corte', grupo, colapsado: true });
       corteColapsadoEmitidoHistorico.add(grupo.id);
     }
   }
+  if (grupoAbierto) columnasGrillaHistorico.push({ tipo: 'corte', grupo: grupoAbierto, colapsado: false });
   const hayGruposHistorico = gruposActivosHistorico.length > 0;
+  // Responsable + Línea base + Meta global — las 3 columnas que el ícono del encabezado
+  // oculta/muestra (Batch AW). Los colSpan de filas de grupo/Total/vacío de las 3 tablas de
+  // Histórico se calculan a partir de este número para no desalinearse cuando se ocultan.
+  const columnasDescriptivasCount = columnasDescriptivasOcultas ? 0 : 3;
+  const iconoColumnasDescriptivas = (
+    <button
+      type="button"
+      className="boton-arbol"
+      style={{ float: 'right' }}
+      onClick={() => setColumnasDescriptivasOcultas((v) => !v)}
+      title={columnasDescriptivasOcultas ? 'Mostrar Responsable, Línea base y Meta global' : 'Ocultar Responsable, Línea base y Meta global'}
+      data-testid="alternar-columnas-descriptivas-historico"
+    >
+      <Icono nombre={columnasDescriptivasOcultas ? 'ojo' : 'ojoTachado'} tamano={15} />
+    </button>
+  );
 
   const conteo = (estado: string): number => filas.filter((f) => f.estado === estado).length;
 
@@ -893,22 +942,36 @@ export function SeguimientoPage(): React.JSX.Element {
    */
   const celdaHistorico = (h: FilaHistorico, nivel = 0): React.JSX.Element => (
     <>
-      <td style={{ paddingLeft: nivel > 0 ? 6 + nivel * 18 : undefined }}>
+      <td
+        style={{ paddingLeft: nivel > 0 ? 6 + nivel * 18 : undefined }}
+        title={[h.definicion, h.formaCalculo ? `Metodología de cálculo: ${h.formaCalculo}` : null, h.unidadMedida ? `Unidad de medida: ${h.unidadMedida}` : null]
+          .filter(Boolean).join('\n')}
+      >
         {nivel > 0 && <span className="conector-jerarquia">└</span>}
         <strong>{h.nombre}</strong>
-      </td>
-      {/* X3: el histórico gana la misma columna Responsable (+equipo en segunda línea, U6) que ya tiene Estado. */}
-      <td className="texto-suave">
-        {h.responsable ?? '—'}
-        {h.responsable && h.equipo && (
-          <>
-            <br />
-            <span style={{ fontSize: '0.8em' }}>({h.equipo})</span>
-          </>
+        {h.codigo && (
+          <div className="texto-suave" style={{ fontSize: '0.85em', fontStyle: 'italic', fontWeight: 'normal' }}>
+            {etiquetaConPrefijo(categoriasCatalogo.find((c) => c.id === h.categoriaId)?.prefijo, h.codigo)}
+          </div>
         )}
       </td>
-      <td className="texto-suave columna-valor">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
-      <td className="texto-suave columna-valor">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+      {/* X3: el histórico gana la misma columna Responsable (+equipo en segunda línea, U6) que ya tiene Estado.
+          Batch AW: las 3 columnas descriptivas se ocultan juntas con el ícono del encabezado. */}
+      {!columnasDescriptivasOcultas && (
+        <>
+          <td className="texto-suave">
+            {h.responsable ?? '—'}
+            {h.responsable && h.equipo && (
+              <>
+                <br />
+                <span style={{ fontSize: '0.8em' }}>({h.equipo})</span>
+              </>
+            )}
+          </td>
+          <td className="texto-suave columna-valor">{h.lineaBase ?? '—'}{h.lineaBase != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+          <td className="texto-suave columna-valor">{h.metaGlobal ?? '—'}{h.metaGlobal != null && h.unidadMedida ? ` ${h.unidadMedida}` : ''}</td>
+        </>
+      )}
       {columnasGrillaHistorico.map((col) => {
         if (col.tipo === 'corte') {
           const valor = resultadosCorte.get(`${h.indicadorId}:${col.grupo.id}`);
@@ -916,7 +979,7 @@ export function SeguimientoPage(): React.JSX.Element {
           // flotante (p. ej. 92.5925925925926) — se redondea a 2 decimales solo para MOSTRAR.
           const valorMostrado = valor == null ? null : Math.round(valor * 100) / 100;
           return (
-            <td key={`c-${col.grupo.id}`} className="columna-corte-colapsada" title={`Valor agregado del corte para ${col.grupo.etiqueta}`}>
+            <td key={`c-${col.grupo.id}`} className="columna-corte-subtotal" title={`Valor agregado del corte para ${col.grupo.etiqueta}`}>
               {valorMostrado == null ? <span className="texto-suave">—</span> : `${valorMostrado}%`}
             </td>
           );
@@ -1063,6 +1126,9 @@ export function SeguimientoPage(): React.JSX.Element {
             ))}
           </div>
         )}
+        {/* Batch AW (pedido explícito del usuario): buscador ANTES de los dropdowns de filtro. */}
+        <input type="search" placeholder="Buscar indicador…" value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
+        <div className="separador" />
         <select value={filtroPeriodicidad} onChange={(e) => setFiltroPeriodicidad(e.target.value)} style={{ width: 'auto' }}>
           <option value="todas">Todas las periodicidades</option>
           {periodicidades.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -1087,8 +1153,6 @@ export function SeguimientoPage(): React.JSX.Element {
             {(valoresPorAtributo.get(a.id) ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         ))}
-        <div className="separador" />
-        <input type="search" placeholder="Buscar indicador…" value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
       </div>
 
       {pestana === 'estado' && seleccionados.size > 0 && (
@@ -1451,19 +1515,20 @@ export function SeguimientoPage(): React.JSX.Element {
               {v.etiqueta}
             </button>
           ))}
-        </div>
-      )}
-
-      {pestana === 'historico' && cortes.length > 0 && (
-        <div className="filtros-chips">
-          <span className="texto-suave" style={{ alignSelf: 'center' }}>Cortes de medición (agrupar columnas):</span>
-          <DropdownMultiple
-            placeholder="Ninguno"
-            opciones={cortes.map((c) => ({ id: c.id, etiqueta: `${c.nombre} (${c.periodicidad})` }))}
-            seleccionados={cortesActivosHistorico}
-            alCambiar={setCortesActivosHistorico}
-            testId="historico-filtro-cortes"
-          />
+          {/* Batch AW (pedido explícito del usuario): en la misma línea que "Ver como", no en fila aparte. */}
+          {cortes.length > 0 && (
+            <>
+              <div className="separador" />
+              <span className="texto-suave" style={{ alignSelf: 'center' }}>Cortes de medición (agrupar columnas):</span>
+              <DropdownMultiple
+                placeholder="Ninguno"
+                opciones={cortes.map((c) => ({ id: c.id, etiqueta: `${c.nombre} (${c.periodicidad})` }))}
+                seleccionados={cortesActivosHistorico}
+                alCambiar={setCortesActivosHistorico}
+                testId="historico-filtro-cortes"
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -1473,20 +1538,34 @@ export function SeguimientoPage(): React.JSX.Element {
             <thead>
               {hayGruposHistorico && (
                 <tr data-testid="fila-grupos-corte-historico">
-                  <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
-                  <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
-                  <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
-                  <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                  <EncabezadoOrdenable
+                    columna="nombre" etiqueta="Indicador" orden={ordenHistorico}
+                    alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} extra={iconoColumnasDescriptivas}
+                  />
+                  {!columnasDescriptivasOcultas && (
+                    <>
+                      <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                      <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                      <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} rowSpan={2} />
+                    </>
+                  )}
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
               <tr>
                 {!hayGruposHistorico && (
                   <>
-                    <EncabezadoOrdenable columna="nombre" etiqueta="Indicador" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                    <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                    <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
-                    <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                    <EncabezadoOrdenable
+                      columna="nombre" etiqueta="Indicador" orden={ordenHistorico}
+                      alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} extra={iconoColumnasDescriptivas}
+                    />
+                    {!columnasDescriptivasOcultas && (
+                      <>
+                        <EncabezadoOrdenable columna="responsable" etiqueta="Responsable" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                        <EncabezadoOrdenable columna="lineaBase" etiqueta="Línea base" orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                        <EncabezadoOrdenable columna="metaGlobal" etiqueta="Meta global"orden={ordenHistorico} alClic={(c) => setOrdenHistorico(alternarOrden(ordenHistorico, c))} />
+                      </>
+                    )}
                   </>
                 )}
                 {/* Las columnas de período (dinámicas, una por período) no se ordenan — ver docstring de VALOR_COLUMNA_HISTORICO. */}
@@ -1508,7 +1587,7 @@ export function SeguimientoPage(): React.JSX.Element {
               ))}
               {historicoVisible.length === 0 && (
                 <tr>
-                  <td colSpan={4 + columnasGrillaHistorico.length}>
+                  <td colSpan={1 + columnasDescriptivasCount + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -1520,7 +1599,7 @@ export function SeguimientoPage(): React.JSX.Element {
             </tbody>
             <tfoot>
               <tr className="fila-totales" data-testid="historico-fila-totales">
-                <td colSpan={4}><strong>Total</strong></td>
+                <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(nodoTotalesLista, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
               </tr>
             </tfoot>
@@ -1535,10 +1614,14 @@ export function SeguimientoPage(): React.JSX.Element {
               {hayGruposHistorico && (
                 <tr>
                   <th rowSpan={2} style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                  <th rowSpan={2}>Categoría / Indicador</th>
-                  <th rowSpan={2}>Responsable</th>
-                  <th rowSpan={2}>Línea base</th>
-                  <th rowSpan={2}>Meta global</th>
+                  <th rowSpan={2}>Categoría / Indicador{iconoColumnasDescriptivas}</th>
+                  {!columnasDescriptivasOcultas && (
+                    <>
+                      <th rowSpan={2}>Responsable</th>
+                      <th rowSpan={2}>Línea base</th>
+                      <th rowSpan={2}>Meta global</th>
+                    </>
+                  )}
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
@@ -1546,10 +1629,14 @@ export function SeguimientoPage(): React.JSX.Element {
                 {!hayGruposHistorico && (
                   <>
                     <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                    <th>Categoría / Indicador</th>
-                    <th>Responsable</th>
-                    <th>Línea base</th>
-                    <th>Meta global</th>
+                    <th>Categoría / Indicador{iconoColumnasDescriptivas}</th>
+                    {!columnasDescriptivasOcultas && (
+                      <>
+                        <th>Responsable</th>
+                        <th>Línea base</th>
+                        <th>Meta global</th>
+                      </>
+                    )}
                   </>
                 )}
                 {hayGruposHistorico
@@ -1577,10 +1664,10 @@ export function SeguimientoPage(): React.JSX.Element {
                           </button>
                         )}
                       </td>
-                      {/* colSpan=4: Categoría/Indicador + Responsable + Línea base + Meta — sin cubrir
-                          "Meta" también, el primer subtotal de columna quedaba bajo ese encabezado
+                      {/* colSpan: Categoría/Indicador + (Responsable + Línea base + Meta, si visibles) — sin
+                          cubrir "Meta" también, el primer subtotal de columna quedaba bajo ese encabezado
                           en vez del primer período (bug de desplazamiento, reportado por el usuario). */}
-                      <td colSpan={4} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                      <td colSpan={1 + columnasDescriptivasCount} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                         {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                         {etiquetaConPrefijo(nodo.prefijo, nodo.nombre)}
                         <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1605,7 +1692,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={5 + columnasGrillaHistorico.length}>
+                  <td colSpan={2 + columnasDescriptivasCount + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -1618,7 +1705,7 @@ export function SeguimientoPage(): React.JSX.Element {
             <tfoot>
               <tr className="fila-totales" data-testid="historico-fila-totales">
                 <td className="celda-arbol" />
-                <td colSpan={4}><strong>Total</strong></td>
+                <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(nodoTotalesArbolCategoria, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
               </tr>
             </tfoot>
@@ -1633,10 +1720,14 @@ export function SeguimientoPage(): React.JSX.Element {
               {hayGruposHistorico && (
                 <tr>
                   <th rowSpan={2} style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                  <th rowSpan={2}>Equipo / Categoría / Indicador</th>
-                  <th rowSpan={2}>Responsable</th>
-                  <th rowSpan={2}>Línea base</th>
-                  <th rowSpan={2}>Meta global</th>
+                  <th rowSpan={2}>Equipo / Categoría / Indicador{iconoColumnasDescriptivas}</th>
+                  {!columnasDescriptivasOcultas && (
+                    <>
+                      <th rowSpan={2}>Responsable</th>
+                      <th rowSpan={2}>Línea base</th>
+                      <th rowSpan={2}>Meta global</th>
+                    </>
+                  )}
                   {encabezadosGrupoCorte(columnasGrillaHistorico, alternarGrupoCorteHistorico)}
                 </tr>
               )}
@@ -1644,10 +1735,14 @@ export function SeguimientoPage(): React.JSX.Element {
                 {!hayGruposHistorico && (
                   <>
                     <th style={{ width: 32 }} aria-label="Expandir/colapsar" />
-                    <th>Equipo / Categoría / Indicador</th>
-                    <th>Responsable</th>
-                    <th>Línea base</th>
-                    <th>Meta global</th>
+                    <th>Equipo / Categoría / Indicador{iconoColumnasDescriptivas}</th>
+                    {!columnasDescriptivasOcultas && (
+                      <>
+                        <th>Responsable</th>
+                        <th>Línea base</th>
+                        <th>Meta global</th>
+                      </>
+                    )}
                   </>
                 )}
                 {hayGruposHistorico
@@ -1687,8 +1782,8 @@ export function SeguimientoPage(): React.JSX.Element {
                         </button>
                       )}
                     </td>
-                    {/* colSpan=4 — mismo fix que el árbol de Categoría: cubrir también "Meta". */}
-                    <td colSpan={4} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
+                    {/* colSpan — mismo fix que el árbol de Categoría: cubrir también "Meta" cuando es visible. */}
+                    <td colSpan={1 + columnasDescriptivasCount} style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       {etiqueta}
                       <span className="texto-suave" style={{ marginLeft: 8 }}>({nodo.contador})</span>
@@ -1702,7 +1797,7 @@ export function SeguimientoPage(): React.JSX.Element {
               })}
               {arbolEquipoHistorico.length === 0 && (
                 <tr>
-                  <td colSpan={5 + columnasGrillaHistorico.length}>
+                  <td colSpan={2 + columnasDescriptivasCount + columnasGrillaHistorico.length}>
                     {cargandoHistorico ? (
                       <Vacio mensaje="Cargando…" />
                     ) : (
@@ -1715,7 +1810,7 @@ export function SeguimientoPage(): React.JSX.Element {
             <tfoot>
               <tr className="fila-totales" data-testid="historico-fila-totales">
                 <td className="celda-arbol" />
-                <td colSpan={4}><strong>Total</strong></td>
+                <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(nodoTotalesArbolEquipo, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, 'totales', TITULO_TOTALES)}
               </tr>
             </tfoot>
