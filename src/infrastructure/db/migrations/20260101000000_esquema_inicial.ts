@@ -232,12 +232,29 @@ export async function up(knex: Knex): Promise<void> {
     t.text('usuario').notNullable();
     t.text('fecha_hora').notNullable();
     t.text('accion').notNullable();
-    t.text('entidad').notNullable();
-    t.string('entidad_id', 64).notNullable();
+    // `.string(64)`, no `.text()` (Fase 2b — validación contra SQL Server real
+    // encontró este bug): la columna está indexada más abajo, y SQL Server no
+    // permite que una nvarchar(max)/`.text()` sea columna clave de índice —
+    // el mismo motivo documentado arriba para las UNIQUE. Los valores reales
+    // (nombres de entidad como "Indicador", "ConfiguracionMedicionCategoria")
+    // no superan los 30 caracteres.
+    t.string('entidad', 64).notNullable();
+    // `entidad_id` SÍ se queda como `.text()` (a diferencia de `entidad`
+    // arriba): para `entidad === 'Resultado'` es una clave compuesta
+    // `"${indicadorId}:${periodoId}:${claveDesagregacion}"`, y
+    // `claveDesagregacion` (ver `ClaveDesagregacion.claveATexto`) no tiene
+    // tope de longitud — depende de cuántas desagregaciones tenga el
+    // indicador. Fase 2b: con `.string(64)` esto truncaba en SQL Server
+    // ("String or binary data would be truncated") en cuanto la clave
+    // superaba los 64 caracteres, algo casi garantizado con 2+
+    // desagregaciones. Por eso el índice de abajo solo cubre `entidad`, no
+    // el par — SQL Server no admite una columna nvarchar(max) como columna
+    // de índice (mismo motivo que las UNIQUE).
+    t.text('entidad_id').notNullable();
     t.text('campo');
     t.text('valor_anterior');
     t.text('valor_nuevo');
-    t.index(['entidad', 'entidad_id']);
+    t.index(['entidad']);
   });
 
   await knex.schema.createTable('resultados_historial', (t) => {
@@ -255,7 +272,8 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex.schema.createTable('adjuntos', (t) => {
     t.string('id', 64).primary();
-    t.text('entidad').notNullable();
+    // `.string(64)`, mismo motivo que `auditoria.entidad` arriba (Fase 2b).
+    t.string('entidad', 64).notNullable();
     t.string('entidad_id', 64).notNullable();
     t.text('nombre_archivo').notNullable();
     t.text('ruta_relativa').notNullable();
