@@ -110,7 +110,11 @@ export function puedeVerWorkspaces(usuario: IdentidadConPermisos): boolean {
   );
 }
 
-/** Visible en el nav "Administración" si hay algo que hacer ahí: cualquiera de las tarjetas de arriba. */
+/**
+ * Visible en el nav "Administración" (Sistema) si hay algo que hacer ahí: cualquiera de las
+ * tarjetas de arriba. Workspaces/Roles globales NO entran acá — viven en `Servicio >
+ * Administración` (ver `puedeVerServicio` más abajo), gateadas por `puedeVerWorkspaces`.
+ */
 export function puedeVerAdministracion(usuario: IdentidadConPermisos): boolean {
   return (
     puedeAdministrarCatalogos(usuario) ||
@@ -118,7 +122,11 @@ export function puedeVerAdministracion(usuario: IdentidadConPermisos): boolean {
     puedeAdministrarEquipos(usuario) ||
     puedeAdministrarOrigenes(usuario) ||
     puedeImportarExportarRespaldo(usuario) ||
-    puedeAdministrarRoles(usuario) ||
-    puedeVerWorkspaces(usuario)
+    puedeAdministrarRoles(usuario)
   );
+}
+
+/** Visible el propio grupo "Servicio" en el sidebar si hay algo que hacer en cualquiera de sus dos entradas. */
+export function puedeVerServicio(usuario: IdentidadConPermisos): boolean {
+  return puedeVerWorkspaces(usuario) || puedeCambiarWorkspace(usuario);
 }

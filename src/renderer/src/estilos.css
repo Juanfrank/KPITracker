@@ -227,6 +227,21 @@ body {
   font-weight: 600;
 }
 
+/* Submenú "Servicio > Administración" (Workspaces/Roles globales): el toggle reutiliza `.nav-item`
+   (ya sirve tanto para <NavLink> como <button>, ver `App.tsx`); solo hace falta el chevron y la
+   indentación de los sub-ítems una vez expandido. */
+.nav-submenu-chevron {
+  transition: transform var(--transicion);
+}
+
+.nav-subitem {
+  padding-left: 30px;
+}
+
+.sidebar.colapsado .nav-subitem {
+  padding-left: 12px;
+}
+
 .sidebar .pie {
   padding: 10px 12px 2px;
   display: flex;

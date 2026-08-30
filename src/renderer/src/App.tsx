@@ -15,14 +15,17 @@ import { ExportacionPage } from './modulos/exportacion/ExportacionPage';
 import { AuditoriaPage } from './modulos/auditoria/AuditoriaPage';
 import { AdminPage } from './modulos/admin/AdminPage';
 import { AcercaDePage } from './modulos/acerca-de/AcercaDePage';
+import { WorkspacesPage } from './modulos/servicio/WorkspacesPage';
+import { RolesGlobalesPage } from './modulos/servicio/RolesGlobalesPage';
+import { CambiarWorkspacePage } from './modulos/servicio/CambiarWorkspacePage';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import type { IdentidadConPermisos } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import {
-  puedeAdministrarCatalogos, puedeCambiarWorkspace, puedeModificarAtributos, puedeModificarIndicadores,
-  puedeModificarListas, puedeModificarMetas, puedeModificarReglas, puedeVerAdministracion, puedeVerAuditoria
+  puedeAdministrarCatalogos, puedeAdministrarRolesGlobales, puedeCambiarWorkspace, puedeModificarAtributos,
+  puedeModificarIndicadores, puedeModificarListas, puedeModificarMetas, puedeModificarReglas,
+  puedeVerAdministracion, puedeVerAuditoria, puedeVerWorkspaces
 } from './auth/permisosNav';
-import { trpcClient } from './trpc';
 
 interface ModuloDef {
   id: string;
@@ -55,50 +58,21 @@ const MODULOS: ModuloDef[] = [
   { id: 'exportacion', etiqueta: 'Exportación', icono: 'exportar', seccion: 'Sistema', Componente: ExportacionPage },
   { id: 'auditoria', etiqueta: 'Auditoría', icono: 'auditoria', seccion: 'Sistema', Componente: AuditoriaPage, visible: puedeVerAuditoria },
   { id: 'admin', etiqueta: 'Administración', icono: 'admin', seccion: 'Sistema', Componente: AdminPage, visible: puedeVerAdministracion },
-  { id: 'acerca-de', etiqueta: 'Acerca de', icono: 'informacion', seccion: 'Sistema', Componente: AcercaDePage }
+  { id: 'acerca-de', etiqueta: 'Acerca de', icono: 'informacion', seccion: 'Sistema', Componente: AcercaDePage },
+  // Servicio (pedido explícito del usuario): configuración GLOBAL — sobre los Workspaces mismos, no sobre lo
+  // que hay dentro de uno — separada de "Administración" (Sistema). `servicio-workspaces`/`servicio-roles-globales`
+  // se agrupan bajo un submenú colapsable "Administración" en el sidebar (ver `Shell`, distinto del módulo `admin`
+  // de arriba); `cambiar-workspace` es una entrada plana hermana, reemplazo del viejo `<select>` de pie de sidebar.
+  { id: 'servicio-workspaces', etiqueta: 'Workspaces', icono: 'admin', seccion: 'Servicio', Componente: WorkspacesPage, visible: puedeVerWorkspaces },
+  { id: 'servicio-roles-globales', etiqueta: 'Roles globales', icono: 'admin', seccion: 'Servicio', Componente: RolesGlobalesPage, visible: puedeAdministrarRolesGlobales },
+  { id: 'cambiar-workspace', etiqueta: 'Cambiar workspace', icono: 'usuario', seccion: 'Servicio', Componente: CambiarWorkspacePage, visible: puedeCambiarWorkspace }
 ];
+
+/** Ids de módulo agrupados bajo el submenú colapsable "Administración" dentro de la sección "Servicio" (ver `Shell`). */
+const SUBMENU_ADMINISTRACION_SERVICIO = new Set(['servicio-workspaces', 'servicio-roles-globales']);
 
 function modulosVisiblesPara(usuario: IdentidadConPermisos): ModuloDef[] {
   return MODULOS.filter((m) => !m.visible || m.visible(usuario));
-}
-
-/**
- * Selector de workspace (Batch AX, fundación SaaS): solo se monta para quien
- * tiene el permiso global `workspaces.cambiar` (o `esAdministrador`) — la
- * enorme mayoría de los usuarios opera siempre en un único Workspace y nunca
- * ve este control. Cambiar el workspace actual navega a Seguimiento (el
- * mismo default que un login nuevo) porque el catálogo de roles/permisos
- * cambia por completo — quedarse en una pantalla de administración del
- * workspace anterior sería confuso.
- */
-function SelectorWorkspace(): React.JSX.Element | null {
-  const { usuario, cambiarWorkspace } = useAuth();
-  const navigate = useNavigate();
-  const [workspaces, setWorkspaces] = useState<Array<{ id: string; nombre: string }>>([]);
-  const [cambiando, setCambiando] = useState(false);
-
-  useEffect(() => {
-    if (!usuario || !puedeCambiarWorkspace(usuario)) return;
-    void trpcClient.workspaces.listar.query().then(setWorkspaces);
-  }, [usuario]);
-
-  if (!usuario || !puedeCambiarWorkspace(usuario) || workspaces.length === 0) return null;
-
-  return (
-    <select
-      value={usuario.workspaceActualId}
-      disabled={cambiando}
-      title="Cambiar de workspace"
-      data-testid="selector-workspace"
-      onChange={(e) => {
-        const workspaceId = e.target.value;
-        setCambiando(true);
-        void cambiarWorkspace(workspaceId).then(() => navigate('/seguimiento')).finally(() => setCambiando(false));
-      }}
-    >
-      {workspaces.map((w) => <option key={w.id} value={w.id}>{w.nombre}</option>)}
-    </select>
-  );
 }
 
 /** Sidebar + contenido de la página activa (resuelta por `<Outlet/>`, ver `App`). Solo se monta con sesión válida. */
@@ -111,6 +85,11 @@ function Shell(): React.JSX.Element {
   // Batch AR (pedido explícito del usuario): menú lateral colapsable — persiste la preferencia
   // igual que el tema, así que sobrevive a un F5 y entre sesiones del mismo navegador.
   const [colapsado, setColapsado] = useState<boolean>(() => localStorage.getItem('kpitracker-sidebar-colapsado') === '1');
+  // Submenú "Servicio > Administración" (Workspaces/Roles globales): abierto por defecto si la ruta
+  // actual ya está adentro, para que un F5/link directo no lo deje colapsado sobre su propia página activa.
+  const [submenuAdminAbierto, setSubmenuAdminAbierto] = useState<boolean>(
+    () => [...SUBMENU_ADMINISTRACION_SERVICIO].some((id) => location.pathname === `/${id}`)
+  );
 
   useEffect(() => {
     document.documentElement.dataset.tema = tema;
@@ -178,24 +157,81 @@ function Shell(): React.JSX.Element {
               </span>
             </button>
           </div>
-          {secciones.map((seccion) => (
-            <div key={seccion}>
-              <div className="seccion">{seccion}</div>
-              {modulos.filter((m) => m.seccion === seccion).map((m) => (
-                <NavLink
-                  key={m.id}
-                  to={`/${m.id}`}
-                  className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
-                  title={colapsado ? m.etiqueta : undefined}
-                  data-testid={`nav-${m.id}`}
-                >
-                  <Icono nombre={m.icono} />
-                  <span className="etiqueta-nav">{m.etiqueta}</span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
-          <SelectorWorkspace />
+          {secciones.map((seccion) => {
+            if (seccion !== 'Servicio') {
+              return (
+                <div key={seccion}>
+                  <div className="seccion">{seccion}</div>
+                  {modulos.filter((m) => m.seccion === seccion).map((m) => (
+                    <NavLink
+                      key={m.id}
+                      to={`/${m.id}`}
+                      className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
+                      title={colapsado ? m.etiqueta : undefined}
+                      data-testid={`nav-${m.id}`}
+                    >
+                      <Icono nombre={m.icono} />
+                      <span className="etiqueta-nav">{m.etiqueta}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              );
+            }
+            // Servicio (pedido explícito del usuario): Workspaces/Roles globales van bajo un submenú
+            // colapsable "Administración"; "Cambiar workspace" queda como entrada plana hermana —
+            // reemplazo del viejo `<select>` de pie de sidebar (`SelectorWorkspace`, retirado).
+            const modulosAdmin = modulos.filter((m) => SUBMENU_ADMINISTRACION_SERVICIO.has(m.id));
+            const modulosSueltos = modulos.filter((m) => m.seccion === 'Servicio' && !SUBMENU_ADMINISTRACION_SERVICIO.has(m.id));
+            return (
+              <div key={seccion}>
+                <div className="seccion">{seccion}</div>
+                {modulosAdmin.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      className={`nav-item nav-submenu-toggle ${submenuAdminAbierto ? 'expandido' : ''}`}
+                      onClick={() => setSubmenuAdminAbierto((v) => !v)}
+                      title={colapsado ? 'Administración' : undefined}
+                      data-testid="nav-submenu-servicio-administracion"
+                    >
+                      <Icono nombre="admin" />
+                      <span className="etiqueta-nav" style={{ flex: 1 }}>Administración</span>
+                      <span
+                        className="etiqueta-nav nav-submenu-chevron"
+                        style={{ display: 'inline-flex', transform: submenuAdminAbierto ? 'rotate(90deg)' : undefined }}
+                      >
+                        <Icono nombre="flecha" tamano={11} />
+                      </span>
+                    </button>
+                    {submenuAdminAbierto && modulosAdmin.map((m) => (
+                      <NavLink
+                        key={m.id}
+                        to={`/${m.id}`}
+                        className={({ isActive }) => `nav-item nav-subitem ${isActive ? 'activo' : ''}`}
+                        title={colapsado ? m.etiqueta : undefined}
+                        data-testid={`nav-${m.id}`}
+                      >
+                        <Icono nombre={m.icono} />
+                        <span className="etiqueta-nav">{m.etiqueta}</span>
+                      </NavLink>
+                    ))}
+                  </>
+                )}
+                {modulosSueltos.map((m) => (
+                  <NavLink
+                    key={m.id}
+                    to={`/${m.id}`}
+                    className={({ isActive }) => `nav-item ${isActive ? 'activo' : ''}`}
+                    title={colapsado ? m.etiqueta : undefined}
+                    data-testid={`nav-${m.id}`}
+                  >
+                    <Icono nombre={m.icono} />
+                    <span className="etiqueta-nav">{m.etiqueta}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
           <div className="fila-usuario">
             <Icono nombre="usuario" tamano={15} />
             <span className="texto-suave etiqueta-nav" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
