@@ -45,6 +45,13 @@ npm run start:server    # arranca el servidor (sirve la API y, si existe, out/re
 | `COOKIE_SECRET` | **sí, en `NODE_ENV=production`** | Clave de firma de la cookie de sesión — un valor largo y aleatorio, distinto por instalación | valor fijo de desarrollo (rechazado explícitamente si `NODE_ENV=production` y no se definió) |
 | `ADMIN_INICIAL_USUARIO` | no | Usuario del administrador creado automáticamente si la tabla `usuarios` está vacía en el primer arranque | `admin` |
 | `ADMIN_INICIAL_PASSWORD` | no | Contraseña de ese administrador — **cambiarla de inmediato tras el primer login** si se dejó el default | `admin1234` |
+| `SMTP_HOST` | no | Host del servidor SMTP para las notificaciones proactivas de vencimiento (correo al responsable de un indicador vencido o próximo a vencer). Sin definir, el job sigue corriendo pero no envía nada (log de aviso una sola vez) | — (deshabilitado) |
+| `SMTP_PORT` | no | Puerto del servidor SMTP | `587` |
+| `SMTP_SECURE` | no | `true`/`false` — TLS implícito (puerto 465 típicamente); con `false` y puerto 587 se usa STARTTLS si el servidor lo ofrece | `false` |
+| `SMTP_USER` / `SMTP_PASSWORD` | no | Credenciales SMTP, si el servidor las exige | — (sin autenticación) |
+| `SMTP_FROM` | no | Remitente de los correos de notificación | `KPITracker <no-reply@kpitracker.local>` |
+| `NOTIFICACIONES_DIAS_ANTICIPACION` | no | Días de anticipación para avisar de un vencimiento próximo (mismo criterio que el banner in-app) | `3` |
+| `NOTIFICACIONES_INTERVALO_HORAS` | no | Cada cuántas horas corre el job de notificaciones (corre también una vez al arrancar el proceso) | `24` |
 | `NODE_ENV` | no | `production` activa las validaciones de variables obligatorias arriba marcadas | — |
 
 No hay variable para TLS/HTTPS de la app en sí: en producción se espera un reverse proxy (IIS, nginx, un balanceador de carga) delante que termine TLS y reenvíe HTTP plano al puerto de `PORT`.

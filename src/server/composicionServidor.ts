@@ -12,6 +12,8 @@ import { ServicioPermisos } from '@application/use-cases/ServicioPermisos';
 import { ServicioRolesGlobales } from '@application/use-cases/ServicioRolesGlobales';
 import { ServicioUsuarios } from '@application/use-cases/ServicioUsuarios';
 import { referenciasDeWorkspace } from '@application/use-cases/referencias';
+import { ServicioNotificacionesVencimiento } from '@application/notificaciones/ServicioNotificacionesVencimiento';
+import { crearNotificadorEmail } from '@infrastructure/notificaciones';
 
 /**
  * `Aplicacion` (el mismo tipo que usa Electron) más los servicios de
@@ -27,6 +29,8 @@ export interface AplicacionServidor extends Aplicacion {
   permisos: ServicioPermisos;
   workspaces: ServicioCatalogoGenerico<Workspace>;
   rolesGlobales: ServicioRolesGlobales;
+  /** Notificaciones proactivas de vencimiento por correo — el llamador (`src/server/index.ts`) programa las corridas periódicas; ver docstring de la clase. */
+  notificacionesVencimiento: ServicioNotificacionesVencimiento;
 }
 
 /**
@@ -66,6 +70,13 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
     (id) => referenciasDeWorkspace({ usuarios: infra.usuarios, roles: infra.roles }, id)
   );
   const rolesGlobales = new ServicioRolesGlobales(ctxAplicacion, infra.rolesGlobales, infra.usuarios);
+  // Notificaciones proactivas de vencimiento por correo (SMTP) — ver docstring de la clase.
+  // `diasAnticipacion` configurable (mismo criterio que el resto de env vars de este archivo);
+  // por defecto 3, igual que el banner in-app (`indicadoresQueRequierenNotificacion`).
+  const notificacionesVencimiento = new ServicioNotificacionesVencimiento(
+    servicios.seguimiento, infra.usuarios, crearNotificadorEmail(), infra.reloj,
+    Number(process.env.NOTIFICACIONES_DIAS_ANTICIPACION ?? 3)
+  );
 
   await asegurarAdminInicial(infra.usuarios, hasher, infra.ids, infra.reloj, infra.credencialesGeneradas);
 
@@ -78,6 +89,7 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
     permisos,
     workspaces,
     rolesGlobales,
+    notificacionesVencimiento,
     cerrar: () => infra.cerrar()
   };
 }

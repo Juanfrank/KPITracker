@@ -347,6 +347,27 @@ export interface ILimitadorIntentos {
   limpiar(clave: string): void;
 }
 
+/** Un correo a enviar — sin adjuntos ni HTML, solo texto plano (alcance de `ServicioNotificacionesVencimiento`). */
+export interface CorreoAEnviar {
+  para: string;
+  asunto: string;
+  textoPlano: string;
+}
+
+/**
+ * Notificaciones proactivas de vencimiento por correo (elegido sobre webhook
+ * vía `AskUserQuestion`) — interfaz mínima y reemplazable, mismo espíritu
+ * que `IAuthProvider`. `NotificadorEmailSmtp` (infraestructura, nodemailer)
+ * es la implementación real, configurable por variables de entorno
+ * (`SMTP_HOST`/`SMTP_PORT`/...) — el mismo patrón que `DB_CLIENT`.
+ * `NotificadorEmailDeshabilitado` (no-op con warning una sola vez) es la que
+ * se usa cuando `SMTP_HOST` no está configurado, para que el servidor
+ * arranque igual sin que este job bloquee nada.
+ */
+export interface INotificadorEmail {
+  enviar(correo: CorreoAEnviar): Promise<void>;
+}
+
 /**
  * Verifica credenciales y devuelve la identidad autenticada, o `null`. Es el
  * único punto de enganche para reemplazar la autenticación por contraseña

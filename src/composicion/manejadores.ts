@@ -36,13 +36,19 @@ export interface Aplicacion {
     [C in Exclude<NombreCanal, CanalLocal>]: (payload: CanalesIpc[C]['req']) => Promise<CanalesIpc[C]['res']>;
   };
   /**
-   * Instancias de servicio que las rutas REST (fuera de tRPC, ver
-   * `src/server/rest/`) necesitan invocar directamente porque el flujo web
-   * no calza con el manejador IPC original (p. ej. `adjuntos:subir` asumía
-   * un diálogo nativo — la ruta REST usa `subirDesdeArchivo` en su lugar).
+   * Instancias de servicio que consumidores fuera de tRPC necesitan invocar
+   * directamente. `adjuntos`: las rutas REST (`src/server/rest/`), porque el
+   * flujo web no calza con el manejador IPC original (p. ej. `adjuntos:subir`
+   * asumía un diálogo nativo). `seguimiento`: el job de notificaciones de
+   * vencimiento (`ServicioNotificacionesVencimiento`, cableado en
+   * `composicionServidor.ts`) — corre FUERA de una request tRPC, así que
+   * llamarlo directo (sin pasar por `conPermisos`) resuelve al contexto "sin
+   * restricción" (ver `contextoUsuario.ts`), que es justo lo que necesita:
+   * mirar el tablero completo, no el de un usuario en particular.
    */
   servicios: {
     adjuntos: ServicioAdjuntos;
+    seguimiento: ServicioSeguimiento;
   };
   cerrar(): Promise<void>;
 }
@@ -264,5 +270,5 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
     'sistema:leerHojaCalculo': ({ rutaArchivo }) => infra.archivos.leerHojaCalculo(rutaArchivo)
   };
 
-  return { manejadores, servicios: { adjuntos } };
+  return { manejadores, servicios: { adjuntos, seguimiento } };
 }
