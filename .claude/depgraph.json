@@ -106,35 +106,35 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogos.ts"
     },
     {
      "module": "@application/use-cases/ServicioConfiguracion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioConfiguracion.ts"
     },
     {
      "module": "@application/use-cases/ServicioRecoleccion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRecoleccion.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@domain/services/ConciliacionLista",
-     "resolved": null
+     "resolved": "src/domain/services/ConciliacionLista.ts"
     },
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     }
    ]
   },
@@ -151,7 +151,7 @@
    "import_edges": [
     {
      "module": "./app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "node:http",
@@ -191,35 +191,35 @@
    "import_edges": [
     {
      "module": "./composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./rest/adjuntos",
-     "resolved": null
+     "resolved": "src/server/rest/adjuntos.ts"
     },
     {
      "module": "./rest/exportacion",
-     "resolved": null
+     "resolved": "src/server/rest/exportacion.ts"
     },
     {
      "module": "./rest/importacion",
-     "resolved": null
+     "resolved": "src/server/rest/importacion.ts"
     },
     {
      "module": "./rest/portable",
-     "resolved": null
+     "resolved": "src/server/rest/portable.ts"
     },
     {
      "module": "./rest/respaldo",
-     "resolved": null
+     "resolved": "src/server/rest/respaldo.ts"
     },
     {
      "module": "./trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "./trpc/context",
-     "resolved": null
+     "resolved": "src/server/trpc/context.ts"
     },
     {
      "module": "@trpc/server/adapters/express",
@@ -276,59 +276,59 @@
    "import_edges": [
     {
      "module": "@application/notificaciones/ServicioNotificacionesVencimiento",
-     "resolved": null
+     "resolved": "src/application/notificaciones/ServicioNotificacionesVencimiento.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogoGenerico",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogoGenerico.ts"
     },
     {
      "module": "@application/use-cases/ServicioPermisos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioPermisos.ts"
     },
     {
      "module": "@application/use-cases/ServicioRolesGlobales",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRolesGlobales.ts"
     },
     {
      "module": "@application/use-cases/ServicioUsuarios",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioUsuarios.ts"
     },
     {
      "module": "@application/use-cases/referencias",
-     "resolved": null
+     "resolved": "src/application/use-cases/referencias.ts"
     },
     {
      "module": "@composicion/manejadores",
-     "resolved": null
+     "resolved": "src/composicion/manejadores.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/auth/LimitadorIntentosLoginMemoria",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/LimitadorIntentosLoginMemoria.ts"
     },
     {
      "module": "@infrastructure/auth/ProveedorPassword",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/ProveedorPassword.ts"
     },
     {
      "module": "@infrastructure/bootstrap",
-     "resolved": null
+     "resolved": "src/infrastructure/bootstrap.ts"
     },
     {
      "module": "@infrastructure/notificaciones",
-     "resolved": null
+     "resolved": "src/infrastructure/notificaciones/index.ts"
     }
    ]
   },
@@ -357,15 +357,15 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./authMiddleware",
-     "resolved": null
+     "resolved": "src/server/rest/authMiddleware.ts"
     },
     {
      "module": "./errores",
-     "resolved": null
+     "resolved": "src/server/rest/errores.ts"
     },
     {
      "module": "express",
@@ -409,23 +409,23 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./authMiddleware",
-     "resolved": null
+     "resolved": "src/server/rest/authMiddleware.ts"
     },
     {
      "module": "./errores",
-     "resolved": null
+     "resolved": "src/server/rest/errores.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     },
     {
      "module": "express",
@@ -469,19 +469,19 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./authMiddleware",
-     "resolved": null
+     "resolved": "src/server/rest/authMiddleware.ts"
     },
     {
      "module": "./errores",
-     "resolved": null
+     "resolved": "src/server/rest/errores.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "express",
@@ -510,7 +510,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "express",
@@ -545,19 +545,19 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./authMiddleware",
-     "resolved": null
+     "resolved": "src/server/rest/authMiddleware.ts"
     },
     {
      "module": "./errores",
-     "resolved": null
+     "resolved": "src/server/rest/errores.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "express",
@@ -604,19 +604,19 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "./authMiddleware",
-     "resolved": null
+     "resolved": "src/server/rest/authMiddleware.ts"
     },
     {
      "module": "./errores",
-     "resolved": null
+     "resolved": "src/server/rest/errores.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "express",
@@ -667,23 +667,23 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "../trpc/context",
-     "resolved": null
+     "resolved": "src/server/trpc/context.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "@application/use-cases/contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "express",
@@ -725,11 +725,11 @@
    "import_edges": [
     {
      "module": "../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "@trpc/server/adapters/express",
@@ -886,15 +886,15 @@
    "import_edges": [
     {
      "module": "./context",
-     "resolved": null
+     "resolved": "src/server/trpc/context.ts"
     },
     {
      "module": "@application/use-cases/contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@trpc/server",
@@ -997,115 +997,115 @@
    "import_edges": [
     {
      "module": "./routers/adjuntos",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/adjuntos.ts"
     },
     {
      "module": "./routers/atributos",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/atributos.ts"
     },
     {
      "module": "./routers/auditoria",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/auditoria.ts"
     },
     {
      "module": "./routers/auth",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/auth.ts"
     },
     {
      "module": "./routers/automatizacion",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/automatizacion.ts"
     },
     {
      "module": "./routers/categorias",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/categorias.ts"
     },
     {
      "module": "./routers/config",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/config.ts"
     },
     {
      "module": "./routers/cortesMedicion",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/cortesMedicion.ts"
     },
     {
      "module": "./routers/equipos",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/equipos.ts"
     },
     {
      "module": "./routers/exportacion",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/exportacion.ts"
     },
     {
      "module": "./routers/indicadores",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/indicadores.ts"
     },
     {
      "module": "./routers/listas",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/listas.ts"
     },
     {
      "module": "./routers/medicionCategoria",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/medicionCategoria.ts"
     },
     {
      "module": "./routers/medicionEquipo",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/medicionEquipo.ts"
     },
     {
      "module": "./routers/metas",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/metas.ts"
     },
     {
      "module": "./routers/origenes",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/origenes.ts"
     },
     {
      "module": "./routers/periodicidades",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/periodicidades.ts"
     },
     {
      "module": "./routers/recoleccion",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/recoleccion.ts"
     },
     {
      "module": "./routers/reglas",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/reglas.ts"
     },
     {
      "module": "./routers/roles",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/roles.ts"
     },
     {
      "module": "./routers/rolesGlobales",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/rolesGlobales.ts"
     },
     {
      "module": "./routers/seguimiento",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/seguimiento.ts"
     },
     {
      "module": "./routers/simulacion",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/simulacion.ts"
     },
     {
      "module": "./routers/sistema",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/sistema.ts"
     },
     {
      "module": "./routers/tipos",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/tipos.ts"
     },
     {
      "module": "./routers/usuarios",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/usuarios.ts"
     },
     {
      "module": "./routers/workspaces",
-     "resolved": null
+     "resolved": "src/server/trpc/routers/workspaces.ts"
     },
     {
      "module": "./trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     }
    ]
   },
@@ -1129,7 +1129,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     }
    ]
   },
@@ -1156,15 +1156,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1193,7 +1193,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -1223,7 +1223,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "node:fs",
@@ -1258,15 +1258,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1297,15 +1297,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1336,15 +1336,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogos.ts"
     },
     {
      "module": "zod",
@@ -1375,15 +1375,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1414,15 +1414,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1453,15 +1453,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1492,15 +1492,15 @@
    "import_edges": [
     {
      "module": "../context",
-     "resolved": null
+     "resolved": "src/server/trpc/context.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "zod",
@@ -1531,15 +1531,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1570,15 +1570,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1607,7 +1607,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -1636,7 +1636,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -1668,19 +1668,19 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1709,7 +1709,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -1741,19 +1741,19 @@
    "import_edges": [
     {
      "module": "../../composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "../context",
-     "resolved": null
+     "resolved": "src/server/trpc/context.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "zod",
@@ -1783,15 +1783,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -1816,7 +1816,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -1848,19 +1848,19 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@application/use-cases/contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1888,7 +1888,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     }
    ]
   },
@@ -1915,15 +1915,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1954,15 +1954,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -1993,15 +1993,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -2032,15 +2032,15 @@
    "import_edges": [
     {
      "module": "../schemas",
-     "resolved": null
+     "resolved": "src/server/trpc/schemas.ts"
     },
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -2069,7 +2069,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/server/trpc/trpc.ts"
     },
     {
      "module": "zod",
@@ -2129,91 +2129,91 @@
    "import_edges": [
     {
      "module": "./auth/AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "./auth/CambiarPasswordObligatoria",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/CambiarPasswordObligatoria.tsx"
     },
     {
      "module": "./auth/LoginPage",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/LoginPage.tsx"
     },
     {
      "module": "./auth/permisosNav",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/permisosNav.ts"
     },
     {
      "module": "./componentes/BusquedaGlobal",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/BusquedaGlobal.tsx"
     },
     {
      "module": "./componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "./modulos/acerca-de/AcercaDePage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/acerca-de/AcercaDePage.tsx"
     },
     {
      "module": "./modulos/admin/AdminPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/AdminPage.tsx"
     },
     {
      "module": "./modulos/atributos/AtributosPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/atributos/AtributosPage.tsx"
     },
     {
      "module": "./modulos/auditoria/AuditoriaPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/auditoria/AuditoriaPage.tsx"
     },
     {
      "module": "./modulos/config-general/ConfigGeneralPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/config-general/ConfigGeneralPage.tsx"
     },
     {
      "module": "./modulos/cortes/CortesMedicionPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/cortes/CortesMedicionPage.tsx"
     },
     {
      "module": "./modulos/exportacion/ExportacionPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/exportacion/ExportacionPage.tsx"
     },
     {
      "module": "./modulos/indicadores/IndicadoresPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/indicadores/IndicadoresPage.tsx"
     },
     {
      "module": "./modulos/listas/ListasPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/listas/ListasPage.tsx"
     },
     {
      "module": "./modulos/metas/ConfiguracionMetasPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/metas/ConfiguracionMetasPage.tsx"
     },
     {
      "module": "./modulos/recoleccion/RecoleccionPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/recoleccion/RecoleccionPage.tsx"
     },
     {
      "module": "./modulos/reglas/ReglasPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/reglas/ReglasPage.tsx"
     },
     {
      "module": "./modulos/seguimiento/SeguimientoPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/seguimiento/SeguimientoPage.tsx"
     },
     {
      "module": "./modulos/servicio/CambiarWorkspacePage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/servicio/CambiarWorkspacePage.tsx"
     },
     {
      "module": "./modulos/servicio/RolesGlobalesPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/servicio/RolesGlobalesPage.tsx"
     },
     {
      "module": "./modulos/servicio/WorkspacesPage",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/servicio/WorkspacesPage.tsx"
     },
     {
      "module": "react",
@@ -2247,11 +2247,11 @@
    "import_edges": [
     {
      "module": "./trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "@shared/ipc",
-     "resolved": null
+     "resolved": "src/shared/ipc.ts"
     },
     {
      "module": "@trpc/client",
@@ -2280,7 +2280,7 @@
    "import_edges": [
     {
      "module": "@server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -2304,7 +2304,7 @@
    "import_edges": [
     {
      "module": "./App",
-     "resolved": null
+     "resolved": "src/renderer/src/App.tsx"
     },
     {
      "module": "./estilos.css",
@@ -2385,7 +2385,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -2412,15 +2412,15 @@
    "import_edges": [
     {
      "module": "../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "@application/use-cases/ServicioRecoleccion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRecoleccion.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zustand",
@@ -2574,7 +2574,7 @@
    "import_edges": [
     {
      "module": "./AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     }
    ]
   },
@@ -2600,7 +2600,7 @@
    "import_edges": [
     {
      "module": "./AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "react",
@@ -2634,11 +2634,11 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "./AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "react",
@@ -2673,7 +2673,7 @@
    "import_edges": [
     {
      "module": "../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "react",
@@ -2705,19 +2705,19 @@
    "import_edges": [
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../rest",
-     "resolved": null
+     "resolved": "src/renderer/src/rest.ts"
     },
     {
      "module": "./modeloSeleccion",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/modeloSeleccion.ts"
     },
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     },
     {
      "module": "react",
@@ -2756,43 +2756,43 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../auth/AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "../../auth/permisosNav",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/permisosNav.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "../../utils/jerarquia",
-     "resolved": null
+     "resolved": "src/renderer/src/utils/jerarquia.ts"
     },
     {
      "module": "./TarjetaRespaldo",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/TarjetaRespaldo.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@shared/ipc",
-     "resolved": null
+     "resolved": "src/shared/ipc.ts"
     },
     {
      "module": "react",
@@ -2860,7 +2860,7 @@
    "import_edges": [
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     }
    ]
   },
@@ -2887,15 +2887,15 @@
    "import_edges": [
     {
      "module": "../../rest",
-     "resolved": null
+     "resolved": "src/renderer/src/rest.ts"
     },
     {
      "module": "./SelectorImportacion",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/SelectorImportacion.tsx"
     },
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     },
     {
      "module": "react",
@@ -2926,15 +2926,15 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -2966,19 +2966,19 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3011,23 +3011,23 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@application/use-cases/ServicioConfiguracion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioConfiguracion.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3058,15 +3058,15 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@shared/ipc",
-     "resolved": null
+     "resolved": "src/shared/ipc.ts"
     },
     {
      "module": "react",
@@ -3102,31 +3102,31 @@
    "import_edges": [
     {
      "module": "../../componentes/HistorialCelda",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/HistorialCelda.tsx"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/PanelAdjuntos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/PanelAdjuntos.tsx"
     },
     {
      "module": "../../componentes/RestaurarPeriodo",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/RestaurarPeriodo.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../stores/recoleccion",
-     "resolved": null
+     "resolved": "src/renderer/src/stores/recoleccion.ts"
     },
     {
      "module": "@application/use-cases/ServicioRecoleccion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRecoleccion.ts"
     },
     {
      "module": "react",
@@ -3162,19 +3162,19 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3208,27 +3208,27 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/EditorCondicion",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/EditorCondicion.tsx"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../dominio",
-     "resolved": null
+     "resolved": "src/renderer/src/dominio.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3260,19 +3260,19 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../rest",
-     "resolved": null
+     "resolved": "src/renderer/src/rest.ts"
     },
     {
      "module": "react",
@@ -3303,15 +3303,15 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3349,39 +3349,39 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "../../utils/ordenTabla",
-     "resolved": null
+     "resolved": "src/renderer/src/utils/ordenTabla.ts"
     },
     {
      "module": "@application/notificaciones/DetectorVencimientos",
-     "resolved": null
+     "resolved": "src/application/notificaciones/DetectorVencimientos.ts"
     },
     {
      "module": "@application/use-cases/ServicioRecoleccion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRecoleccion.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3419,27 +3419,27 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@domain/services/ConciliacionLista",
-     "resolved": null
+     "resolved": "src/domain/services/ConciliacionLista.ts"
     },
     {
      "module": "react",
@@ -3479,51 +3479,51 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/CampoAtributo",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/CampoAtributo.tsx"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/SelectorBuscable",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/SelectorBuscable.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../dominio",
-     "resolved": null
+     "resolved": "src/renderer/src/dominio.ts"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "../../utils/jerarquia",
-     "resolved": null
+     "resolved": "src/renderer/src/utils/jerarquia.ts"
     },
     {
      "module": "./ImportarExcelIndicadores",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/indicadores/ImportarExcelIndicadores.tsx"
     },
     {
      "module": "./ModalAutomatizacionIndicador",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/indicadores/ModalAutomatizacionIndicador.tsx"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3555,19 +3555,19 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../rest",
-     "resolved": null
+     "resolved": "src/renderer/src/rest.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogos.ts"
     },
     {
      "module": "react",
@@ -3599,15 +3599,15 @@
    "import_edges": [
     {
      "module": "../../auth/AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "react",
@@ -3640,11 +3640,11 @@
    "import_edges": [
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "./SeccionWorkspaces",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/servicio/SeccionWorkspaces.tsx"
     }
    ]
   },
@@ -3672,19 +3672,19 @@
    "import_edges": [
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3718,27 +3718,27 @@
    "import_edges": [
     {
      "module": "../../auth/AuthContext",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/AuthContext.tsx"
     },
     {
      "module": "../../auth/permisosNav",
-     "resolved": null
+     "resolved": "src/renderer/src/auth/permisosNav.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "../../trpc",
-     "resolved": null
+     "resolved": "src/renderer/src/trpc.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3767,11 +3767,11 @@
    "import_edges": [
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "./SeccionRolesGlobales",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/servicio/SeccionRolesGlobales.tsx"
     }
    ]
   },
@@ -3799,19 +3799,19 @@
    "import_edges": [
     {
      "module": "../../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../../componentes/Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "../../componentes/basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3842,11 +3842,11 @@
    "import_edges": [
     {
      "module": "../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3898,15 +3898,15 @@
    "import_edges": [
     {
      "module": "../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "./Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -3965,7 +3965,7 @@
    "import_edges": [
     {
      "module": "./Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "react",
@@ -3995,11 +3995,11 @@
    "import_edges": [
     {
      "module": "../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "./Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "react",
@@ -4029,15 +4029,15 @@
    "import_edges": [
     {
      "module": "./Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "./basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4065,19 +4065,19 @@
    "import_edges": [
     {
      "module": "../api",
-     "resolved": null
+     "resolved": "src/renderer/src/api.ts"
     },
     {
      "module": "../rest",
-     "resolved": null
+     "resolved": "src/renderer/src/rest.ts"
     },
     {
      "module": "./Icono",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/Icono.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "react",
@@ -4131,15 +4131,15 @@
    "import_edges": [
     {
      "module": "../dominio",
-     "resolved": null
+     "resolved": "src/renderer/src/dominio.ts"
     },
     {
      "module": "./basicos",
-     "resolved": null
+     "resolved": "src/renderer/src/componentes/basicos.tsx"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4222,55 +4222,55 @@
    "import_edges": [
     {
      "module": "./conectores/ConectorOrigenFactory",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorOrigenFactory.ts"
     },
     {
      "module": "./config-portable/ConfigPortableService",
-     "resolved": null
+     "resolved": "src/infrastructure/config-portable/ConfigPortableService.ts"
     },
     {
      "module": "./db/knexInstance",
-     "resolved": null
+     "resolved": "src/infrastructure/db/knexInstance.ts"
     },
     {
      "module": "./export/ExportAnaliticoService",
-     "resolved": null
+     "resolved": "src/infrastructure/export/ExportAnaliticoService.ts"
     },
     {
      "module": "./parquet/RutasDataLake",
-     "resolved": null
+     "resolved": "src/infrastructure/parquet/RutasDataLake.ts"
     },
     {
      "module": "./perfiles/RespaldoPerfilService",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/RespaldoPerfilService.ts"
     },
     {
      "module": "./repositories/ConfiguracionRepositoryJson",
-     "resolved": null
+     "resolved": "src/infrastructure/repositories/ConfiguracionRepositoryJson.ts"
     },
     {
      "module": "./repositories/RepositoriosKnex",
-     "resolved": null
+     "resolved": "src/infrastructure/repositories/RepositoriosKnex.ts"
     },
     {
      "module": "./repositories/mapeos",
-     "resolved": null
+     "resolved": "src/infrastructure/repositories/mapeos.ts"
     },
     {
      "module": "./soporte/ArchivoServiceWeb",
-     "resolved": null
+     "resolved": "src/infrastructure/soporte/ArchivoServiceWeb.ts"
     },
     {
      "module": "./soporte/servicios",
-     "resolved": null
+     "resolved": "src/infrastructure/soporte/servicios.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -4305,7 +4305,7 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "nodemailer",
@@ -4353,15 +4353,15 @@
    "import_edges": [
     {
      "module": "./NotificadorEmailDeshabilitado",
-     "resolved": null
+     "resolved": "src/infrastructure/notificaciones/NotificadorEmailDeshabilitado.ts"
     },
     {
      "module": "./NotificadorEmailSmtp",
-     "resolved": null
+     "resolved": "src/infrastructure/notificaciones/NotificadorEmailSmtp.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     }
    ]
   },
@@ -4385,7 +4385,7 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     }
    ]
   },
@@ -4411,15 +4411,15 @@
    "import_edges": [
     {
      "module": "./esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4516,19 +4516,19 @@
    "import_edges": [
     {
      "module": "../auth/AutenticadorMicrosoft",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/AutenticadorMicrosoft.ts"
     },
     {
      "module": "../auth/cabeceraAutenticacion",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/cabeceraAutenticacion.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "fast-xml-parser",
@@ -4577,19 +4577,19 @@
    "import_edges": [
     {
      "module": "../auth/AutenticadorMicrosoft",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/AutenticadorMicrosoft.ts"
     },
     {
      "module": "../auth/cabeceraAutenticacion",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/cabeceraAutenticacion.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4614,11 +4614,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4648,31 +4648,31 @@
    "import_edges": [
     {
      "module": "../auth/AutenticadorMicrosoft",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/AutenticadorMicrosoft.ts"
     },
     {
      "module": "./ConectorApi",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorApi.ts"
     },
     {
      "module": "./ConectorPowerBI",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorPowerBI.ts"
     },
     {
      "module": "./ConectorSql",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorSql.ts"
     },
     {
      "module": "./ConectorXmla",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorXmla.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4698,11 +4698,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "mssql",
@@ -4732,11 +4732,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "zod",
@@ -4765,7 +4765,7 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "bcryptjs",
@@ -4800,11 +4800,11 @@
    "import_edges": [
     {
      "module": "./AutenticadorMicrosoft",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/AutenticadorMicrosoft.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -4828,7 +4828,7 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     }
    ]
   },
@@ -4884,7 +4884,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:crypto",
@@ -4967,35 +4967,35 @@
    "import_edges": [
     {
      "module": "../parquet/RutasDataLake",
-     "resolved": null
+     "resolved": "src/infrastructure/parquet/RutasDataLake.ts"
     },
     {
      "module": "./DuckDbAnalitico",
-     "resolved": null
+     "resolved": "src/infrastructure/export/DuckDbAnalitico.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@domain/services/EvaluadorFormulas",
-     "resolved": null
+     "resolved": "src/domain/services/EvaluadorFormulas.ts"
     },
     {
      "module": "@domain/services/GeneradorPeriodos",
-     "resolved": null
+     "resolved": "src/domain/services/GeneradorPeriodos.ts"
     },
     {
      "module": "@domain/value-objects/ClaveDesagregacion",
-     "resolved": null
+     "resolved": "src/domain/value-objects/ClaveDesagregacion.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "knex",
@@ -5321,7 +5321,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -5348,15 +5348,15 @@
    "import_edges": [
     {
      "module": "../parquet/RutasDataLake",
-     "resolved": null
+     "resolved": "src/infrastructure/parquet/RutasDataLake.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:fs",
@@ -5527,19 +5527,19 @@
    "import_edges": [
     {
      "module": "../db/upsert",
-     "resolved": null
+     "resolved": "src/infrastructure/db/upsert.ts"
     },
     {
      "module": "./mapeos",
-     "resolved": null
+     "resolved": "src/infrastructure/repositories/mapeos.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -5602,7 +5602,7 @@
    "import_edges": [
     {
      "module": "./migrations/index",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/index.ts"
     },
     {
      "module": "knex",
@@ -5733,63 +5733,63 @@
    "import_edges": [
     {
      "module": "./20260101000000_esquema_inicial",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260101000000_esquema_inicial.ts"
     },
     {
      "module": "./20260825000000_categorias_equipos",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260825000000_categorias_equipos.ts"
     },
     {
      "module": "./20260901000000_roles_permisos",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260901000000_roles_permisos.ts"
     },
     {
      "module": "./20260915000000_unificar_usuario_responsable",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260915000000_unificar_usuario_responsable.ts"
     },
     {
      "module": "./20260920000000_requiere_validacion",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260920000000_requiere_validacion.ts"
     },
     {
      "module": "./20260925000000_meta_periodo_id",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260925000000_meta_periodo_id.ts"
     },
     {
      "module": "./20260930000000_roles_validador_tecnico",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20260930000000_roles_validador_tecnico.ts"
     },
     {
      "module": "./20261010000000_rol_administrador",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261010000000_rol_administrador.ts"
     },
     {
      "module": "./20261015000000_medicion",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261015000000_medicion.ts"
     },
     {
      "module": "./20261020000000_rol_visitante",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261020000000_rol_visitante.ts"
     },
     {
      "module": "./20261101000000_cortes_medicion_periodicidad",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261101000000_cortes_medicion_periodicidad.ts"
     },
     {
      "module": "./20261110000000_captura_resultado",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261110000000_captura_resultado.ts"
     },
     {
      "module": "./20261120000000_workspaces",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261120000000_workspaces.ts"
     },
     {
      "module": "./20261201000000_permisos_categoria",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261201000000_permisos_categoria.ts"
     },
     {
      "module": "./20261210000000_medicion_equipo",
-     "resolved": null
+     "resolved": "src/infrastructure/db/migrations/20261210000000_medicion_equipo.ts"
     },
     {
      "module": "knex",
@@ -5824,7 +5824,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -5949,7 +5949,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -5984,7 +5984,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -6110,7 +6110,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "bcryptjs",
@@ -6179,7 +6179,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -6214,7 +6214,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "knex",
@@ -6249,7 +6249,7 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "node:crypto",
@@ -6283,19 +6283,19 @@
    "import_edges": [
     {
      "module": "../parquet/RutasDataLake",
-     "resolved": null
+     "resolved": "src/infrastructure/parquet/RutasDataLake.ts"
     },
     {
      "module": "./leerHojaCalculo",
-     "resolved": null
+     "resolved": "src/infrastructure/soporte/leerHojaCalculo.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:crypto",
@@ -6372,75 +6372,75 @@
    "import_edges": [
     {
      "module": "@application/use-cases/ServicioAdjuntos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAdjuntos.ts"
     },
     {
      "module": "@application/use-cases/ServicioAuditoria",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAuditoria.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutomatizacionIndicador",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutomatizacionIndicador.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogoGenerico",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogoGenerico.ts"
     },
     {
      "module": "@application/use-cases/ServicioCatalogos",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogos.ts"
     },
     {
      "module": "@application/use-cases/ServicioConfiguracion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioConfiguracion.ts"
     },
     {
      "module": "@application/use-cases/ServicioCortesMedicion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCortesMedicion.ts"
     },
     {
      "module": "@application/use-cases/ServicioMedicionCategoria",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioMedicionCategoria.ts"
     },
     {
      "module": "@application/use-cases/ServicioMedicionEquipo",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioMedicionEquipo.ts"
     },
     {
      "module": "@application/use-cases/ServicioPeriodicidades",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioPeriodicidades.ts"
     },
     {
      "module": "@application/use-cases/ServicioRecoleccion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRecoleccion.ts"
     },
     {
      "module": "@application/use-cases/ServicioRoles",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioRoles.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     },
     {
      "module": "@application/use-cases/base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/use-cases/referencias",
-     "resolved": null
+     "resolved": "src/application/use-cases/referencias.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/bootstrap",
-     "resolved": null
+     "resolved": "src/infrastructure/bootstrap.ts"
     },
     {
      "module": "@shared/ipc",
-     "resolved": null
+     "resolved": "src/shared/ipc.ts"
     }
    ]
   },
@@ -6464,7 +6464,7 @@
    "import_edges": [
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     }
    ]
   },
@@ -6490,15 +6490,15 @@
    "import_edges": [
     {
      "module": "./DetectorVencimientos",
-     "resolved": null
+     "resolved": "src/application/notificaciones/DetectorVencimientos.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     }
    ]
   },
@@ -6523,11 +6523,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6545,15 +6545,15 @@
    "import_edges": [
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6580,19 +6580,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6618,15 +6618,15 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6699,11 +6699,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6734,11 +6734,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6764,15 +6764,15 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6803,11 +6803,11 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6834,19 +6834,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6873,19 +6873,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6911,15 +6911,15 @@
    "import_edges": [
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6945,15 +6945,15 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -6980,19 +6980,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@domain/services/ConciliacionLista",
-     "resolved": null
+     "resolved": "src/domain/services/ConciliacionLista.ts"
     }
    ]
   },
@@ -7019,19 +7019,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7097,31 +7097,31 @@
    "import_edges": [
     {
      "module": "./ServicioCatalogoGenerico",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioCatalogoGenerico.ts"
     },
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "./referencias",
-     "resolved": null
+     "resolved": "src/application/use-cases/referencias.ts"
     },
     {
      "module": "./valoresEav",
-     "resolved": null
+     "resolved": "src/application/use-cases/valoresEav.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7176,7 +7176,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:async_hooks",
@@ -7206,15 +7206,15 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7242,23 +7242,23 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "./referencias",
-     "resolved": null
+     "resolved": "src/application/use-cases/referencias.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7285,19 +7285,19 @@
    "import_edges": [
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "./referencias",
-     "resolved": null
+     "resolved": "src/application/use-cases/referencias.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7324,19 +7324,19 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "./contextoUsuario",
-     "resolved": null
+     "resolved": "src/application/use-cases/contextoUsuario.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7362,15 +7362,15 @@
    "import_edges": [
     {
      "module": "./base",
-     "resolved": null
+     "resolved": "src/application/use-cases/base.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7386,7 +7386,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     }
    ]
   },
@@ -7497,11 +7497,11 @@
    "import_edges": [
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "./DeadlineRule",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRule.ts"
     }
    ]
   },
@@ -7517,7 +7517,7 @@
    "import_edges": [
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     }
    ]
   },
@@ -7580,19 +7580,19 @@
    "import_edges": [
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "./DeadlineRule",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRule.ts"
     },
     {
      "module": "./DeadlineRuleRegistry",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRuleRegistry.ts"
     },
     {
      "module": "./fechas",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/fechas.ts"
     }
    ]
   },
@@ -7624,15 +7624,15 @@
    "import_edges": [
     {
      "module": "../entities/ReglaNegocio",
-     "resolved": null
+     "resolved": "src/domain/entities/ReglaNegocio.ts"
     },
     {
      "module": "../rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "../rules/EvaluadorReglas",
-     "resolved": null
+     "resolved": "src/domain/rules/EvaluadorReglas.ts"
     }
    ]
   },
@@ -7711,15 +7711,15 @@
    "import_edges": [
     {
      "module": "../deadline-rules/DeadlineRule",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRule.ts"
     },
     {
      "module": "../deadline-rules/DeadlineRuleRegistry",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRuleRegistry.ts"
     },
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     }
    ]
   },
@@ -7745,15 +7745,15 @@
    "import_edges": [
     {
      "module": "../entities/DefinicionPeriodicidad",
-     "resolved": null
+     "resolved": "src/domain/entities/DefinicionPeriodicidad.ts"
     },
     {
      "module": "../value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     }
    ]
   },
@@ -7784,11 +7784,11 @@
    "import_edges": [
     {
      "module": "../value-objects/ClaveDesagregacion",
-     "resolved": null
+     "resolved": "src/domain/value-objects/ClaveDesagregacion.ts"
     },
     {
      "module": "./ProductoCartesiano",
-     "resolved": null
+     "resolved": "src/domain/services/ProductoCartesiano.ts"
     }
    ]
   },
@@ -7818,7 +7818,7 @@
    "import_edges": [
     {
      "module": "../entities/AutomatizacionIndicador",
-     "resolved": null
+     "resolved": "src/domain/entities/AutomatizacionIndicador.ts"
     }
    ]
   },
@@ -7859,7 +7859,7 @@
    "import_edges": [
     {
      "module": "../entities/Meta",
-     "resolved": null
+     "resolved": "src/domain/entities/Meta.ts"
     }
    ]
   },
@@ -7907,7 +7907,7 @@
    "import_edges": [
     {
      "module": "./PoliticaPermisos",
-     "resolved": null
+     "resolved": "src/domain/services/PoliticaPermisos.ts"
     }
    ]
   },
@@ -7955,11 +7955,11 @@
    "import_edges": [
     {
      "module": "../entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     },
     {
      "module": "../value-objects/ClaveDesagregacion",
-     "resolved": null
+     "resolved": "src/domain/value-objects/ClaveDesagregacion.ts"
     }
    ]
   },
@@ -7991,15 +7991,15 @@
    "import_edges": [
     {
      "module": "../entities/OrigenAutomatico",
-     "resolved": null
+     "resolved": "src/domain/entities/OrigenAutomatico.ts"
     },
     {
      "module": "../value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     }
    ]
   },
@@ -8040,7 +8040,7 @@
    "import_edges": [
     {
      "module": "../errors/errores",
-     "resolved": null
+     "resolved": "src/domain/errors/errores.ts"
     }
    ]
   },
@@ -8067,19 +8067,19 @@
    "import_edges": [
     {
      "module": "../entities/DefinicionPeriodicidad",
-     "resolved": null
+     "resolved": "src/domain/entities/DefinicionPeriodicidad.ts"
     },
     {
      "module": "../entities/Meta",
-     "resolved": null
+     "resolved": "src/domain/entities/Meta.ts"
     },
     {
      "module": "../value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "./GeneradorPeriodos",
-     "resolved": null
+     "resolved": "src/domain/services/GeneradorPeriodos.ts"
     }
    ]
   },
@@ -8216,7 +8216,7 @@
    "import_edges": [
     {
      "module": "../entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     }
    ]
   },
@@ -8240,7 +8240,7 @@
    "import_edges": [
     {
      "module": "./TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     }
    ]
   },
@@ -8267,19 +8267,19 @@
    "import_edges": [
     {
      "module": "../rules/Validaciones",
-     "resolved": null
+     "resolved": "src/domain/rules/Validaciones.ts"
     },
     {
      "module": "../value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     },
     {
      "module": "./TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     },
     {
      "module": "./TypeRegistry",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeRegistry.ts"
     }
    ]
   },
@@ -8296,11 +8296,11 @@
    "import_edges": [
     {
      "module": "../rules/Validaciones",
-     "resolved": null
+     "resolved": "src/domain/rules/Validaciones.ts"
     },
     {
      "module": "../value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     }
    ]
   },
@@ -8324,7 +8324,7 @@
    "import_edges": [
     {
      "module": "./Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     }
    ]
   },
@@ -8371,31 +8371,31 @@
    "import_edges": [
     {
      "module": "../data-types/TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     },
     {
      "module": "../data-types/TypeRegistry",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeRegistry.ts"
     },
     {
      "module": "../entities/Atributo",
-     "resolved": null
+     "resolved": "src/domain/entities/Atributo.ts"
     },
     {
      "module": "../entities/ReglaNegocio",
-     "resolved": null
+     "resolved": "src/domain/entities/ReglaNegocio.ts"
     },
     {
      "module": "./Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "./EvaluadorReglas",
-     "resolved": null
+     "resolved": "src/domain/rules/EvaluadorReglas.ts"
     },
     {
      "module": "./Validaciones",
-     "resolved": null
+     "resolved": "src/domain/rules/Validaciones.ts"
     }
    ]
   },
@@ -8425,7 +8425,7 @@
    "import_edges": [
     {
      "module": "./Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     }
    ]
   },
@@ -8491,7 +8491,7 @@
    "import_edges": [
     {
      "module": "./Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     }
    ]
   },
@@ -8518,19 +8518,19 @@
    "import_edges": [
     {
      "module": "../data-types/TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     },
     {
      "module": "../entities/Atributo",
-     "resolved": null
+     "resolved": "src/domain/entities/Atributo.ts"
     },
     {
      "module": "../entities/Indicador",
-     "resolved": null
+     "resolved": "src/domain/entities/Indicador.ts"
     },
     {
      "module": "./Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     }
    ]
   },
@@ -8598,15 +8598,15 @@
    "import_edges": [
     {
      "module": "../rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "../rules/Validaciones",
-     "resolved": null
+     "resolved": "src/domain/rules/Validaciones.ts"
     },
     {
      "module": "../value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     }
    ]
   },
@@ -8655,11 +8655,11 @@
    "import_edges": [
     {
      "module": "../services/AgregacionMedicion",
-     "resolved": null
+     "resolved": "src/domain/services/AgregacionMedicion.ts"
     },
     {
      "module": "../value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     }
    ]
   },
@@ -8779,7 +8779,7 @@
    "import_edges": [
     {
      "module": "./Permiso",
-     "resolved": null
+     "resolved": "src/domain/entities/Permiso.ts"
     }
    ]
   },
@@ -8836,7 +8836,7 @@
    "import_edges": [
     {
      "module": "../value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     }
    ]
   },
@@ -8906,7 +8906,7 @@
    "import_edges": [
     {
      "module": "../deadline-rules/DeadlineRule",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/DeadlineRule.ts"
     }
    ]
   },
@@ -8931,7 +8931,7 @@
    "import_edges": [
     {
      "module": "../services/AgregacionMedicion",
-     "resolved": null
+     "resolved": "src/domain/services/AgregacionMedicion.ts"
     }
    ]
   },
@@ -8981,7 +8981,7 @@
    "import_edges": [
     {
      "module": "../rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     }
    ]
   },
@@ -9038,7 +9038,7 @@
    "import_edges": [
     {
      "module": "../value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     }
    ]
   },
@@ -9064,11 +9064,11 @@
    "import_edges": [
     {
      "module": "../services/AgregacionMedicion",
-     "resolved": null
+     "resolved": "src/domain/services/AgregacionMedicion.ts"
     },
     {
      "module": "./MedicionCategoria",
-     "resolved": null
+     "resolved": "src/domain/entities/MedicionCategoria.ts"
     }
    ]
   },
@@ -9175,11 +9175,11 @@
    "import_edges": [
     {
      "module": "../entities/DefinicionPeriodicidad",
-     "resolved": null
+     "resolved": "src/domain/entities/DefinicionPeriodicidad.ts"
     },
     {
      "module": "./Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     }
    ]
   },
@@ -9225,6 +9225,15 @@
    "import_edges": []
   },
   {
+   "path": "out/renderer/assets/index-2BjfrXNy.js",
+   "hash": "6c0ac837ec353b3838366c891478eca294b001a9d0ff184bbf729d135d8bd9d3",
+   "imports": [],
+   "defines": [],
+   "exports": [],
+   "references": [],
+   "import_edges": []
+  },
+  {
    "path": "tests/integration/respaldo.test.ts",
    "hash": "31e4702fe6b683a080ae35da1b35feb9a46752827e8be3236e74215ef2dbd7db",
    "imports": [
@@ -9242,15 +9251,15 @@
    "import_edges": [
     {
      "module": "../../src/renderer/src/modulos/admin/modeloSeleccion",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/modeloSeleccion.ts"
     },
     {
      "module": "../../src/server/composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:fs",
@@ -9289,11 +9298,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9340,11 +9349,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9391,11 +9400,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9442,11 +9451,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9489,7 +9498,7 @@
    "import_edges": [
     {
      "module": "@infrastructure/auth/AutenticadorMicrosoft",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/AutenticadorMicrosoft.ts"
     },
     {
      "module": "node:crypto",
@@ -9526,11 +9535,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9586,15 +9595,15 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@trpc/client",
@@ -9639,11 +9648,11 @@
    "import_edges": [
     {
      "module": "../../src/server/composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:fs",
@@ -9680,11 +9689,11 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/bootstrap",
-     "resolved": null
+     "resolved": "src/infrastructure/bootstrap.ts"
     },
     {
      "module": "node:fs",
@@ -9723,11 +9732,11 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "../../src/server/trpc/appRouter",
-     "resolved": null
+     "resolved": "src/server/trpc/appRouter.ts"
     },
     {
      "module": "@trpc/client",
@@ -9772,11 +9781,11 @@
    "import_edges": [
     {
      "module": "../../src/server/composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:fs",
@@ -9814,11 +9823,11 @@
    "import_edges": [
     {
      "module": "../../src/server/composicionServidor",
-     "resolved": null
+     "resolved": "src/server/composicionServidor.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "node:fs",
@@ -9856,11 +9865,11 @@
    "import_edges": [
     {
      "module": "@infrastructure/perfiles/esquemaRespaldo",
-     "resolved": null
+     "resolved": "src/infrastructure/perfiles/esquemaRespaldo.ts"
     },
     {
      "module": "@renderer/src/modulos/admin/modeloSeleccion",
-     "resolved": null
+     "resolved": "src/renderer/src/modulos/admin/modeloSeleccion.ts"
     },
     {
      "module": "vitest",
@@ -9881,7 +9890,7 @@
    "import_edges": [
     {
      "module": "@renderer/src/utils/ordenTabla",
-     "resolved": null
+     "resolved": "src/renderer/src/utils/ordenTabla.ts"
     },
     {
      "module": "vitest",
@@ -9902,7 +9911,7 @@
    "import_edges": [
     {
      "module": "@infrastructure/conectores/ConectorXmla",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorXmla.ts"
     },
     {
      "module": "vitest",
@@ -9925,7 +9934,7 @@
    "import_edges": [
     {
      "module": "@infrastructure/notificaciones/index",
-     "resolved": null
+     "resolved": "src/infrastructure/notificaciones/index.ts"
     },
     {
      "module": "mailparser",
@@ -9956,15 +9965,15 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/auth/ProveedorPassword",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/ProveedorPassword.ts"
     },
     {
      "module": "vitest",
@@ -9985,7 +9994,7 @@
    "import_edges": [
     {
      "module": "@infrastructure/conectores/ConectorPowerBI",
-     "resolved": null
+     "resolved": "src/infrastructure/conectores/ConectorPowerBI.ts"
     },
     {
      "module": "vitest",
@@ -10010,23 +10019,23 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioUsuarios",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioUsuarios.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/auth/ProveedorPassword",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/ProveedorPassword.ts"
     },
     {
      "module": "@infrastructure/soporte/servicios",
-     "resolved": null
+     "resolved": "src/infrastructure/soporte/servicios.ts"
     },
     {
      "module": "vitest",
@@ -10050,19 +10059,19 @@
    "import_edges": [
     {
      "module": "@application/notificaciones/ServicioNotificacionesVencimiento",
-     "resolved": null
+     "resolved": "src/application/notificaciones/ServicioNotificacionesVencimiento.ts"
     },
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10088,27 +10097,27 @@
    "import_edges": [
     {
      "module": "@application/ports/index",
-     "resolved": null
+     "resolved": "src/application/ports/index.ts"
     },
     {
      "module": "@application/use-cases/ServicioAutenticacion",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioAutenticacion.ts"
     },
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "@infrastructure/auth/LimitadorIntentosLoginMemoria",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/LimitadorIntentosLoginMemoria.ts"
     },
     {
      "module": "@infrastructure/auth/ProveedorPassword",
-     "resolved": null
+     "resolved": "src/infrastructure/auth/ProveedorPassword.ts"
     },
     {
      "module": "@infrastructure/soporte/servicios",
-     "resolved": null
+     "resolved": "src/infrastructure/soporte/servicios.ts"
     },
     {
      "module": "vitest",
@@ -10130,11 +10139,11 @@
    "import_edges": [
     {
      "module": "@application/notificaciones/DetectorVencimientos",
-     "resolved": null
+     "resolved": "src/application/notificaciones/DetectorVencimientos.ts"
     },
     {
      "module": "@application/use-cases/ServicioSeguimiento",
-     "resolved": null
+     "resolved": "src/application/use-cases/ServicioSeguimiento.ts"
     },
     {
      "module": "vitest",
@@ -10155,7 +10164,7 @@
    "import_edges": [
     {
      "module": "@domain/entities/Permiso",
-     "resolved": null
+     "resolved": "src/domain/entities/Permiso.ts"
     },
     {
      "module": "vitest",
@@ -10177,11 +10186,11 @@
    "import_edges": [
     {
      "module": "@domain/rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "@domain/rules/constructorCondicion",
-     "resolved": null
+     "resolved": "src/domain/rules/constructorCondicion.ts"
     },
     {
      "module": "vitest",
@@ -10205,19 +10214,19 @@
    "import_edges": [
     {
      "module": "@domain/entities/OrigenAutomatico",
-     "resolved": null
+     "resolved": "src/domain/entities/OrigenAutomatico.ts"
     },
     {
      "module": "@domain/services/ResolverParametrosGenerales",
-     "resolved": null
+     "resolved": "src/domain/services/ResolverParametrosGenerales.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "@domain/value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "vitest",
@@ -10239,11 +10248,11 @@
    "import_edges": [
     {
      "module": "@domain/entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     },
     {
      "module": "@domain/services/ConciliacionLista",
-     "resolved": null
+     "resolved": "src/domain/services/ConciliacionLista.ts"
     },
     {
      "module": "vitest",
@@ -10267,19 +10276,19 @@
    "import_edges": [
     {
      "module": "@domain/entities/Meta",
-     "resolved": null
+     "resolved": "src/domain/entities/Meta.ts"
     },
     {
      "module": "@domain/services/ResolucionMetaPeriodo",
-     "resolved": null
+     "resolved": "src/domain/services/ResolucionMetaPeriodo.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "@domain/value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "vitest",
@@ -10300,7 +10309,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10321,7 +10330,7 @@
    "import_edges": [
     {
      "module": "@domain/entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     },
     {
      "module": "vitest",
@@ -10343,11 +10352,11 @@
    "import_edges": [
     {
      "module": "@domain/rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "@domain/rules/explicarCondicion",
-     "resolved": null
+     "resolved": "src/domain/rules/explicarCondicion.ts"
     },
     {
      "module": "vitest",
@@ -10368,7 +10377,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10389,7 +10398,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10413,19 +10422,19 @@
    "import_edges": [
     {
      "module": "@domain/entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     },
     {
      "module": "@domain/services/ArbolDesagregaciones",
-     "resolved": null
+     "resolved": "src/domain/services/ArbolDesagregaciones.ts"
     },
     {
      "module": "@domain/services/ProductoCartesiano",
-     "resolved": null
+     "resolved": "src/domain/services/ProductoCartesiano.ts"
     },
     {
      "module": "@domain/value-objects/ClaveDesagregacion",
-     "resolved": null
+     "resolved": "src/domain/value-objects/ClaveDesagregacion.ts"
     },
     {
      "module": "vitest",
@@ -10452,31 +10461,31 @@
    "import_edges": [
     {
      "module": "@domain/data-types/TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     },
     {
      "module": "@domain/data-types/builtinTypes",
-     "resolved": null
+     "resolved": "src/domain/data-types/builtinTypes.ts"
     },
     {
      "module": "@domain/entities/Atributo",
-     "resolved": null
+     "resolved": "src/domain/entities/Atributo.ts"
     },
     {
      "module": "@domain/entities/ReglaNegocio",
-     "resolved": null
+     "resolved": "src/domain/entities/ReglaNegocio.ts"
     },
     {
      "module": "@domain/rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "@domain/rules/ValidadorAtributos",
-     "resolved": null
+     "resolved": "src/domain/rules/ValidadorAtributos.ts"
     },
     {
      "module": "@domain/value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     },
     {
      "module": "vitest",
@@ -10498,11 +10507,11 @@
    "import_edges": [
     {
      "module": "@domain/rules/Condicion",
-     "resolved": null
+     "resolved": "src/domain/rules/Condicion.ts"
     },
     {
      "module": "@domain/rules/EvaluadorReglas",
-     "resolved": null
+     "resolved": "src/domain/rules/EvaluadorReglas.ts"
     },
     {
      "module": "vitest",
@@ -10525,15 +10534,15 @@
    "import_edges": [
     {
      "module": "@domain/entities/DefinicionPeriodicidad",
-     "resolved": null
+     "resolved": "src/domain/entities/DefinicionPeriodicidad.ts"
     },
     {
      "module": "@domain/services/GeneradorPeriodos",
-     "resolved": null
+     "resolved": "src/domain/services/GeneradorPeriodos.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "vitest",
@@ -10554,7 +10563,7 @@
    "import_edges": [
     {
      "module": "@domain/services/GeneradorConsultaDax",
-     "resolved": null
+     "resolved": "src/domain/services/GeneradorConsultaDax.ts"
     },
     {
      "module": "vitest",
@@ -10575,7 +10584,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10599,19 +10608,19 @@
    "import_edges": [
     {
      "module": "@domain/deadline-rules/reglasBase",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/reglasBase.ts"
     },
     {
      "module": "@domain/services/CalculadoraEstados",
-     "resolved": null
+     "resolved": "src/domain/services/CalculadoraEstados.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "@domain/value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "vitest",
@@ -10632,7 +10641,7 @@
    "import_edges": [
     {
      "module": "@domain/services/ResolucionEquipo",
-     "resolved": null
+     "resolved": "src/domain/services/ResolucionEquipo.ts"
     },
     {
      "module": "vitest",
@@ -10654,11 +10663,11 @@
    "import_edges": [
     {
      "module": "@domain/entities/ReglaNegocio",
-     "resolved": null
+     "resolved": "src/domain/entities/ReglaNegocio.ts"
     },
     {
      "module": "@domain/services/ValidacionCaptura",
-     "resolved": null
+     "resolved": "src/domain/services/ValidacionCaptura.ts"
     },
     {
      "module": "vitest",
@@ -10680,11 +10689,11 @@
    "import_edges": [
     {
      "module": "@domain/data-types/builtinTypes",
-     "resolved": null
+     "resolved": "src/domain/data-types/builtinTypes.ts"
     },
     {
      "module": "@domain/value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     },
     {
      "module": "vitest",
@@ -10707,15 +10716,15 @@
    "import_edges": [
     {
      "module": "@domain/entities/DefinicionPeriodicidad",
-     "resolved": null
+     "resolved": "src/domain/entities/DefinicionPeriodicidad.ts"
     },
     {
      "module": "@domain/services/GeneradorPeriodos",
-     "resolved": null
+     "resolved": "src/domain/services/GeneradorPeriodos.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "vitest",
@@ -10736,7 +10745,7 @@
    "import_edges": [
     {
      "module": "@domain/index",
-     "resolved": null
+     "resolved": "src/domain/index.ts"
     },
     {
      "module": "vitest",
@@ -10762,27 +10771,27 @@
    "import_edges": [
     {
      "module": "@domain/data-types/TypeDescriptor",
-     "resolved": null
+     "resolved": "src/domain/data-types/TypeDescriptor.ts"
     },
     {
      "module": "@domain/entities/Atributo",
-     "resolved": null
+     "resolved": "src/domain/entities/Atributo.ts"
     },
     {
      "module": "@domain/entities/Indicador",
-     "resolved": null
+     "resolved": "src/domain/entities/Indicador.ts"
     },
     {
      "module": "@domain/rules/contextoIndicador",
-     "resolved": null
+     "resolved": "src/domain/rules/contextoIndicador.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "@domain/value-objects/TipoDato",
-     "resolved": null
+     "resolved": "src/domain/value-objects/TipoDato.ts"
     },
     {
      "module": "vitest",
@@ -10803,7 +10812,7 @@
    "import_edges": [
     {
      "module": "@domain/services/SustitutorScript",
-     "resolved": null
+     "resolved": "src/domain/services/SustitutorScript.ts"
     },
     {
      "module": "vitest",
@@ -10826,15 +10835,15 @@
    "import_edges": [
     {
      "module": "@domain/entities/Lista",
-     "resolved": null
+     "resolved": "src/domain/entities/Lista.ts"
     },
     {
      "module": "@domain/services/ProductoCartesiano",
-     "resolved": null
+     "resolved": "src/domain/services/ProductoCartesiano.ts"
     },
     {
      "module": "@domain/value-objects/ClaveDesagregacion",
-     "resolved": null
+     "resolved": "src/domain/value-objects/ClaveDesagregacion.ts"
     },
     {
      "module": "vitest",
@@ -10857,15 +10866,15 @@
    "import_edges": [
     {
      "module": "@domain/deadline-rules/reglasBase",
-     "resolved": null
+     "resolved": "src/domain/deadline-rules/reglasBase.ts"
     },
     {
      "module": "@domain/value-objects/Periodicidad",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodicidad.ts"
     },
     {
      "module": "@domain/value-objects/Periodo",
-     "resolved": null
+     "resolved": "src/domain/value-objects/Periodo.ts"
     },
     {
      "module": "vitest",
@@ -10886,7 +10895,7 @@
    "import_edges": [
     {
      "module": "@domain/entities/Catalogos",
-     "resolved": null
+     "resolved": "src/domain/entities/Catalogos.ts"
     },
     {
      "module": "vitest",
@@ -10907,7 +10916,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -10930,7 +10939,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -10959,7 +10968,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -10981,7 +10990,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11006,7 +11015,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11027,7 +11036,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11048,7 +11057,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11069,7 +11078,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11090,7 +11099,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11111,7 +11120,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11168,7 +11177,7 @@
    "import_edges": [
     {
      "module": "../../src/server/app",
-     "resolved": null
+     "resolved": "src/server/app.ts"
     },
     {
      "module": "@playwright/test",
@@ -11206,7 +11215,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11231,7 +11240,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11252,7 +11261,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11273,7 +11282,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11294,7 +11303,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11315,7 +11324,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11336,7 +11345,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11357,7 +11366,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11378,7 +11387,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11399,7 +11408,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11420,7 +11429,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11441,7 +11450,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11462,7 +11471,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11483,7 +11492,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11504,7 +11513,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11525,7 +11534,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11570,7 +11579,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11591,7 +11600,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11612,7 +11621,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11633,7 +11642,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11654,7 +11663,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11675,7 +11684,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11696,7 +11705,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11717,7 +11726,7 @@
    "import_edges": [
     {
      "module": "./fixtures",
-     "resolved": null
+     "resolved": "tests/acceptance/fixtures.ts"
     },
     {
      "module": "@playwright/test",
@@ -11726,5 +11735,5 @@
    ]
   }
  ],
- "file_count": 306
+ "file_count": 307
 }
