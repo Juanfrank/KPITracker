@@ -107,6 +107,38 @@ function construirValorEntidad(atributo: Atributo, crudo: string, entidadId: str
 const PERIODICIDADES_INDICADOR = Object.values(Periodicidad);
 
 /**
+ * Reordena la lista para que cada indicador padre quede seguido inmediatamente
+ * por sus hijos (pedido explícito del usuario — "mantener padre e hijo
+ * adyacentes, indentar un poco al hijo"), sin reordenar el resto: se respeta
+ * el orden original de `filas` para todo lo demás, solo se "saca" a un hijo
+ * de su posición natural y se reinserta justo después de su padre. Un hijo
+ * cuyo padre no está en `filas` (filtrado por la búsqueda, por ejemplo)
+ * simplemente queda en su lugar normal, sin indentar — no hay padre visible
+ * junto al cual anidarlo.
+ */
+function ordenarConHijosAdyacentes(filas: Indicador[]): Array<{ indicador: Indicador; esHijoAnidado: boolean }> {
+  const porId = new Map(filas.map((f) => [f.id, f]));
+  const idsAnidados = new Set<string>();
+  const hijosDePadre = new Map<string, Indicador[]>();
+  for (const f of filas) {
+    if (!f.esPadre) continue;
+    const hijosVisibles = f.indicadoresHijoIds.filter((id) => porId.has(id));
+    if (hijosVisibles.length === 0) continue;
+    hijosDePadre.set(f.id, hijosVisibles.map((id) => porId.get(id)!));
+    for (const id of hijosVisibles) idsAnidados.add(id);
+  }
+  const resultado: Array<{ indicador: Indicador; esHijoAnidado: boolean }> = [];
+  for (const f of filas) {
+    if (idsAnidados.has(f.id)) continue; // se emite junto a su padre, no en su posición original
+    resultado.push({ indicador: f, esHijoAnidado: false });
+    for (const hijo of hijosDePadre.get(f.id) ?? []) {
+      resultado.push({ indicador: hijo, esHijoAnidado: true });
+    }
+  }
+  return resultado;
+}
+
+/**
  * Configuración de Indicadores: atributos mínimos obligatorios, selección
  * de desagregaciones con checkboxes, periodicidad personalizada,
  * responsable/categoría, y atributos dinámicos con
@@ -201,6 +233,7 @@ export function IndicadoresPage(): React.JSX.Element {
   const filtrados = indicadores.filter((i) =>
     i.nombre.toLowerCase().includes(filtro.toLowerCase()) || i.codigo.toLowerCase().includes(filtro.toLowerCase())
   );
+  const filasOrdenadas = ordenarConHijosAdyacentes(filtrados);
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
   const usuariosPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
 
@@ -308,12 +341,13 @@ export function IndicadoresPage(): React.JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((i) => (
+            {filasOrdenadas.map(({ indicador: i, esHijoAnidado }) => (
               <tr key={i.id} onClick={() => void abrirEditor(i)} style={{ cursor: 'pointer' }} data-testid={`indicador-${i.nombre}`}>
                 <td className="texto-suave">
                   {etiquetaConPrefijo(categorias.find((c) => c.id === i.categoria)?.prefijo, i.codigo) || '—'}
                 </td>
-                <td>
+                <td style={esHijoAnidado ? { paddingLeft: 24 } : undefined}>
+                  {esHijoAnidado && <span className="conector-jerarquia">└</span>}
                   <strong>{i.nombre}</strong>
                   {i.esCalculado && <span className="chip" style={{ marginLeft: 6 }}>Calculado</span>}
                   {i.esPadre && <span className="chip" style={{ marginLeft: 6 }}>Padre</span>}

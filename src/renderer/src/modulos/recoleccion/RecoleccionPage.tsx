@@ -124,6 +124,12 @@ export function RecoleccionPage(): React.JSX.Element {
   // es General puede tener menos etiquetas que el total (las demás vienen enrolladas).
   const desagregacionesActivas = captura?.desagregacionesDisponibles.filter((d) => !d.excluida) ?? [];
   const indicadorSeleccionado = vm.indicadores.find((i) => i.id === vm.indicadorId);
+  // Un indicador padre, igual que uno calculado, no captura manualmente — su valor se sintetiza
+  // (fórmula o agregación de hijos, según el caso). Mismo tratamiento de UI para ambos: sin
+  // "Restaurar período", sin Comentario/evidencia, sin "Obtener automáticamente", celda de solo
+  // lectura y sin historial de celda (ver `ServicioRecoleccion`, que ya rechaza esas acciones
+  // para ambos con el mismo mensaje de error).
+  const esDerivado = Boolean(indicadorSeleccionado?.esCalculado || indicadorSeleccionado?.esPadre);
   const filasVisibles = captura ? calcularFilasVisibles(captura.filas, colapsadas) : [];
 
   return (
@@ -169,7 +175,7 @@ export function RecoleccionPage(): React.JSX.Element {
             />
             <span className="texto-suave">Única y compartida por todas las desagregaciones del período.</span>
           </Campo>
-          {captura && vm.indicadorId && vm.periodoId && !indicadorSeleccionado?.esCalculado && (
+          {captura && vm.indicadorId && vm.periodoId && !esDerivado && (
             // X5: misma fila que Indicador/Período/Fecha de corte (antes vivía en un toolbar aparte,
             // más abajo) y restylado como HistorialCelda — ver RestaurarPeriodo.tsx.
             <Campo etiqueta="Restaurar período">
@@ -183,7 +189,7 @@ export function RecoleccionPage(): React.JSX.Element {
             </Campo>
           )}
         </div>
-        {captura && !indicadorSeleccionado?.esCalculado && (
+        {captura && !esDerivado && (
           // Colapsado por defecto (Batch U9): el comentario y la evidencia no
           // son parte del flujo de captura del día a día, pero su ausencia/
           // presencia debe notarse sin tener que desplegar el panel.
@@ -217,7 +223,7 @@ export function RecoleccionPage(): React.JSX.Element {
             </div>
           </details>
         )}
-        {captura && vm.automatizacionConfigurada && !indicadorSeleccionado?.esCalculado && (
+        {captura && vm.automatizacionConfigurada && !esDerivado && (
           <div className="toolbar" style={{ marginTop: 10 }}>
             <button className="boton" onClick={() => void vm.obtenerAutomatico()} data-testid="recoleccion-obtener-automatico">
               Obtener automáticamente
@@ -255,7 +261,13 @@ export function RecoleccionPage(): React.JSX.Element {
         </div>
       )}
 
-      {captura && !indicadorSeleccionado?.esCalculado && !captura.fechaCorte && (
+      {captura && indicadorSeleccionado?.esPadre && (
+        <div className="aviso info">
+          Este indicador es padre: su valor se agrega automáticamente a partir de los resultados de sus indicadores hijo y no admite captura manual.
+        </div>
+      )}
+
+      {captura && !esDerivado && !captura.fechaCorte && (
         <div className="aviso info" data-testid="aviso-fecha-corte-requerida">
           Establezca la fecha de corte para habilitar la captura de resultados.
         </div>
@@ -313,7 +325,9 @@ export function RecoleccionPage(): React.JSX.Element {
                     </td>
                     {fila.esGeneral ? (
                       <td colSpan={Math.max(desagregacionesActivas.length, 1)}>
-                        {indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'General (total del indicador)'}
+                        {indicadorSeleccionado?.esPadre
+                          ? 'Valor agregado de los hijos'
+                          : indicadorSeleccionado?.esCalculado ? 'Valor calculado' : 'General (total del indicador)'}
                       </td>
                     ) : (
                       desagregacionesActivas.map((d) => {
@@ -348,7 +362,7 @@ export function RecoleccionPage(): React.JSX.Element {
                             Recargar
                           </button>
                         </div>
-                      ) : indicadorSeleccionado?.esCalculado ? (
+                      ) : esDerivado ? (
                         <span data-testid={`celda-${fila.claveDesagregacion}`}>{fila.valor ?? '—'}</span>
                       ) : (
                         <CeldaValor
@@ -367,7 +381,7 @@ export function RecoleccionPage(): React.JSX.Element {
                     </td>
                     <td className="texto-suave" style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
                       {fila.actualizadoEn ? new Date(fila.actualizadoEn).toLocaleString('es') : '—'}
-                      {!indicadorSeleccionado?.esCalculado && vm.indicadorId && vm.periodoId && (
+                      {!esDerivado && vm.indicadorId && vm.periodoId && (
                         <HistorialCelda
                           indicadorId={vm.indicadorId}
                           periodoId={vm.periodoId}
