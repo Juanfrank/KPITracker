@@ -41,6 +41,9 @@ export interface FilaTablero {
   totalPeriodos: number;
   periodosCompletos: number;
   atributosFiltro: AtributoFiltro[];
+  /** Para que el renderer pueda anidar visualmente sus hijos bajo él, igual que categoría/equipo — ver `FilaHistorico`. */
+  esPadre: boolean;
+  indicadoresHijoIds: string[];
 }
 
 export interface DetalleSeguimiento {
@@ -267,7 +270,9 @@ export class ServicioSeguimiento extends ServicioBase {
         ...this.clasificacionDe(indicador, nombreCategoria, nombreEquipo, usuariosPorId),
         totalPeriodos: estados.length,
         periodosCompletos: estados.filter((e) => e.estado === 'Completo').length,
-        atributosFiltro: await this.valoresFiltroPara(indicador.id, atributosFiltrables, elementosPorLista)
+        atributosFiltro: await this.valoresFiltroPara(indicador.id, atributosFiltrables, elementosPorLista),
+        esPadre: indicador.esPadre,
+        indicadoresHijoIds: indicador.indicadoresHijoIds
       });
     }
     return filas;

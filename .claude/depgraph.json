@@ -4842,7 +4842,7 @@
   },
   {
    "path": "src/renderer/src/modulos/seguimiento/SeguimientoPage.tsx",
-   "hash": "3f449c02ebb1fedcc59e8970b2da13c75ae4ea6278e416a6aa4f7f1ad5238306",
+   "hash": "327812b700041b9817a0334a080fdd3575bc254486085345668c76c06a9208dc",
    "imports": [
     "../../api",
     "../../componentes/Icono",
@@ -4932,6 +4932,7 @@
     "defecto",
     "derecha",
     "distintas",
+    "emitirIndicadores",
     "encabezado",
     "encabezadosGrupoCorte",
     "encabezadosMiembroCorte",
@@ -4962,6 +4963,7 @@
     "invocar",
     "join",
     "legible",
+    "lista",
     "llamadas",
     "localeCompare",
     "map",
@@ -4974,6 +4976,8 @@
     "nodosVisibles",
     "nombreUsuario",
     "ordenarFilas",
+    "otro",
+    "padre",
     "periodicidad",
     "periodosDelAnio",
     "planos",
@@ -4981,6 +4985,7 @@
     "puntual",
     "push",
     "query",
+    "rama",
     "real",
     "reasignarSeleccionados",
     "recursivo",
@@ -4989,6 +4994,7 @@
     "round",
     "secas",
     "seleccionado",
+    "separarPadresEHijos",
     "setAbierto",
     "setAdjuntosCeldaDetalle",
     "setCargando",
@@ -10992,7 +10998,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioSeguimiento.ts",
-   "hash": "aa7d5e38218da9ea3ac91d158f66b1cc5132d7ccbdc44e75a91e964787215479",
+   "hash": "6295d61aae04c71f8876de371a25c9fefde85aefe9e16b23215cb607bb0f73ab",
    "imports": [
     "./base",
     "./contextoUsuario",
@@ -15891,8 +15897,8 @@
    "import_edges": []
   },
   {
-   "path": "out/renderer/assets/index-DK6AJwOC.js",
-   "hash": "b69c63fb42c825f415e468360040846c7c9d2987b38b4e5121ab64fc56983bf2",
+   "path": "out/renderer/assets/index-Du8SBpIb.js",
+   "hash": "d7bf6009c4a1aded6829c7dc74e6470e39fd9cd9ce47b7c00e1d635021d46c8d",
    "imports": [],
    "defines": [],
    "exports": [],
@@ -15922,6 +15928,7 @@
     "At",
     "Ba",
     "Basic",
+    "Bc",
     "Be",
     "Bi",
     "BigInt",
@@ -15967,6 +15974,7 @@
     "El",
     "En",
     "Entero",
+    "Eo",
     "Er",
     "Error",
     "Es",
@@ -15989,7 +15997,6 @@
     "Ft",
     "G",
     "Ga",
-    "Gc",
     "General",
     "Gi",
     "Gl",
@@ -16036,7 +16043,6 @@
     "Jt",
     "K",
     "Ka",
-    "Kc",
     "Ke",
     "Kl",
     "Kn",
@@ -16066,6 +16072,7 @@
     "Mn",
     "Mo",
     "Mr",
+    "Ms",
     "Mt",
     "MutationObserver",
     "N",
@@ -16095,8 +16102,7 @@
     "Os",
     "Ot",
     "P",
-    "Pa",
-    "Pc"
+    "Pa"
    ],
    "import_edges": []
   },
@@ -17746,7 +17752,7 @@
   },
   {
    "path": "tests/unit/application/ServicioNotificacionesVencimiento.test.ts",
-   "hash": "5c6628d4fea373976ad338326ca650892457d554c84fe29547e091031149dc20",
+   "hash": "96ca3ca2bd3e00d151de1afa7ea375e0f47e41e7c81d9fef9c7bdd7cc062fc74",
    "imports": [
     "@application/notificaciones/ServicioNotificacionesVencimiento",
     "@application/ports/index",
@@ -17891,7 +17897,7 @@
   },
   {
    "path": "tests/unit/application/DetectorVencimientos.test.ts",
-   "hash": "597057ac16bf112bddde9917bdfcaac74368dda9f0a53351f3f593f298f23bd2",
+   "hash": "79b8495e46c04a49e931a1acfa99a73ca620f73607a774f57f3babab6f3222ae",
    "imports": [
     "@application/notificaciones/DetectorVencimientos",
     "@application/use-cases/ServicioSeguimiento",

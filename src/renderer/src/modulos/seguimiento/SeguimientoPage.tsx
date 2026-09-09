@@ -47,6 +47,54 @@ interface FilaClasificable {
   nombre: string;
   categoriaId: string | null;
   equipoId: string | null;
+  /**
+   * Pedido explícito del usuario: un indicador padre anida visualmente a sus
+   * hijos, igual que categoría → subcategoría o equipo → sub-equipo — ver
+   * `separarPadresEHijos`. Solo anida dentro de la MISMA rama (incluido
+   * "Sin categoría"/"Sin equipo" como una rama más): un hijo cuyo padre cae
+   * en otra categoría/equipo simplemente no tiene un padre visible ahí y se
+   * lista plano, como cualquier otro indicador — mismo criterio que una
+   * subcategoría nunca salta de árbol.
+   */
+  esPadre: boolean;
+  indicadoresHijoIds: string[];
+}
+
+/**
+ * Separa las filas DIRECTAS de un nodo (mismo criterio de "propias" ya usado
+ * por categoría/equipo) en las que quedan al nivel plano del nodo y las que
+ * se anidan bajo un padre — un hijo se anida solo si SU padre está presente
+ * en esta MISMA lista (ver docstring de `FilaClasificable.esPadre`). Sin
+ * soporte para más de un nivel: un indicador padre nunca puede ser a la vez
+ * hijo de otro (regla de dominio, "sin anidamiento" — ver
+ * `Indicador.indicadoresHijoIds`), así que un solo pase alcanza.
+ */
+function separarPadresEHijos<F extends FilaClasificable>(filas: F[]): { planas: F[]; hijosDePadre: Map<string, F[]> } {
+  const porId = new Map(filas.map((f) => [f.indicadorId, f]));
+  const hijosDePadre = new Map<string, F[]>();
+  const idsAnidados = new Set<string>();
+  for (const f of filas) {
+    if (!f.esPadre) continue;
+    const hijosVisibles = f.indicadoresHijoIds.filter((id) => porId.has(id));
+    if (hijosVisibles.length === 0) continue;
+    hijosDePadre.set(f.indicadorId, hijosVisibles.map((id) => porId.get(id)!));
+    for (const id of hijosVisibles) idsAnidados.add(id);
+  }
+  const planas = filas.filter((f) => !idsAnidados.has(f.indicadorId));
+  return { planas, hijosDePadre };
+}
+
+/** Empuja los nodos-hoja `indicador` de `filas` (las DIRECTAS de un nodo de categoría/equipo/"Sin ..."), anidando cada padre con sus hijos visibles un nivel más abajo — ver `separarPadresEHijos`. */
+function emitirIndicadores<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F>[], filas: F[], nivel: number): void {
+  const { planas, hijosDePadre } = separarPadresEHijos(filas);
+  for (const f of [...planas].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
+    const hijos = hijosDePadre.get(f.indicadorId);
+    nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel, fila: f, tieneHijos: !!hijos });
+    if (!hijos) continue;
+    for (const h of [...hijos].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
+      nodos.push({ tipo: 'indicador', id: h.indicadorId, nivel: nivel + 1, fila: h, tieneHijos: false });
+    }
+  }
 }
 
 /**
@@ -65,7 +113,7 @@ type NodoArbolSeguimiento<F extends FilaClasificable = FilaTablero> =
       tipo: 'categoria'; id: string; categoriaId: string; nivel: number; nombre: string; prefijo: string | null;
       contador: number; tieneHijos: boolean; filasDirectas: F[];
     }
-  | { tipo: 'indicador'; id: string; nivel: number; fila: F };
+  | { tipo: 'indicador'; id: string; nivel: number; fila: F; tieneHijos: boolean };
 
 /**
  * Nodos categoría → subcategoría → indicador para un subconjunto de
@@ -111,14 +159,14 @@ function construirNodosCategoria<F extends FilaClasificable>(
   const nodos: NodoArbolSeguimiento<F>[] = [];
   const visitar = (categoria: Categoria, nivel: number): void => {
     const hijos = hijosDe.get(categoria.id) ?? [];
-    const propias = [...(filasPorCategoria.get(categoria.id) ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const propias = filasPorCategoria.get(categoria.id) ?? [];
     nodos.push({
       tipo: 'categoria', id: `${prefijoId}${categoria.id}`, categoriaId: categoria.id, nivel, nombre: categoria.nombre,
       prefijo: categoria.prefijo, contador: contarTotal(categoria.id), tieneHijos: hijos.length > 0 || propias.length > 0,
-      filasDirectas: filasPorCategoria.get(categoria.id) ?? []
+      filasDirectas: propias
     });
     for (const hijo of hijos) visitar(hijo, nivel + 1);
-    for (const f of propias) nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivel + 1, fila: f });
+    emitirIndicadores(nodos, propias, nivel + 1);
   };
   for (const raiz of hijosDe.get(null) ?? []) visitar(raiz, nivelBase);
 
@@ -127,9 +175,7 @@ function construirNodosCategoria<F extends FilaClasificable>(
       tipo: 'categoria', id: `${prefijoId}${SIN_CATEGORIA}`, categoriaId: SIN_CATEGORIA, nivel: nivelBase,
       nombre: 'Sin categoría', prefijo: null, contador: sinCategoria.length, tieneHijos: true, filasDirectas: sinCategoria
     });
-    for (const f of [...sinCategoria].sort((a, b) => a.nombre.localeCompare(b.nombre))) {
-      nodos.push({ tipo: 'indicador', id: f.indicadorId, nivel: nivelBase + 1, fila: f });
-    }
+    emitirIndicadores(nodos, sinCategoria, nivelBase + 1);
   }
   return nodos;
 }
@@ -259,7 +305,9 @@ function nodosVisibles<F extends FilaClasificable>(nodos: NodoArbolSeguimiento<F
       ocultarDesdeNivel = null;
     }
     visibles.push(nodo);
-    if (nodo.tipo !== 'indicador' && nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
+    // Las tres variantes traen `tieneHijos` ahora — un indicador padre colapsa sus hijos anidados
+    // con el mismo mecanismo que una categoría/equipo (ver `emitirIndicadores`).
+    if (nodo.tieneHijos && colapsadas.has(nodo.id)) ocultarDesdeNivel = nodo.nivel;
   }
   return visibles;
 }
@@ -1453,6 +1501,7 @@ export function SeguimientoPage(): React.JSX.Element {
               }
               if (nodo.tipo === 'equipo') return null; // Esta vista no agrupa por equipo — ver `arbolEquipo` abajo.
               const f = nodo.fila;
+              const colapsadaIndicador = colapsadasCategorias.has(nodo.id);
               return (
                 <tr
                   key={`i-${nodo.id}`}
@@ -1460,7 +1509,21 @@ export function SeguimientoPage(): React.JSX.Element {
                   onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
                   data-testid={`seguimiento-${f.nombre}`}
                 >
-                  <td className="celda-arbol" />
+                  <td className="celda-arbol">
+                    {/* Indicador padre (pedido explícito del usuario): anida a sus hijos igual que
+                        categoría/equipo, con el mismo botón de expandir/colapsar. */}
+                    {nodo.tieneHijos && (
+                      <button
+                        type="button"
+                        className={`boton-arbol ${colapsadaIndicador ? '' : 'expandido'}`}
+                        onClick={(e) => { e.stopPropagation(); alternarColapsoCategoria(nodo.id); }}
+                        title={colapsadaIndicador ? 'Expandir' : 'Colapsar'}
+                        data-testid={`colapsar-indicador-${f.nombre}`}
+                      >
+                        <Icono nombre="flecha" tamano={13} />
+                      </button>
+                    )}
+                  </td>
                   <td style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                     {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                     <strong>{f.nombre}</strong>
@@ -1528,6 +1591,7 @@ export function SeguimientoPage(): React.JSX.Element {
             {arbolEquipo.map((nodo) => {
               if (nodo.tipo === 'indicador') {
                 const f = nodo.fila;
+                const colapsadaIndicador = colapsadasEquipo.has(nodo.id);
                 return (
                   <tr
                     key={`i-${nodo.id}`}
@@ -1535,7 +1599,19 @@ export function SeguimientoPage(): React.JSX.Element {
                     onClick={() => void invocar('seguimiento:detalle', { indicadorId: f.indicadorId }).then(setDetalle)}
                     data-testid={`seguimiento-${f.nombre}`}
                   >
-                    <td className="celda-arbol" />
+                    <td className="celda-arbol">
+                      {nodo.tieneHijos && (
+                        <button
+                          type="button"
+                          className={`boton-arbol ${colapsadaIndicador ? '' : 'expandido'}`}
+                          onClick={(e) => { e.stopPropagation(); alternarColapsoEquipo(nodo.id); }}
+                          title={colapsadaIndicador ? 'Expandir' : 'Colapsar'}
+                          data-testid={`colapsar-indicador-${f.nombre}`}
+                        >
+                          <Icono nombre="flecha" tamano={13} />
+                        </button>
+                      )}
+                    </td>
                     <td style={{ paddingLeft: 6 + nodo.nivel * 18 }}>
                       {nodo.nivel > 0 && <span className="conector-jerarquia">└</span>}
                       <strong>{f.nombre}</strong>
@@ -1792,17 +1868,32 @@ export function SeguimientoPage(): React.JSX.Element {
                     </tr>
                   );
                 }
-                return (
-                  <tr
-                    key={`i-${nodo.id}`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => void invocar('seguimiento:detalle', { indicadorId: nodo.fila.indicadorId }).then(setDetalle)}
-                    data-testid={`historico-${nodo.fila.nombre}`}
-                  >
-                    <td className="celda-arbol" />
-                    {celdaHistorico(nodo.fila, nodo.nivel)}
-                  </tr>
-                );
+                {
+                  const colapsadaIndicador = colapsadasCategorias.has(nodo.id);
+                  return (
+                    <tr
+                      key={`i-${nodo.id}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => void invocar('seguimiento:detalle', { indicadorId: nodo.fila.indicadorId }).then(setDetalle)}
+                      data-testid={`historico-${nodo.fila.nombre}`}
+                    >
+                      <td className="celda-arbol">
+                        {nodo.tieneHijos && (
+                          <button
+                            type="button"
+                            className={`boton-arbol ${colapsadaIndicador ? '' : 'expandido'}`}
+                            onClick={(e) => { e.stopPropagation(); alternarColapsoCategoria(nodo.id); }}
+                            title={colapsadaIndicador ? 'Expandir' : 'Colapsar'}
+                            data-testid={`colapsar-indicador-${nodo.fila.nombre}`}
+                          >
+                            <Icono nombre="flecha" tamano={13} />
+                          </button>
+                        )}
+                      </td>
+                      {celdaHistorico(nodo.fila, nodo.nivel)}
+                    </tr>
+                  );
+                }
               })}
               {arbolHistorico.length === 0 && (
                 <tr>
@@ -1870,6 +1961,7 @@ export function SeguimientoPage(): React.JSX.Element {
             <tbody>
               {arbolEquipoHistorico.map((nodo) => {
                 if (nodo.tipo === 'indicador') {
+                  const colapsadaIndicador = colapsadasEquipo.has(nodo.id);
                   return (
                     <tr
                       key={`i-${nodo.id}`}
@@ -1877,7 +1969,19 @@ export function SeguimientoPage(): React.JSX.Element {
                       onClick={() => void invocar('seguimiento:detalle', { indicadorId: nodo.fila.indicadorId }).then(setDetalle)}
                       data-testid={`historico-${nodo.fila.nombre}`}
                     >
-                      <td className="celda-arbol" />
+                      <td className="celda-arbol">
+                        {nodo.tieneHijos && (
+                          <button
+                            type="button"
+                            className={`boton-arbol ${colapsadaIndicador ? '' : 'expandido'}`}
+                            onClick={(e) => { e.stopPropagation(); alternarColapsoEquipo(nodo.id); }}
+                            title={colapsadaIndicador ? 'Expandir' : 'Colapsar'}
+                            data-testid={`colapsar-indicador-${nodo.fila.nombre}`}
+                          >
+                            <Icono nombre="flecha" tamano={13} />
+                          </button>
+                        )}
+                      </td>
                       {celdaHistorico(nodo.fila, nodo.nivel)}
                     </tr>
                   );
