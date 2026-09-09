@@ -5207,7 +5207,7 @@
   },
   {
    "path": "src/renderer/src/modulos/indicadores/IndicadoresPage.tsx",
-   "hash": "e80884bc108d3a96958918e5bdbbb99b6d210213d6052b2f8b9082a353803069",
+   "hash": "6f3afa27947f18f64d0bd28f91cc80bb7b7b63055c8e346a847d04e3ab6e8ab1",
    "imports": [
     "../../api",
     "../../componentes/CampoAtributo",
@@ -5251,6 +5251,7 @@
     "construirContextoIndicador",
     "construirValorEntidad",
     "crudo",
+    "equipoEfectivo",
     "equipoGeneralId",
     "esObligatorio",
     "esVisible",
@@ -5261,6 +5262,7 @@
     "getFullYear",
     "guardar",
     "has",
+    "hijo",
     "includes",
     "indicador",
     "indicadorVacio",
@@ -11131,7 +11133,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioCatalogos.ts",
-   "hash": "f2f717c36eac1747c7b51687e41cc30ff161fb24e6044489beb9e4574c8c1c0a",
+   "hash": "817f06b0f30376c8cde9fe9e889f8ec3ff96dcf7e540d5a33d737cfe64e861c7",
    "imports": [
     "./ServicioCatalogoGenerico",
     "./base",
@@ -15897,8 +15899,8 @@
    "import_edges": []
   },
   {
-   "path": "out/renderer/assets/index-Du8SBpIb.js",
-   "hash": "d7bf6009c4a1aded6829c7dc74e6470e39fd9cd9ce47b7c00e1d635021d46c8d",
+   "path": "out/renderer/assets/index-BNAQT2sc.js",
+   "hash": "577e994f78190ed096d093ec0daaf00f00ed8e3a80543b8a6b38bc501222454c",
    "imports": [],
    "defines": [],
    "exports": [],
@@ -17228,7 +17230,7 @@
   },
   {
    "path": "tests/integration/aplicacion.test.ts",
-   "hash": "b79c00dd6cfd2ec4d3870ce4e6eb2c666818d0f5dea9701139d34530d6427b0f",
+   "hash": "c785aaa394788bb19bbb5c9c9918f47a1165993aadcc7d90acf3fd36c291400f",
    "imports": [
     "../../src/server/composicionServidor",
     "@domain/index",
@@ -17289,6 +17291,7 @@
     "createServer",
     "crudo",
     "describe",
+    "distinto",
     "ejes",
     "elemento",
     "eliminar",

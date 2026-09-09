@@ -5,7 +5,7 @@ import type {
 } from '@domain/index';
 import {
   ETIQUETAS_AGREGACION, GeneradorPeriodos, OPCIONES_AGREGACION_INDICADOR_PADRE, Periodicidad,
-  construirContextoIndicador, etiquetaConPrefijo
+  construirContextoIndicador, equipoEfectivo, etiquetaConPrefijo
 } from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
@@ -202,6 +202,7 @@ export function IndicadoresPage(): React.JSX.Element {
     i.nombre.toLowerCase().includes(filtro.toLowerCase()) || i.codigo.toLowerCase().includes(filtro.toLowerCase())
   );
   const equiposPorId = new Map(equipos.map((e) => [e.id, e]));
+  const usuariosPorId = new Map(responsables.map((r) => [r.id, { equipoId: r.equipoId }]));
 
   // Grupos/opciones para el buscador de "Responsable / Equipo" (Batch X, X12).
   const gruposResponsable: GrupoSelectorBuscable[] = [
@@ -235,6 +236,16 @@ export function IndicadoresPage(): React.JSX.Element {
 
   // Validación en vivo de atributos dinámicos: mismas reglas que evaluará el backend al guardar.
   const base = editando ?? indicadorVacio();
+  // Candidatos a "indicador hijo" (pedido explícito del usuario: padre e hijo no pueden
+  // pertenecer a categorías/subcategorías o equipos distintos, además de compartir periodicidad,
+  // no ser calculados ni padre — ver la misma validación en ServicioIndicadores.guardar).
+  const hijosElegibles = indicadores.filter((i) =>
+    i.id !== base.id && !i.esCalculado && !i.esPadre &&
+    i.periodicidad === base.periodicidad &&
+    (base.periodicidad !== Periodicidad.Personalizada || i.periodicidadPersonalizadaId === base.periodicidadPersonalizadaId) &&
+    i.categoria === base.categoria &&
+    equipoEfectivo(i, usuariosPorId) === equipoEfectivo(base, usuariosPorId)
+  );
   const valoresMap = new Map<string, ValorAtributo>(
     atributos.map((a) => {
       const parseado = tipos.obtener(a.tipoDato).parse(valoresAttr.get(a.id) ?? '');
@@ -598,35 +609,31 @@ export function IndicadoresPage(): React.JSX.Element {
 
               <h4 style={{ margin: '8px 0 0' }}>Indicadores hijo</h4>
               <p className="texto-suave" style={{ margin: 0 }}>
-                Solo se ofrecen indicadores con la misma periodicidad, que no sean calculados ni padre (sin anidamiento).
+                Solo se ofrecen indicadores con la misma periodicidad, categoría y equipo que este indicador — que no
+                sean calculados ni padre (sin anidamiento). Padre e hijo no pueden pertenecer a categorías/subcategorías
+                o equipos distintos.
               </p>
-              {indicadores
-                .filter((i) =>
-                  i.id !== editando.id && !i.esCalculado && !i.esPadre &&
-                  i.periodicidad === editando.periodicidad &&
-                  (editando.periodicidad !== Periodicidad.Personalizada || i.periodicidadPersonalizadaId === editando.periodicidadPersonalizadaId)
-                )
-                .map((i) => (
-                  <label key={i.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={editando.indicadoresHijoIds.includes(i.id)}
-                      onChange={(e) =>
-                        setEditando({
-                          ...editando,
-                          indicadoresHijoIds: e.target.checked
-                            ? [...editando.indicadoresHijoIds, i.id]
-                            : editando.indicadoresHijoIds.filter((id) => id !== i.id)
-                        })
-                      }
-                      style={{ width: 'auto' }}
-                      data-testid={`indicador-hijo-${i.nombre}`}
-                    />
-                    {i.nombre}
-                  </label>
-                ))}
-              {indicadores.filter((i) => i.id !== editando.id && !i.esCalculado && !i.esPadre).length === 0 && (
-                <p className="texto-suave">No hay indicadores elegibles como hijo todavía.</p>
+              {hijosElegibles.map((i) => (
+                <label key={i.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editando.indicadoresHijoIds.includes(i.id)}
+                    onChange={(e) =>
+                      setEditando({
+                        ...editando,
+                        indicadoresHijoIds: e.target.checked
+                          ? [...editando.indicadoresHijoIds, i.id]
+                          : editando.indicadoresHijoIds.filter((id) => id !== i.id)
+                      })
+                    }
+                    style={{ width: 'auto' }}
+                    data-testid={`indicador-hijo-${i.nombre}`}
+                  />
+                  {i.nombre}
+                </label>
+              ))}
+              {hijosElegibles.length === 0 && (
+                <p className="texto-suave">No hay indicadores elegibles como hijo (misma periodicidad, categoría y equipo) todavía.</p>
               )}
             </>
           )}

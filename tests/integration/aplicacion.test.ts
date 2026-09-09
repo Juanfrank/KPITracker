@@ -1175,6 +1175,40 @@ describe('Composition root — indicadores padre/hijo', () => {
     );
   });
 
+  it('rechaza un hijo en una categoría/subcategoría distinta a la del padre', async () => {
+    const otraCategoria = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Otra categoría', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const hijoOtraCategoria = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'HIJO-OTRA-CAT-1', categoria: otraCategoria.id }), valores: []
+    });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-7', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [hijoOtraCategoria.id] }),
+        valores: []
+      }),
+      /misma categoría/
+    );
+  });
+
+  it('rechaza un hijo en un equipo distinto (directo) al del padre', async () => {
+    const otroEquipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Otro equipo', descripcion: '', activo: true, eliminado: false, padreId: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const hijoOtroEquipo = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'HIJO-OTRO-EQUIPO-1', equipo: otroEquipo.id }), valores: []
+    });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-8', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [hijoOtroEquipo.id] }),
+        valores: []
+      }),
+      /mismo equipo/
+    );
+  });
+
   it('fuerza desagregaciones vacías al guardar un indicador padre', async () => {
     const hijo = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-DESAG-1' }), valores: [] });
     const padre = await app.manejadores['indicadores:guardar']({

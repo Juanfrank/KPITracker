@@ -167,6 +167,14 @@ export class ServicioIndicadores extends ServicioBase {
       } else if (indicador.id && indicador.indicadoresHijoIds.includes(indicador.id)) {
         errores.push('Un indicador no puede ser su propio hijo.');
       } else {
+        // Padre e hijo deben compartir categoría (o subcategoría — una subcategoría es una
+        // Categoria más, así que "misma categoría" ya cubre ambos casos) y equipo EFECTIVO
+        // (directo si está seteado, si no indirecto vía el responsable — ver `equipoEfectivo`):
+        // pedido explícito del usuario, "prohibido residir en equipos/categorías/subcategorías
+        // distintas". Se resuelve una sola vez antes del bucle.
+        const usuarios = await this.usuariosRepo.listar();
+        const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
+        const equipoPadre = equipoEfectivo(indicador, usuariosPorId);
         for (const hijoId of indicador.indicadoresHijoIds) {
           const hijo = await this.repo.obtener(hijoId);
           if (!hijo) {
@@ -180,6 +188,10 @@ export class ServicioIndicadores extends ServicioBase {
             (indicador.periodicidad === Periodicidad.Personalizada && hijo.periodicidadPersonalizadaId !== indicador.periodicidadPersonalizadaId)
           ) {
             errores.push(`"${hijo.nombre}" debe tener la misma periodicidad que el indicador padre.`);
+          } else if (hijo.categoria !== indicador.categoria) {
+            errores.push(`"${hijo.nombre}" debe pertenecer a la misma categoría (o subcategoría) que el indicador padre.`);
+          } else if (equipoEfectivo(hijo, usuariosPorId) !== equipoPadre) {
+            errores.push(`"${hijo.nombre}" debe pertenecer al mismo equipo que el indicador padre.`);
           }
         }
       }
