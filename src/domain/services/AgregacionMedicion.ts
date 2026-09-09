@@ -47,6 +47,19 @@ export const OPCIONES_AGREGACION_CORTES: readonly TipoAgregacion[] = [
   'ultimoValor'
 ];
 
+/**
+ * Tercer consumo de este vocabulario compartido: `Indicador.tipoAgregacionPadre`
+ * (indicadores padre/hijo) combina los valores GENERAL de sus hijos en cada
+ * período. `suma` (pedido explícito del usuario, junto con promedio) más
+ * `maximo`/`minimo` — sin `promedioPonderado`: acá no hay una noción de "el
+ * hijo tiene una Meta configurada" que tenga sentido para ponderar.
+ */
+export const OPCIONES_AGREGACION_INDICADOR_PADRE: readonly TipoAgregacion[] = ['suma', 'promedio', 'maximo', 'minimo'];
+
+export function tipoAgregacionPadreValido(valor: string): valor is TipoAgregacion {
+  return (OPCIONES_AGREGACION_INDICADOR_PADRE as readonly string[]).includes(valor);
+}
+
 export const ETIQUETAS_AGREGACION: Record<TipoAgregacion, string> = {
   promedio: 'Promedio',
   promedioPonderado: 'Promedio ponderado (por meta configurada)',

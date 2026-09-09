@@ -107,7 +107,7 @@ describe('Notificaciones proactivas de vencimiento — punta a punta (Knex + tRP
         id: '', codigo: 'NOTIF-1', nombre: 'Indicador para notificar', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: responsable.id, categoria: null, equipo: null,
-        unidadMedida: null, esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });
@@ -135,7 +135,7 @@ describe('Notificaciones proactivas de vencimiento — punta a punta (Knex + tRP
         id: '', codigo: 'NOTIF-2', nombre: 'Otro indicador para notificar', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: responsable.id, categoria: null, equipo: null,
-        unidadMedida: null, esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });

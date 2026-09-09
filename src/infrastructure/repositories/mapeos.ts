@@ -55,6 +55,11 @@ export const aIndicador = (f: Fila): Indicador => ({
   // portable anterior) no traen la columna — el default es "requiere validación" (true),
   // el comportamiento que ya tenían todos los indicadores.
   requiereValidacion: f.requiere_validacion == null ? true : b(f.requiere_validacion),
+  // Indicadores padre/hijo: registros de antes de esta migración no traen estas columnas —
+  // el default es "no es padre", sin hijos ni regla de agregación, igual que hoy.
+  esPadre: b(f.es_padre),
+  indicadoresHijoIds: json<string[]>(f.indicadores_hijo, []),
+  tipoAgregacionPadre: sn(f.tipo_agregacion_padre) as Indicador['tipoAgregacionPadre'],
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -72,6 +77,8 @@ export const deIndicador = (i: Indicador): Fila => ({
   responsable: i.responsable, categoria: i.categoria, equipo: i.equipo ?? null, unidad_medida: i.unidadMedida,
   periodicidad_personalizada_id: i.periodicidadPersonalizadaId, es_calculado: i.esCalculado ?? false,
   formula: i.formula ?? null, requiere_validacion: i.requiereValidacion ?? true,
+  es_padre: i.esPadre ?? false, indicadores_hijo: JSON.stringify(i.indicadoresHijoIds ?? []),
+  tipo_agregacion_padre: i.tipoAgregacionPadre ?? null,
   creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
 });
 

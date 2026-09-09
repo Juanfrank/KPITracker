@@ -4,6 +4,7 @@ import type { RutasDataLake } from '../parquet/RutasDataLake';
 import type { ICatalogoRepository, IConfiguracionRepository, IExportService, IUsuarioRepository } from '@application/ports/index';
 import { GeneradorPeriodos } from '@domain/services/GeneradorPeriodos';
 import { EvaluadorFormulas } from '@domain/services/EvaluadorFormulas';
+import { agregar, tipoAgregacionPadreValido } from '@domain/services/AgregacionMedicion';
 import { Periodicidad } from '@domain/value-objects/Periodicidad';
 import { textoAClave } from '@domain/value-objects/ClaveDesagregacion';
 import type { Categoria, DefinicionPeriodicidad } from '@domain/index';
@@ -17,7 +18,7 @@ const COLUMNAS_INDICADOR = [
   'id', 'codigo', 'nombre', 'definicion', 'forma_calculo', 'periodicidad', 'linea_base',
   'linea_base_periodo_id', 'meta_global', 'desagregaciones', 'estado', 'responsable', 'categoria',
   'unidad_medida', 'periodicidad_personalizada_id', 'es_calculado', 'formula', 'origen_automatico_id',
-  'parametros_origen', 'creado_en', 'actualizado_en'
+  'parametros_origen', 'es_padre', 'indicadores_hijo', 'tipo_agregacion_padre', 'creado_en', 'actualizado_en'
 ] as const;
 const COLUMNAS_LISTA = [
   'id', 'nombre', 'descripcion', 'prefijo', 'estado', 'version', 'orden', 'jerarquica', 'eliminado',
@@ -294,6 +295,64 @@ export class ExportAnaliticoService implements IExportService {
             categoria: ic.categoria,
             unidad_medida: ic.unidad_medida,
             periodicidad_personalizada_id: ic.periodicidad_personalizada_id,
+            fecha_corte: null
+          });
+        }
+      }
+    }
+
+    // Indicadores padre: igual tratamiento que los calculados arriba — no tienen
+    // filas propias, se sintetizan a nivel GENERAL agregando (`tipoAgregacionPadre`)
+    // el valor GENERAL de sus `indicadoresHijoIds`, para cada período en el que al
+    // menos uno de ellos tenga datos.
+    const indicadoresPadre = await this.knex('indicadores').where('es_padre', true);
+    if (indicadoresPadre.length > 0) {
+      const valorPorIdYPeriodo = new Map<string, number | null>();
+      for (const f of filas) {
+        if (String(f.clave_desagregacion) !== 'GENERAL') continue;
+        valorPorIdYPeriodo.set(`${f.indicador_id}|${f.periodo_id}`, f.valor == null ? null : Number(f.valor));
+      }
+
+      for (const ip of indicadoresPadre) {
+        const tipoAgregacion = String(ip.tipo_agregacion_padre ?? '');
+        if (!tipoAgregacionPadreValido(tipoAgregacion)) continue;
+        let hijoIds: string[];
+        try {
+          hijoIds = JSON.parse(String(ip.indicadores_hijo ?? '[]'));
+        } catch {
+          continue;
+        }
+        const periodosConDatos = new Set<string>();
+        for (const [clave, valor] of valorPorIdYPeriodo) {
+          if (valor == null) continue;
+          const separador = clave.indexOf('|');
+          if (hijoIds.includes(clave.slice(0, separador))) periodosConDatos.add(clave.slice(separador + 1));
+        }
+        for (const periodoId of periodosConDatos) {
+          const entradas = hijoIds
+            .map((hijoId) => valorPorIdYPeriodo.get(`${hijoId}|${periodoId}`))
+            .filter((v): v is number => v != null)
+            .map((valor) => ({ valor, tieneMeta: false }));
+          const valorAgregado = agregar(tipoAgregacion, entradas);
+          filas.push({
+            resultado_id: `padre:${ip.id}:${periodoId}`,
+            indicador_id: ip.id,
+            periodo_id: periodoId,
+            anio: Number(String(periodoId).slice(0, 4)),
+            clave_desagregacion: 'GENERAL',
+            valor: valorAgregado,
+            observacion: null,
+            actualizado_en: ip.actualizado_en,
+            indicador: ip.nombre,
+            definicion: ip.definicion,
+            periodicidad: ip.periodicidad,
+            linea_base: ip.linea_base,
+            meta_global: ip.meta_global,
+            estado: ip.estado,
+            responsable: ip.responsable,
+            categoria: ip.categoria,
+            unidad_medida: ip.unidad_medida,
+            periodicidad_personalizada_id: ip.periodicidad_personalizada_id,
             fecha_corte: null
           });
         }

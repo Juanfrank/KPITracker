@@ -1,6 +1,6 @@
 import {
   CLAVE_GENERAL, ConflictoConcurrenciaError, EntidadNoEncontradaError, EvaluadorFormulas, GeneradorPeriodos,
-  Periodicidad, ProductoCartesiano, TipoDato, ValidacionError, cadenaAncestros, calcularAgregadosCaptura,
+  Periodicidad, ProductoCartesiano, TipoDato, ValidacionError, agregar, cadenaAncestros, calcularAgregadosCaptura,
   claveATexto, crearClave, equipoEfectivo, etiquetaMasReciente, evaluarValidacionesCaptura, ordenarComoArbol,
   puedeSobreIndicador, redondear2, resolverParametrosGenerales, sustituirTokens
 } from '@domain/index';
@@ -148,8 +148,10 @@ export class ServicioRecoleccion extends ServicioBase {
   async obtenerCaptura(indicadorId: string, periodoId: string): Promise<DatosCaptura> {
     const indicador = await this.indicadorConPermiso(indicadorId, 'ver');
 
-    if (indicador.esCalculado && indicador.formula) {
-      const valor = await this.calcularValorIndicador(indicador.formula, periodoId);
+    if ((indicador.esCalculado && indicador.formula) || (indicador.esPadre && indicador.tipoAgregacionPadre)) {
+      const valor = indicador.esCalculado
+        ? await this.calcularValorIndicador(indicador.formula as string, periodoId)
+        : await this.calcularValorIndicadorPadre(indicador, periodoId);
       const definicion = await this.definicionPara(indicador);
       return {
         indicadorId,
@@ -282,6 +284,9 @@ export class ServicioRecoleccion extends ServicioBase {
     if (indicadorActual.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene automáticamente de la fórmula y no admite captura manual.');
     }
+    if (indicadorActual.esPadre) {
+      throw new ValidacionError('Este indicador es padre: su valor se agrega automáticamente de sus indicadores hijo y no admite captura manual.');
+    }
     const levantamientoActual = await this.resultados.obtenerLevantamiento(indicadorId, periodoId);
     if (!levantamientoActual?.fechaCorte) {
       throw new ValidacionError('Debe establecer la fecha de corte del período antes de capturar resultados.');
@@ -325,6 +330,9 @@ export class ServicioRecoleccion extends ServicioBase {
     const indicador = await this.indicadorConPermiso(indicadorId, 'registrar');
     if (indicador.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene de la fórmula, no de un origen automático.');
+    }
+    if (indicador.esPadre) {
+      throw new ValidacionError('Este indicador es padre: su valor se agrega de sus indicadores hijo, no de un origen automático.');
     }
     const automatizacion = await this.automatizaciones.obtenerPorIndicador(indicadorId);
     if (!automatizacion) {
@@ -598,6 +606,9 @@ export class ServicioRecoleccion extends ServicioBase {
     if (indicador.esCalculado) {
       throw new ValidacionError('Este indicador es calculado: su valor se obtiene de la fórmula y no admite restauración manual.');
     }
+    if (indicador.esPadre) {
+      throw new ValidacionError('Este indicador es padre: su valor se agrega de sus indicadores hijo y no admite restauración manual.');
+    }
 
     const captura = await this.obtenerCaptura(indicadorId, periodoId);
     const existentes = await this.resultados.obtenerPorIndicadorPeriodo(indicadorId, periodoId);
@@ -784,6 +795,23 @@ export class ServicioRecoleccion extends ServicioBase {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Agrega, para un período, los valores GENERAL de los hijos de un
+   * indicador padre (mismo criterio que `ServicioSeguimiento.calcularValorIndicadorPadre`
+   * — un hijo sin valor o ya borrado simplemente no entra en la agregación).
+   */
+  private async calcularValorIndicadorPadre(indicador: Indicador, periodoId: string): Promise<number | null> {
+    const entradas: Array<{ valor: number; tieneMeta: boolean }> = [];
+    for (const hijoId of indicador.indicadoresHijoIds) {
+      const hijo = await this.indicadores.obtener(hijoId);
+      if (!hijo) continue;
+      const resultados = await this.resultados.obtenerPorIndicadorPeriodo(hijoId, periodoId);
+      const valor = resultados.find((r) => r.claveDesagregacion === 'GENERAL')?.valor ?? null;
+      if (valor != null) entradas.push({ valor, tieneMeta: false });
+    }
+    return agregar(indicador.tipoAgregacionPadre!, entradas);
   }
 
   private etiquetaPeriodo(periodoId: string, definicion?: DefinicionPeriodicidad): string {

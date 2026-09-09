@@ -1,5 +1,5 @@
 import {
-  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, cadenaAncestros,
+  CalculadoraEstados, EvaluadorFormulas, GeneradorPeriodos, Periodicidad, ProductoCartesiano, agregar, cadenaAncestros,
   equipoEfectivo, metaVigenteParaPeriodo, puedeVerIndicador, redondear2
 } from '@domain/index';
 import type {
@@ -317,7 +317,8 @@ export class ServicioSeguimiento extends ServicioBase {
    * Serie histórica por indicador (períodos cerrados con su valor GENERAL y
    * cumplimiento respecto a la meta), para la vista pivotada de Seguimiento.
    * Los indicadores calculados evalúan su fórmula por período en vez de leer
-   * `resultados` (no tienen filas propias, ver ExportAnaliticoService).
+   * `resultados`, y los indicadores padre agregan los resultados GENERAL de
+   * sus hijos (ninguno de los dos tiene filas propias, ver ExportAnaliticoService).
    */
   async historico(): Promise<FilaHistorico[]> {
     const [config, indicadores, usuarios, categorias, equipos] = await Promise.all([
@@ -349,6 +350,10 @@ export class ServicioSeguimiento extends ServicioBase {
       if (indicador.esCalculado && indicador.formula) {
         for (const periodo of periodos) {
           valoresPorPeriodo.set(periodo.id, await this.calcularValorIndicador(indicador.formula, periodo.id));
+        }
+      } else if (indicador.esPadre && indicador.tipoAgregacionPadre) {
+        for (const periodo of periodos) {
+          valoresPorPeriodo.set(periodo.id, await this.calcularValorIndicadorPadre(indicador, periodo.id));
         }
       } else {
         for (const dato of await this.resultados.resultadosGeneralPorIndicador(indicador.id)) {
@@ -415,6 +420,26 @@ export class ServicioSeguimiento extends ServicioBase {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Agrega, para un período dado, los valores GENERAL de los hijos de un
+   * indicador padre (`tipoAgregacionPadre`, ver `AgregacionMedicion.agregar`).
+   * Un hijo sin valor para ese período (aún no capturado) o que ya no exista
+   * (borrado) simplemente no entra en la agregación — no la anula, a
+   * diferencia de un indicador calculado cuya fórmula sí propaga `null` de
+   * cualquier referencia faltante (ver `calcularValorIndicador`).
+   */
+  private async calcularValorIndicadorPadre(indicador: Indicador, periodoId: string): Promise<number | null> {
+    const entradas: Array<{ valor: number; tieneMeta: boolean }> = [];
+    for (const hijoId of indicador.indicadoresHijoIds) {
+      const hijo = await this.indicadores.obtener(hijoId);
+      if (!hijo) continue;
+      const datos = await this.resultados.resultadosGeneralPorIndicador(hijoId);
+      const valor = datos.find((d) => d.periodoId === periodoId)?.valor ?? null;
+      if (valor != null) entradas.push({ valor, tieneMeta: false });
+    }
+    return agregar(indicador.tipoAgregacionPadre!, entradas);
   }
 
   private async totalCombinaciones(

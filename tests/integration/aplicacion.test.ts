@@ -16,7 +16,7 @@ function indicador(parcial: Partial<Indicador> = {}): Indicador {
   return {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null, periodicidad: Periodicidad.Trimestral,
     periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
-    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null, requiereValidacion: true,
+    estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, requiereValidacion: true,
     creadoEn: '', actualizadoEn: '',
     ...parcial
   };
@@ -1082,6 +1082,162 @@ describe('Composition root — indicadores calculados (fórmulas)', () => {
         indicador: indicador({ codigo: 'Z', esCalculado: true, formula: '[A] +' }), valores: []
       })
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * `guardar()` agrupa todas las validaciones en un único `ValidacionError('Indicador
+ * inválido.', detalles)` (ver ServicioCatalogos) — el mensaje en sí siempre es genérico,
+ * así que hay que inspeccionar `detalles` para afirmar CUÁL regla disparó, igual que ya
+ * hace el test de referencia circular de indicadores calculados más arriba.
+ */
+async function esperarDetalle(promesa: Promise<unknown>, patron: RegExp): Promise<void> {
+  try {
+    await promesa;
+    throw new Error('no debió llegar aquí');
+  } catch (error) {
+    const detalles = (error as Error & { detalles?: string[] }).detalles;
+    expect(detalles?.some((d) => patron.test(d))).toBe(true);
+  }
+}
+
+describe('Composition root — indicadores padre/hijo', () => {
+  it('rechaza un indicador padre y calculado a la vez', async () => {
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-1', esPadre: true, esCalculado: true, formula: '[X] + 1', tipoAgregacionPadre: 'suma', indicadoresHijoIds: ['x'] }),
+        valores: []
+      }),
+      /calculado y padre/
+    );
+  });
+
+  it('rechaza un indicador padre sin hijos', async () => {
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-2', esPadre: true, tipoAgregacionPadre: 'suma' }), valores: []
+      }),
+      /al menos un indicador hijo/
+    );
+  });
+
+  it('rechaza un indicador padre sin un tipo de agregación válido', async () => {
+    const hijo = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-TA-1' }), valores: [] });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-3', esPadre: true, indicadoresHijoIds: [hijo.id] }), valores: []
+      }),
+      /tipo de agregación/
+    );
+  });
+
+  it('rechaza como hijo a un indicador que ya es padre (sin anidamiento)', async () => {
+    const nieto = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'NIETO-1' }), valores: [] });
+    const otroPadre = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'OTRO-PADRE-1', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [nieto.id] }), valores: []
+    });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-4', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [otroPadre.id] }),
+        valores: []
+      }),
+      /ya es un indicador padre/
+    );
+  });
+
+  it('rechaza como hijo a un indicador calculado', async () => {
+    await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'BASE-CH-1' }), valores: [] });
+    const calculado = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'CALC-CH-1', esCalculado: true, formula: '[BASE-CH-1] * 2' }), valores: []
+    });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({ codigo: 'PADRE-INVALIDO-5', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [calculado.id] }),
+        valores: []
+      }),
+      /calculado/
+    );
+  });
+
+  it('rechaza un hijo con periodicidad distinta a la del padre', async () => {
+    const hijoMensual = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'HIJO-MENSUAL-1', periodicidad: 'Mensual' as never }), valores: []
+    });
+    await esperarDetalle(
+      app.manejadores['indicadores:guardar']({
+        indicador: indicador({
+          codigo: 'PADRE-INVALIDO-6', periodicidad: 'Trimestral' as never,
+          esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [hijoMensual.id]
+        }),
+        valores: []
+      }),
+      /misma periodicidad/
+    );
+  });
+
+  it('fuerza desagregaciones vacías al guardar un indicador padre', async () => {
+    const hijo = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-DESAG-1' }), valores: [] });
+    const padre = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'PADRE-DESAG-1', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [hijo.id], desagregaciones: ['algo'] }),
+      valores: []
+    });
+    expect(padre.desagregaciones).toEqual([]);
+  });
+
+  it('agrega (suma) los resultados GENERAL de los hijos en Recolección y Seguimiento, y bloquea captura/restauración/obtención automática', async () => {
+    const hijoA = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-SUMA-A' }), valores: [] });
+    const hijoB = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-SUMA-B' }), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: hijoA.id });
+    // `seguimiento:historico` solo considera períodos CERRADOS (`periodosCerrados`) — mismo
+    // criterio que el test de indicadores calculados de más arriba, para que el punto exista.
+    const hoy = new Date().toISOString().slice(0, 10);
+    const periodoId = periodos.slice().reverse().find((p) => p.fechaFin < hoy)!.id;
+    for (const hijo of [hijoA, hijoB]) {
+      await app.manejadores['recoleccion:fechaCorte']({ indicadorId: hijo.id, periodoId, fechaCorte: '2025-01-31' });
+    }
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: hijoA.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '10' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: hijoB.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '15' });
+
+    const padre = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'PADRE-SUMA-1', esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [hijoA.id, hijoB.id] }),
+      valores: []
+    });
+
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId: padre.id, periodoId });
+    expect(captura.filas[0]?.valor).toBe(25);
+
+    const historico = await app.manejadores['seguimiento:historico'](undefined);
+    const fila = historico.find((h) => h.indicadorId === padre.id);
+    const punto = fila!.puntos.find((p) => p.periodoId === periodoId);
+    expect(punto?.valor).toBe(25);
+
+    await expect(
+      app.manejadores['recoleccion:guardarCelda']({ indicadorId: padre.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '999' })
+    ).rejects.toThrow(/padre/);
+    await expect(
+      app.manejadores['recoleccion:obtenerAutomatico']({ indicadorId: padre.id, periodoId })
+    ).rejects.toThrow(/padre/);
+    await expect(
+      app.manejadores['recoleccion:restaurarPeriodo']({ indicadorId: padre.id, periodoId, timestamp: new Date().toISOString() })
+    ).rejects.toThrow(/padre/);
+  });
+
+  it('un hijo sin valor todavía para el período simplemente no entra en la agregación (no la anula)', async () => {
+    const hijoA = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-PARCIAL-A' }), valores: [] });
+    const hijoB = await app.manejadores['indicadores:guardar']({ indicador: indicador({ codigo: 'HIJO-PARCIAL-B' }), valores: [] });
+    const periodos = await app.manejadores['recoleccion:periodos']({ indicadorId: hijoA.id });
+    const periodoId = periodos[periodos.length - 1]!.id;
+    await app.manejadores['recoleccion:fechaCorte']({ indicadorId: hijoA.id, periodoId, fechaCorte: '2025-01-31' });
+    await app.manejadores['recoleccion:guardarCelda']({ indicadorId: hijoA.id, periodoId, claveDesagregacion: 'GENERAL', valorCrudo: '40' });
+    // hijoB nunca captura un valor para este período.
+
+    const padre = await app.manejadores['indicadores:guardar']({
+      indicador: indicador({ codigo: 'PADRE-PROMEDIO-1', esPadre: true, tipoAgregacionPadre: 'promedio', indicadoresHijoIds: [hijoA.id, hijoB.id] }),
+      valores: []
+    });
+
+    const captura = await app.manejadores['recoleccion:captura']({ indicadorId: padre.id, periodoId });
+    expect(captura.filas[0]?.valor).toBe(40);
   });
 });
 

@@ -3,7 +3,10 @@ import type {
   Atributo, Categoria, DefinicionPeriodicidad, ElementoLista, Equipo, Indicador, Periodo,
   ReglaNegocio, ValorAtributo
 } from '@domain/index';
-import { GeneradorPeriodos, Periodicidad, construirContextoIndicador, etiquetaConPrefijo } from '@domain/index';
+import {
+  ETIQUETAS_AGREGACION, GeneradorPeriodos, OPCIONES_AGREGACION_INDICADOR_PADRE, Periodicidad,
+  construirContextoIndicador, etiquetaConPrefijo
+} from '@domain/index';
 import type { ValorAtributoEntidad } from '@application/ports/index';
 import { invocar } from '../../api';
 import { trpcClient } from '../../trpc';
@@ -61,6 +64,9 @@ function indicadorVacio(): Indicador {
     unidadMedida: null,
     esCalculado: false,
     formula: null,
+    esPadre: false,
+    indicadoresHijoIds: [],
+    tipoAgregacionPadre: null,
     requiereValidacion: true,
     creadoEn: '',
     actualizadoEn: ''
@@ -295,7 +301,11 @@ export function IndicadoresPage(): React.JSX.Element {
                 <td className="texto-suave">
                   {etiquetaConPrefijo(categorias.find((c) => c.id === i.categoria)?.prefijo, i.codigo) || '—'}
                 </td>
-                <td><strong>{i.nombre}</strong>{i.esCalculado && <span className="chip" style={{ marginLeft: 6 }}>Calculado</span>}</td>
+                <td>
+                  <strong>{i.nombre}</strong>
+                  {i.esCalculado && <span className="chip" style={{ marginLeft: 6 }}>Calculado</span>}
+                  {i.esPadre && <span className="chip" style={{ marginLeft: 6 }}>Padre</span>}
+                </td>
                 <td>{i.periodicidad}</td>
                 <td>{i.lineaBase ?? '—'}</td>
                 <td>{i.metaGlobal ?? '—'}</td>
@@ -493,11 +503,40 @@ export function IndicadoresPage(): React.JSX.Element {
             <input
               type="checkbox"
               checked={editando.esCalculado}
-              onChange={(e) => setEditando({ ...editando, esCalculado: e.target.checked })}
+              disabled={editando.esPadre}
+              onChange={(e) =>
+                setEditando({
+                  ...editando,
+                  esCalculado: e.target.checked,
+                  formula: e.target.checked ? editando.formula : null
+                })
+              }
               style={{ width: 'auto' }}
               data-testid="indicador-es-calculado"
             />
             Indicador calculado (su valor se obtiene de una fórmula, no se captura manualmente)
+          </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={editando.esPadre}
+              disabled={editando.esCalculado}
+              onChange={(e) =>
+                setEditando({
+                  ...editando,
+                  esPadre: e.target.checked,
+                  // Mutuamente excluyente con "calculado" y sin desagregaciones propias
+                  // (ver docstring de Indicador.esPadre) — el formulario lo fuerza al activarla.
+                  desagregaciones: e.target.checked ? [] : editando.desagregaciones,
+                  indicadoresHijoIds: e.target.checked ? editando.indicadoresHijoIds : [],
+                  tipoAgregacionPadre: e.target.checked ? editando.tipoAgregacionPadre : null
+                })
+              }
+              style={{ width: 'auto' }}
+              data-testid="indicador-es-padre"
+            />
+            Indicador padre (su valor se agrega a partir de los resultados de sus indicadores hijo)
           </label>
 
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
@@ -526,7 +565,56 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
 
-          {!editando.esCalculado && (
+          {editando.esPadre && (
+            <>
+              <Campo etiqueta="Tipo de agregación" obligatorio>
+                <select
+                  value={editando.tipoAgregacionPadre ?? ''}
+                  onChange={(e) => setEditando({ ...editando, tipoAgregacionPadre: (e.target.value || null) as Indicador['tipoAgregacionPadre'] })}
+                  data-testid="indicador-tipo-agregacion-padre"
+                >
+                  <option value="">— seleccionar —</option>
+                  {OPCIONES_AGREGACION_INDICADOR_PADRE.map((t) => <option key={t} value={t}>{ETIQUETAS_AGREGACION[t]}</option>)}
+                </select>
+                <span className="texto-suave">Cómo combinar, en cada período, los valores de los indicadores hijo.</span>
+              </Campo>
+
+              <h4 style={{ margin: '8px 0 0' }}>Indicadores hijo</h4>
+              <p className="texto-suave" style={{ margin: 0 }}>
+                Solo se ofrecen indicadores con la misma periodicidad, que no sean calculados ni padre (sin anidamiento).
+              </p>
+              {indicadores
+                .filter((i) =>
+                  i.id !== editando.id && !i.esCalculado && !i.esPadre &&
+                  i.periodicidad === editando.periodicidad &&
+                  (editando.periodicidad !== Periodicidad.Personalizada || i.periodicidadPersonalizadaId === editando.periodicidadPersonalizadaId)
+                )
+                .map((i) => (
+                  <label key={i.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editando.indicadoresHijoIds.includes(i.id)}
+                      onChange={(e) =>
+                        setEditando({
+                          ...editando,
+                          indicadoresHijoIds: e.target.checked
+                            ? [...editando.indicadoresHijoIds, i.id]
+                            : editando.indicadoresHijoIds.filter((id) => id !== i.id)
+                        })
+                      }
+                      style={{ width: 'auto' }}
+                      data-testid={`indicador-hijo-${i.nombre}`}
+                    />
+                    {i.nombre}
+                  </label>
+                ))}
+              {indicadores.filter((i) => i.id !== editando.id && !i.esCalculado && !i.esPadre).length === 0 && (
+                <p className="texto-suave">No hay indicadores elegibles como hijo todavía.</p>
+              )}
+            </>
+          )}
+
+          {!editando.esCalculado && !editando.esPadre && (
             <Campo etiqueta="Obtención automática de resultados">
               <button
                 className="boton"
@@ -544,30 +632,34 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
 
-          <h4 style={{ margin: '8px 0 0' }}>Desagregaciones</h4>
-          <p className="texto-suave" style={{ margin: 0 }}>
-            Si selecciona varias, la captura generará todas las combinaciones (producto cartesiano) más una fila para el resultado General.
-          </p>
-          {listas.filter((l) => l.estado === 'Activa').map((l) => (
-            <label key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={editando.desagregaciones.includes(l.id)}
-                onChange={(e) =>
-                  setEditando({
-                    ...editando,
-                    desagregaciones: e.target.checked
-                      ? [...editando.desagregaciones, l.id]
-                      : editando.desagregaciones.filter((d) => d !== l.id)
-                  })
-                }
-                style={{ width: 'auto' }}
-                data-testid={`desagregacion-${l.nombre}`}
-              />
-              {l.nombre}
-            </label>
-          ))}
-          {listas.length === 0 && <p className="texto-suave">No hay listas de selección; créelas en el módulo Listas.</p>}
+          {!editando.esPadre && (
+            <>
+              <h4 style={{ margin: '8px 0 0' }}>Desagregaciones</h4>
+              <p className="texto-suave" style={{ margin: 0 }}>
+                Si selecciona varias, la captura generará todas las combinaciones (producto cartesiano) más una fila para el resultado General.
+              </p>
+              {listas.filter((l) => l.estado === 'Activa').map((l) => (
+                <label key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editando.desagregaciones.includes(l.id)}
+                    onChange={(e) =>
+                      setEditando({
+                        ...editando,
+                        desagregaciones: e.target.checked
+                          ? [...editando.desagregaciones, l.id]
+                          : editando.desagregaciones.filter((d) => d !== l.id)
+                      })
+                    }
+                    style={{ width: 'auto' }}
+                    data-testid={`desagregacion-${l.nombre}`}
+                  />
+                  {l.nombre}
+                </label>
+              ))}
+              {listas.length === 0 && <p className="texto-suave">No hay listas de selección; créelas en el módulo Listas.</p>}
+            </>
+          )}
 
           {atributosVisibles.length > 0 && (
             <>

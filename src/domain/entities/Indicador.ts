@@ -1,4 +1,5 @@
 import type { Periodicidad } from '../value-objects/Periodicidad';
+import type { TipoAgregacion } from '../services/AgregacionMedicion';
 
 export type EstadoIndicador = 'Activo' | 'Inactivo' | 'Borrador';
 
@@ -38,6 +39,36 @@ export interface Indicador {
   esCalculado: boolean;
   /** Expresión aritmética sobre códigos de otros indicadores (p. ej. "IND-001 + IND-002 * 0.5"). Requerida cuando esCalculado = true. */
   formula: string | null;
+  /**
+   * Indicador padre: su resultado por período no se captura ni se calcula
+   * por fórmula, se agrega a partir de los resultados YA ALMACENADOS (nivel
+   * GENERAL) de sus `indicadoresHijoIds`, con `tipoAgregacionPadre`.
+   * Mutuamente excluyente con `esCalculado` (un indicador no puede ser
+   * ambas cosas a la vez) y sin `desagregaciones` propias (siempre agrega
+   * el total de cada hijo, ver docstring de `tipoAgregacionPadre`) — la UI
+   * de creación fuerza y oculta ambos al activar esta casilla.
+   */
+  esPadre: boolean;
+  /**
+   * Ids de los indicadores hijo cuyos resultados GENERAL por período se
+   * agregan para formar el resultado de este indicador padre. Deben ser
+   * indicadores "simples" (ni `esCalculado` ni `esPadre` — sin anidamiento
+   * de padres, sin encadenar con la fórmula) y compartir la periodicidad
+   * exacta del padre (misma `periodicidad`, y si es Personalizada, mismo
+   * `periodicidadPersonalizadaId`) para que "el mismo período" tenga
+   * sentido entre padre e hijos. Vacío salvo que `esPadre` sea `true`.
+   */
+  indicadoresHijoIds: string[];
+  /**
+   * Regla de agregación (vocabulario compartido con Cortes de medición y
+   * Medición por categoría, ver `TipoAgregacion` en `AgregacionMedicion`)
+   * usada para combinar los valores GENERAL de los hijos en cada período.
+   * Solo se ofrecen `OPCIONES_AGREGACION_INDICADOR_PADRE` (suma, promedio,
+   * máximo, mínimo — sin `promedioPonderado`: no hay una noción de "Meta
+   * configurada" por hijo que tenga sentido acá). Requerido cuando
+   * `esPadre` es `true`, `null` en cualquier otro caso.
+   */
+  tipoAgregacionPadre: TipoAgregacion | null;
   /**
    * Si es `false` (Batch U, U7), sus resultados nunca pasan por el flujo de
    * aprobación (Batch T5) — la UI de Recolección oculta la columna/los

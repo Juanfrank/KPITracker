@@ -211,7 +211,7 @@ describe('Servidor tRPC — "Ver como" (U2, simulación de solo lectura)', () =>
           id: '', codigo: '', nombre: 'No debería guardarse', definicion: 'Definición', formaCalculo: null,
           periodicidad: 'Trimestral', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
           metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, unidadMedida: null,
-          esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+          esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
         },
         valores: []
       } as never)
@@ -232,7 +232,7 @@ describe('Servidor tRPC — "Ver como" (U2, simulación de solo lectura)', () =>
         id: '', codigo: '', nombre: 'Ahora sí', definicion: 'Definición', formaCalculo: null,
         periodicidad: 'Trimestral', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, unidadMedida: null,
-        esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     } as never);
@@ -271,7 +271,7 @@ describe('Servidor tRPC — smoke test de un router de dominio real (indicadores
         id: '', codigo: 'IND-001', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null,
         periodicidad: 'Trimestral', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, unidadMedida: null,
-        esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     } as never);

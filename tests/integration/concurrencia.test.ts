@@ -96,7 +96,7 @@ describe('recoleccion.guardarCelda — bloqueo optimista (concurrencia)', () => 
         id: '', codigo: 'CONC-1', nombre: 'Indicador de prueba de concurrencia', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoriaGeneral.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, creadoEn: '', actualizadoEn: ''
+        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });

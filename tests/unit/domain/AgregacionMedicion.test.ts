@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { agregar, redondear2, tipoAgregacionBaseValido, tipoAgregacionValido } from '@domain/index';
+import {
+  agregar, redondear2, tipoAgregacionBaseValido, tipoAgregacionPadreValido, tipoAgregacionValido
+} from '@domain/index';
 import type { EntradaAgregable } from '@domain/index';
 
 describe('AgregacionMedicion — agregar() (Batch Y)', () => {
@@ -50,6 +52,14 @@ describe('AgregacionMedicion — agregar() (Batch Y)', () => {
     expect(tipoAgregacionBaseValido('maximo')).toBe(true);
     expect(tipoAgregacionBaseValido('mediana')).toBe(false);
     expect(tipoAgregacionBaseValido('suma')).toBe(false);
+  });
+
+  it('tipoAgregacionPadreValido() reconoce suma/promedio/maximo/minimo, no promedioPonderado (indicadores padre)', () => {
+    for (const op of ['suma', 'promedio', 'maximo', 'minimo']) {
+      expect(tipoAgregacionPadreValido(op)).toBe(true);
+    }
+    expect(tipoAgregacionPadreValido('promedioPonderado')).toBe(false);
+    expect(tipoAgregacionPadreValido('mediana')).toBe(false);
   });
 
   describe('Batch Z — nuevas reglas de agregación (Cortes de medición)', () => {

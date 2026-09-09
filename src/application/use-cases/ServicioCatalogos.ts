@@ -5,7 +5,8 @@ import type {
 import {
   EntidadNoEncontradaError, EvaluadorFormulas, Periodicidad, ValidacionError, ValidadorAtributos,
   cadenaAncestros, construirContextoIndicador, equipoEfectivo, explicarCondicion, puedeAdministrarCatalogos,
-  puedeAsignarIndicadoresEquipo, puedeVerIndicador, redondear2, signosAgrupacionBalanceados, sinCiclo
+  puedeAsignarIndicadoresEquipo, puedeVerIndicador, redondear2, signosAgrupacionBalanceados, sinCiclo,
+  tipoAgregacionPadreValido
 } from '@domain/index';
 import type {
   IAliasDesagregacionOrigenRepository, IAtributoRepository, IAutomatizacionIndicadorRepository, ICatalogoRepository,
@@ -117,7 +118,11 @@ export class ServicioIndicadores extends ServicioBase {
       // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — la meta
       // global y la línea base son valores de referencia, mismo tratamiento que una Meta.
       metaGlobal: input.indicador.metaGlobal == null ? null : redondear2(input.indicador.metaGlobal),
-      lineaBase: input.indicador.lineaBase == null ? null : redondear2(input.indicador.lineaBase)
+      lineaBase: input.indicador.lineaBase == null ? null : redondear2(input.indicador.lineaBase),
+      // Un indicador padre no tiene desagregaciones propias (agrega siempre el total de cada
+      // hijo, ver docstring de `Indicador.tipoAgregacionPadre`) ni hijos duplicados.
+      desagregaciones: input.indicador.esPadre ? [] : input.indicador.desagregaciones,
+      indicadoresHijoIds: input.indicador.esPadre ? [...new Set(input.indicador.indicadoresHijoIds)] : []
     };
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
@@ -145,6 +150,35 @@ export class ServicioIndicadores extends ServicioBase {
           }
         } catch (err) {
           errores.push(err instanceof Error ? err.message : 'Fórmula inválida.');
+        }
+      }
+    }
+    if (indicador.esPadre) {
+      if (indicador.esCalculado) {
+        errores.push('Un indicador no puede ser calculado y padre al mismo tiempo.');
+      }
+      if (!indicador.tipoAgregacionPadre || !tipoAgregacionPadreValido(indicador.tipoAgregacionPadre)) {
+        errores.push('Debe seleccionar un tipo de agregación válido para el indicador padre.');
+      }
+      if (indicador.indicadoresHijoIds.length === 0) {
+        errores.push('Un indicador padre requiere al menos un indicador hijo.');
+      } else if (indicador.id && indicador.indicadoresHijoIds.includes(indicador.id)) {
+        errores.push('Un indicador no puede ser su propio hijo.');
+      } else {
+        for (const hijoId of indicador.indicadoresHijoIds) {
+          const hijo = await this.repo.obtener(hijoId);
+          if (!hijo) {
+            errores.push(`El indicador hijo con id "${hijoId}" no existe.`);
+          } else if (hijo.esPadre) {
+            errores.push(`"${hijo.nombre}" ya es un indicador padre; no se admite anidar indicadores padre.`);
+          } else if (hijo.esCalculado) {
+            errores.push(`"${hijo.nombre}" es un indicador calculado; un indicador padre solo admite hijos con resultados propios.`);
+          } else if (
+            hijo.periodicidad !== indicador.periodicidad ||
+            (indicador.periodicidad === Periodicidad.Personalizada && hijo.periodicidadPersonalizadaId !== indicador.periodicidadPersonalizadaId)
+          ) {
+            errores.push(`"${hijo.nombre}" debe tener la misma periodicidad que el indicador padre.`);
+          }
         }
       }
     }
@@ -317,6 +351,9 @@ export class ServicioIndicadores extends ServicioBase {
           unidadMedida: mapeo.unidadMedida ? (fila[mapeo.unidadMedida] ?? '').trim() || null : null,
           esCalculado: false,
           formula: null,
+          esPadre: false,
+          indicadoresHijoIds: [],
+          tipoAgregacionPadre: null,
           requiereValidacion: true,
           creadoEn: ahora,
           actualizadoEn: ahora

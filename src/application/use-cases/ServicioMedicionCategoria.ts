@@ -92,7 +92,7 @@ export class ServicioMedicionCategoria extends ServicioBase {
 
     const deLaCategoria = indicadores.filter(
       (i: Indicador) =>
-        i.categoria === categoriaId && !i.esCalculado && `${i.periodicidad}` === periodicidadDelPeriodo &&
+        i.categoria === categoriaId && !i.esCalculado && !i.esPadre && `${i.periodicidad}` === periodicidadDelPeriodo &&
         puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 

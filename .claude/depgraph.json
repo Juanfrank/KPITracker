@@ -5197,7 +5197,7 @@
   },
   {
    "path": "src/renderer/src/modulos/indicadores/IndicadoresPage.tsx",
-   "hash": "23315017264193e712313309f167d3a9753501e2bdf3222c7467fab8ea6fd940",
+   "hash": "9692c0ddb15eb8529cb4e275f12c93dc2f4d0937cf1a0e64bb525773e94ffbaa",
    "imports": [
     "../../api",
     "../../componentes/CampoAtributo",
@@ -5261,6 +5261,7 @@
     "map",
     "obtener",
     "ordenarJerarquia",
+    "padre",
     "parse",
     "periodosDisponibles",
     "periodosLineaBase",
@@ -7638,12 +7639,13 @@
   },
   {
    "path": "src/infrastructure/export/ExportAnaliticoService.ts",
-   "hash": "74e96a1d7b925e02e1c196188cbb34c63a1b8fa6f62d85bcce0779c2c9c01def",
+   "hash": "7f57f5be12ce542b12eb98d65306cf19c2c7395edcb4e8600110267b01d0b40c",
    "imports": [
     "../parquet/RutasDataLake",
     "./DuckDbAnalitico",
     "@application/ports/index",
     "@domain/index",
+    "@domain/services/AgregacionMedicion",
     "@domain/services/EvaluadorFormulas",
     "@domain/services/GeneradorPeriodos",
     "@domain/value-objects/ClaveDesagregacion",
@@ -7674,6 +7676,8 @@
     "ResultadosAnalitico",
     "String",
     "add",
+    "agregando",
+    "agregar",
     "andOn",
     "cancelar",
     "cerrar",
@@ -7708,6 +7712,7 @@
     "obtener",
     "on",
     "orderBy",
+    "parse",
     "periodoEtiqueta",
     "periodosDelAnio",
     "push",
@@ -7729,6 +7734,7 @@
     "t",
     "textoAClave",
     "then",
+    "tipoAgregacionPadreValido",
     "trim",
     "values",
     "where",
@@ -7752,6 +7758,10 @@
     {
      "module": "@domain/index",
      "resolved": "src/domain/index.ts"
+    },
+    {
+     "module": "@domain/services/AgregacionMedicion",
+     "resolved": "src/domain/services/AgregacionMedicion.ts"
     },
     {
      "module": "@domain/services/EvaluadorFormulas",
@@ -7781,7 +7791,7 @@
   },
   {
    "path": "src/infrastructure/repositories/mapeos.ts",
-   "hash": "7949eac8ea470b14d9e353400e23a6aad4b276cc6700190f62a46f540f837bb1",
+   "hash": "a0f43732c7473a5b209aab56ec90c164fbf9bba2808c3a9865a427497ca661ca",
    "imports": [
     "@domain/index"
    ],
@@ -8691,7 +8701,7 @@
   },
   {
    "path": "src/infrastructure/db/migrations/index.ts",
-   "hash": "358a0febebfe2f5c93a4244f7bc42bc014f30c9953d67326040e7e51d4bcad14",
+   "hash": "bb7807ee0f5b7b0edf8ec0a5a832b7147b894a47e2a82aa4d56ba218c06db271",
    "imports": [
     "./20260101000000_esquema_inicial",
     "./20260825000000_categorias_equipos",
@@ -8708,6 +8718,7 @@
     "./20261120000000_workspaces",
     "./20261201000000_permisos_categoria",
     "./20261210000000_medicion_equipo",
+    "./20261220000000_indicador_padre",
     "knex"
    ],
    "defines": [
@@ -8795,6 +8806,10 @@
     {
      "module": "./20261210000000_medicion_equipo",
      "resolved": "src/infrastructure/db/migrations/20261210000000_medicion_equipo.ts"
+    },
+    {
+     "module": "./20261220000000_indicador_padre",
+     "resolved": "src/infrastructure/db/migrations/20261220000000_indicador_padre.ts"
     },
     {
      "module": "knex",
@@ -9181,6 +9196,47 @@
     "text",
     "up",
     "update"
+   ],
+   "import_edges": [
+    {
+     "module": "knex",
+     "resolved": null
+    }
+   ]
+  },
+  {
+   "path": "src/infrastructure/db/migrations/20261220000000_indicador_padre.ts",
+   "hash": "250a398757c74fdef1192d6dcc14db40f3258f3207e344f4cd328652bf8aa804",
+   "imports": [
+    "knex"
+   ],
+   "defines": [
+    {
+     "name": "down",
+     "line": null,
+     "type": "export"
+    },
+    {
+     "name": "up",
+     "line": null,
+     "type": "export"
+    }
+   ],
+   "exports": [
+    "down",
+    "up"
+   ],
+   "references": [
+    "alterTable",
+    "boolean",
+    "defaultTo",
+    "down",
+    "dropColumn",
+    "notNullable",
+    "nullable",
+    "string",
+    "text",
+    "up"
    ],
    "import_edges": [
     {
@@ -10459,7 +10515,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioMedicionCategoria.ts",
-   "hash": "9ee2ed4ca3c7501021bb560d6e8a662eca5ccbacbd1b790431caf051cdeb203e",
+   "hash": "55c4840d825041ddd315ac9036a93211ada42b618cb4aebd52bba6dae754b516",
    "imports": [
     "./base",
     "./contextoUsuario",
@@ -10529,7 +10585,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioRecoleccion.ts",
-   "hash": "ae5b646c3d3d141f0b7d09e29a293906a4ffe80307d14e9be03e34c40e28e179",
+   "hash": "5a1f525f7a18bf5abbe92811aa129d553297df4bb1c9e7b5fb14843f4674be5e",
    "imports": [
     "./base",
     "./contextoUsuario",
@@ -10578,6 +10634,7 @@
     "String",
     "ValidacionError",
     "add",
+    "agregar",
     "ahoraIso",
     "all",
     "alternarExclusion",
@@ -10588,6 +10645,7 @@
     "cadenaAncestros",
     "calcularAgregadosCaptura",
     "calcularValorIndicador",
+    "calcularValorIndicadorPadre",
     "capturado",
     "capturando",
     "celda",
@@ -10645,6 +10703,7 @@
     "omite",
     "optimista",
     "ordenarComoArbol",
+    "padre",
     "parse",
     "pasa",
     "periodosDelAnio",
@@ -10878,7 +10937,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioSeguimiento.ts",
-   "hash": "a65871d9709cc3fd68845cfa4d08031f2b3f6bd99e3ee8bae870d8c78ab4d83f",
+   "hash": "fc8fdc572759692e8cc740be8c03425c2de481308177de49c6139854ae48c84e",
    "imports": [
     "./base",
     "./contextoUsuario",
@@ -10935,6 +10994,7 @@
     "Set",
     "String",
     "X3",
+    "agregar",
     "ahora",
     "all",
     "atributosFiltrables",
@@ -10942,6 +11002,7 @@
     "cadenaAncestros",
     "calcularEstadoPeriodo",
     "calcularValorIndicador",
+    "calcularValorIndicadorPadre",
     "clasificacionDe",
     "codigosReferenciados",
     "conExclusiones",
@@ -10952,11 +11013,13 @@
     "equipoEfectivo",
     "evaluar",
     "factorizado",
+    "faltante",
     "filter",
     "filtrables",
     "find",
     "generar",
     "global",
+    "hijos",
     "historico",
     "hoyIso",
     "indicador",
@@ -10969,6 +11032,7 @@
     "nombre",
     "obtener",
     "obtenerValores",
+    "padre",
     "periodoPendiente",
     "periodosCerrados",
     "permisosActuales",
@@ -11005,7 +11069,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioCatalogos.ts",
-   "hash": "ab00d525367bf0f1cbb05c22926cc57412f2261051dae90109306f284305016e",
+   "hash": "5682c3a0c279aad0ba25ce8e4e399366e84d7f81bce345a7c8ddc5a31dd5e14a",
    "imports": [
     "./ServicioCatalogoGenerico",
     "./base",
@@ -11097,6 +11161,7 @@
     "Map",
     "Number",
     "ServicioCatalogoGenerico",
+    "Set",
     "String",
     "ValidacionError",
     "ValidadorAtributos",
@@ -11143,6 +11208,7 @@
     "obtenerValores",
     "origen",
     "permisosActuales",
+    "propias",
     "puedeAdministrarCatalogos",
     "puedeAsignarIndicadoresEquipo",
     "puedeVerIndicador",
@@ -11163,6 +11229,7 @@
     "some",
     "stringify",
     "test",
+    "tipoAgregacionPadreValido",
     "toUpperCase",
     "transparente",
     "trim",
@@ -11522,7 +11589,7 @@
   },
   {
    "path": "src/application/use-cases/ServicioCortesMedicion.ts",
-   "hash": "c7a2337db10c98471a45d5226811d69ba75cda09335105e6c0c6df8255b010a3",
+   "hash": "8b816a1567a51b2d6ee3ba828a4fe5e87d3c6f38e4f4308b4ad8a3856534ee27",
    "imports": [
     "./base",
     "./contextoUsuario",
@@ -11571,6 +11638,7 @@
     "min",
     "nuevoId",
     "obtener",
+    "padre",
     "periodicidad",
     "periodicidadCorteValida",
     "periodosCerrados",
@@ -13087,7 +13155,7 @@
   },
   {
    "path": "src/domain/services/AgregacionMedicion.ts",
-   "hash": "59e90b885c3dfda9484643af2efa907d38d99ad567f877f53a1a76cfc6870627",
+   "hash": "5c610b5ee0a51e9587334789c0ca1338390b948394a3837ce248220087462c48",
    "imports": [],
    "defines": [
     {
@@ -13107,6 +13175,11 @@
     },
     {
      "name": "OPCIONES_AGREGACION_CORTES",
+     "line": null,
+     "type": "export"
+    },
+    {
+     "name": "OPCIONES_AGREGACION_INDICADOR_PADRE",
      "line": null,
      "type": "export"
     },
@@ -13131,6 +13204,11 @@
      "type": "export"
     },
     {
+     "name": "tipoAgregacionPadreValido",
+     "line": null,
+     "type": "export"
+    },
+    {
      "name": "tipoAgregacionValido",
      "line": null,
      "type": "export"
@@ -13141,10 +13219,12 @@
     "EntradaAgregable",
     "OPCIONES_AGREGACION",
     "OPCIONES_AGREGACION_CORTES",
+    "OPCIONES_AGREGACION_INDICADOR_PADRE",
     "TipoAgregacion",
     "agregar",
     "redondear2",
     "tipoAgregacionBaseValido",
+    "tipoAgregacionPadreValido",
     "tipoAgregacionValido"
    ],
    "references": [
@@ -13167,6 +13247,7 @@
     "round",
     "sort",
     "tipoAgregacionBaseValido",
+    "tipoAgregacionPadreValido",
     "tipoAgregacionValido",
     "todas"
    ],
@@ -14915,8 +14996,9 @@
   },
   {
    "path": "src/domain/entities/Indicador.ts",
-   "hash": "ba30cc5c09735fcf11a4be4a353384530b82b5ea28b1e94f6f0d5c6a90119d35",
+   "hash": "fc0d643c9959db4993fdcfb97588daeb6ee522e39f082f7a28bb5d5ebd4aa994",
    "imports": [
+    "../services/AgregacionMedicion",
     "../value-objects/Periodicidad"
    ],
    "defines": [
@@ -14936,6 +15018,7 @@
     "Indicador"
    ],
    "references": [
+    "ALMACENADOS",
     "Categoria",
     "EAV",
     "Equipo",
@@ -14943,9 +15026,15 @@
     "actual",
     "equipo",
     "indicadores",
+    "padre",
+    "propias",
     "visible"
    ],
    "import_edges": [
+    {
+     "module": "../services/AgregacionMedicion",
+     "resolved": "src/domain/services/AgregacionMedicion.ts"
+    },
     {
      "module": "../value-objects/Periodicidad",
      "resolved": "src/domain/value-objects/Periodicidad.ts"
@@ -15744,8 +15833,8 @@
    "import_edges": []
   },
   {
-   "path": "out/renderer/assets/index-2BjfrXNy.js",
-   "hash": "6c0ac837ec353b3838366c891478eca294b001a9d0ff184bbf729d135d8bd9d3",
+   "path": "out/renderer/assets/index-DMl6iuh5.js",
+   "hash": "47eb68531838978ffc98cbf5c2b96f307a722430811392cd0023fe588fea1861",
    "imports": [],
    "defines": [],
    "exports": [],
@@ -15765,6 +15854,7 @@
     "Ac",
     "Administrador",
     "Ae",
+    "Ai",
     "Al",
     "An",
     "Ao",
@@ -15772,7 +15862,6 @@
     "Array",
     "As",
     "At",
-    "B",
     "Ba",
     "Basic",
     "Be",
@@ -15834,6 +15923,7 @@
     "Fe",
     "Fi",
     "Fl",
+    "Fn",
     "Fo",
     "FormData",
     "ForwardRef",
@@ -15844,25 +15934,29 @@
     "Ga",
     "Gc",
     "General",
+    "Gi",
     "Gl",
     "Gn",
     "Go",
+    "Gr",
     "Gs",
     "Gt",
+    "H",
     "Ha",
     "He",
     "Hi",
     "Hl",
+    "Hn",
     "Ho",
     "Hr",
     "Hs",
     "Ht",
-    "I",
     "ID",
     "Ia",
     "Ic",
     "Id",
     "Ie",
+    "Ii",
     "Il",
     "In",
     "Indicador",
@@ -15873,6 +15967,7 @@
     "Is",
     "It",
     "J",
+    "Ja",
     "Jc",
     "Je",
     "Ji",
@@ -15885,22 +15980,18 @@
     "K",
     "Ka",
     "Kc",
-    "Ke",
-    "Ki",
     "Kl",
     "Kn",
     "Ko",
     "Kr",
     "Ks",
     "Kt",
-    "L",
     "La",
     "Lc",
     "Le",
     "Li",
     "Listas",
     "Ll",
-    "Ln",
     "Lo",
     "Lr",
     "Ls",
@@ -15922,7 +16013,6 @@
     "MutationObserver",
     "N",
     "NO",
-    "Na",
     "Nc",
     "Ne",
     "Ni",
@@ -15948,14 +16038,13 @@
     "Os",
     "Ot",
     "P",
-    "Pa",
-    "Pc"
+    "Pa"
    ],
    "import_edges": []
   },
   {
    "path": "tests/integration/respaldo.test.ts",
-   "hash": "31e4702fe6b683a080ae35da1b35feb9a46752827e8be3236e74215ef2dbd7db",
+   "hash": "d6fa2758c2bbd8292a5ba0275f60e1205106cccc700348bcb756e1b52a590fb7",
    "imports": [
     "../../src/renderer/src/modulos/admin/modeloSeleccion",
     "../../src/server/composicionServidor",
@@ -16050,7 +16139,7 @@
   },
   {
    "path": "tests/integration/concurrencia.test.ts",
-   "hash": "ea4a123df6c1097bbd71f3b7b04491f42519f0ba1ea537ebc444de8cedf3bbcf",
+   "hash": "5416236b0d78b1aea14d3f46d7688c64a72cd7cbbb094e33271dcfc5bc18be77",
    "imports": [
     "../../src/server/app",
     "../../src/server/trpc/appRouter",
@@ -16137,7 +16226,7 @@
   },
   {
    "path": "tests/integration/permisos.test.ts",
-   "hash": "aaceaecb228cc2154d88cf6994281c14600b00dbe7a6283a7079fba36f317b3f",
+   "hash": "b2602b3f2bbe3ae8d0312f5ce9dd69da9915a8023f3f910eb3fee027d1f9cb4c",
    "imports": [
     "../../src/server/app",
     "../../src/server/trpc/appRouter",
@@ -16242,7 +16331,7 @@
   },
   {
    "path": "tests/integration/servidorTrpc.test.ts",
-   "hash": "91894176855fa112e580fb8f3966557ab02e388a08983285243449b3936c109d",
+   "hash": "b3509d7a019af2c4fc097b269ce6c7d0c58e70e636926f5bd61144a108ec094a",
    "imports": [
     "../../src/server/app",
     "../../src/server/trpc/appRouter",
@@ -16504,7 +16593,7 @@
   },
   {
    "path": "tests/integration/notificacionesVencimiento.test.ts",
-   "hash": "e53591fb1084850df5ec513932d7f12d932138c8a3bf37138f80daf426d2c330",
+   "hash": "25f87689bf0058924ec6ffcbea36a3f206b4cf9f24a3b988704e1f42bc0e0d5e",
    "imports": [
     "../../src/server/app",
     "../../src/server/trpc/appRouter",
@@ -16610,7 +16699,7 @@
   },
   {
    "path": "tests/integration/servidorRest.test.ts",
-   "hash": "2a8b19c36eaf45a3f95a3601f61b8e4fe4c4f0552c22f905afb6aa82586d5fab",
+   "hash": "908dc2545706a63fdb8d2bbb900e58ef1d8a5bbfa2af8874cc358feee88a242e",
    "imports": [
     "../../src/server/app",
     "../../src/server/trpc/appRouter",
@@ -16720,7 +16809,7 @@
   },
   {
    "path": "tests/integration/borradoLogico.test.ts",
-   "hash": "a8904e371d2390635d061ea8a468821a80cf3c42b2e8871c2490e6465648592e",
+   "hash": "482d77382a69dc802c26a7f12a3632e50d9cc484ee447fb9ecf77c9f07636387",
    "imports": [
     "../../src/server/composicionServidor",
     "@domain/index",
@@ -16794,7 +16883,7 @@
   },
   {
    "path": "tests/integration/infraestructura.test.ts",
-   "hash": "1de9c56ac383c572e83df1125dda6ef82d0a1cc7d9147df865bf11494f53f59b",
+   "hash": "e5f56d6dc3235f1c33134309d597a69ab0bda8809ebf1645c31d753ad98c0d74",
    "imports": [
     "@domain/index",
     "@infrastructure/bootstrap",
@@ -16991,7 +17080,7 @@
   },
   {
    "path": "tests/integration/medicion.test.ts",
-   "hash": "a206f6cb5ae1cb6e965137c3fb81ce3a0f9c574f4d2915a004dcdff0ed671f47",
+   "hash": "c5f7a86301d1b8a795f0a18d3a74b2c19a5b67fa1c963fee5daa0e74e3c8f8b1",
    "imports": [
     "../../src/server/composicionServidor",
     "@domain/index",
@@ -17072,7 +17161,7 @@
   },
   {
    "path": "tests/integration/aplicacion.test.ts",
-   "hash": "c6ada3e0f9c222db552e89ec8a8361ba4fa9532524a9b92e8036c70b1e85ff0e",
+   "hash": "068959702616cb29a1ebeb4ddb266f82fbc6ba86a3b81d72e412090e6c89c7ed",
    "imports": [
     "../../src/server/composicionServidor",
     "@domain/index",
@@ -17087,6 +17176,7 @@
    "references": [
     "AV",
     "BI",
+    "CERRADOS",
     "DAX",
     "Date",
     "Error",
@@ -17109,9 +17199,11 @@
     "String",
     "U",
     "URLSearchParams",
+    "ValidacionError",
     "XMLA",
     "address",
     "afterEach",
+    "agrega",
     "app",
     "array",
     "beforeEach",
@@ -17136,6 +17228,7 @@
     "end",
     "equipo",
     "erroresDe",
+    "esperarDetalle",
     "establecerEquipo",
     "existsSync",
     "expect",
@@ -17144,6 +17237,7 @@
     "find",
     "generarConsultaDax",
     "getFullYear",
+    "guardar",
     "handlerExtra",
     "historial",
     "includes",
@@ -17163,6 +17257,7 @@
     "obtenerPorIndicadorPeriodo",
     "on",
     "origen",
+    "padre",
     "parse",
     "portable",
     "pruebas",
@@ -17490,7 +17585,7 @@
   },
   {
    "path": "tests/unit/application/ServicioUsuarios.test.ts",
-   "hash": "684656b74444cd6233b341433d2b8ec9297c630e2e53e13d44aa2aa3cfb7fd08",
+   "hash": "e7e7ddcfdeac1492db1869a2f80653eb2286dcf2ab0e8db4d180018eeb620e81",
    "imports": [
     "@application/ports/index",
     "@application/use-cases/ServicioUsuarios",
@@ -18408,7 +18503,7 @@
   },
   {
    "path": "tests/unit/domain/AgregacionMedicion.test.ts",
-   "hash": "74b68300cad1c85ab74e255944e608a752d78a99b9a46cc890d0faf7b26411d6",
+   "hash": "450ea0ca03b7b588438b080a0c801e7a438a5f326420886b4b4036852c884dbf",
    "imports": [
     "@domain/index",
     "vitest"
@@ -18423,10 +18518,12 @@
     "expect",
     "it",
     "llegan",
+    "promedioPonderado",
     "redondear2",
     "reglas",
     "simple",
     "tipoAgregacionBaseValido",
+    "tipoAgregacionPadreValido",
     "tipoAgregacionValido",
     "toBe",
     "toBeNull"
@@ -18690,7 +18787,7 @@
   },
   {
    "path": "tests/unit/domain/ContextoIndicador.test.ts",
-   "hash": "8b534be1cce90128a06f53597aeca6d44ec0d13fd990aaac4b9ccdf6d56e2b9a",
+   "hash": "465f6ee464103a41fa1bc13159ec063a6c8781e897a129d375b24636213dd522",
    "imports": [
     "@domain/data-types/TypeDescriptor",
     "@domain/entities/Atributo",
@@ -20695,5 +20792,5 @@
    ]
   }
  ],
- "file_count": 307
+ "file_count": 308
 }

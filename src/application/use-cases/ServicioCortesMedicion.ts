@@ -27,9 +27,10 @@ import { permisosActuales } from './contextoUsuario';
  * produce % y queda fuera del bucket, sin importar `omitirPeriodosSinMeta`.
  *
  * Limitación conocida (documentada, no silenciosa): los indicadores
- * calculados (`esCalculado`) se excluyen del cálculo — evaluarlos requeriría
- * duplicar `EvaluadorFormulas` + el grafo de dependencias que hoy solo vive
- * en `ServicioSeguimiento`; queda para un batch posterior si hace falta.
+ * calculados (`esCalculado`) y los indicadores padre (`esPadre`) se excluyen
+ * del cálculo — evaluarlos requeriría duplicar `EvaluadorFormulas`/la
+ * agregación de hijos que hoy solo vive en `ServicioSeguimiento`; queda para
+ * un batch posterior si hace falta.
  */
 export class ServicioCortesMedicion extends ServicioBase {
   private readonly generadorPeriodos = new GeneradorPeriodos();
@@ -105,7 +106,7 @@ export class ServicioCortesMedicion extends ServicioBase {
     const usuariosPorId = new Map(usuarios.map((u) => [u.id, { equipoId: u.equipoId }]));
     const permisos = permisosActuales();
     const visibles = indicadores.filter(
-      (i) => !i.esCalculado && puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
+      (i) => !i.esCalculado && !i.esPadre && puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 
     const hoy = this.ctx.reloj.hoyIso();

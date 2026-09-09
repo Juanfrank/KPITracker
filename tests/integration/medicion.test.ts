@@ -40,7 +40,7 @@ function indicadorBase(parcial: Partial<Indicador> = {}): Indicador {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null,
     periodicidad: Periodicidad.Mensual, periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
     metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, equipo: null,
-    unidadMedida: null, esCalculado: false, formula: null, requiereValidacion: true, creadoEn: '', actualizadoEn: '',
+    unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, requiereValidacion: true, creadoEn: '', actualizadoEn: '',
     ...parcial
   };
 }

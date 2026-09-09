@@ -269,7 +269,7 @@ describe('ServicioUsuarios', () => {
       id: 'ind-1', codigo: '', nombre: 'Indicador de prueba', definicion: '', formaCalculo: null,
       periodicidad: 'Mensual' as never, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null,
       desagregaciones: [], estado: 'Activo' as never, responsable: enUso.id, categoria: null,
-      equipo: null, unidadMedida: null, periodicidadPersonalizadaId: null, esCalculado: false, formula: null,
+      equipo: null, unidadMedida: null, periodicidadPersonalizadaId: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null,
       requiereValidacion: true, creadoEn: '', actualizadoEn: ''
     });
 
