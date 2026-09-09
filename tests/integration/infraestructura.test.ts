@@ -33,6 +33,7 @@ function indicador(id: string, parcial: Partial<Indicador> = {}): Indicador {
     esPadre: false,
     indicadoresHijoIds: [],
     tipoAgregacionPadre: null,
+    usarResultadoPropioEnResumenes: true,
     requiereValidacion: true,
     creadoEn: '2025-01-01T00:00:00Z',
     actualizadoEn: '2025-01-01T00:00:00Z',

@@ -209,7 +209,7 @@ describe('Permisos de delegación puntual (Batch X, X6/X7) — Modificar X / Adm
     const nuevoIndicador = {
       id: '', codigo: '', nombre: 'Probar permiso', definicion: 'x', formaCalculo: null, periodicidad: 'Mensual',
       periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null, metaGlobal: null, desagregaciones: [],
-      estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null,
+      estado: 'Activo', responsable: null, categoria: null, equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true,
       requiereValidacion: true, creadoEn: '', actualizadoEn: ''
     };
 
@@ -273,7 +273,7 @@ describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / valida
         id: '', codigo: 'A-1', nombre: 'Indicador del equipo A', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoria.id, equipo: equipoA.id,
-        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
+        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });
@@ -282,7 +282,7 @@ describe('Visibilidad y permisos por equipo (Seguimiento / Recolección / valida
         id: '', codigo: 'B-1', nombre: 'Indicador del equipo B', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoria.id, equipo: equipoB.id,
-        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
+        unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });
@@ -365,7 +365,7 @@ describe('RBAC granular por categoría (permisos por usuario+categoría, ver Amb
         id: '', codigo: 'VAC-1', nombre: 'Cobertura de vacunación', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: subcategoria.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
+        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });
@@ -374,7 +374,7 @@ describe('RBAC granular por categoría (permisos por usuario+categoría, ver Amb
         id: '', codigo: 'EDU-1', nombre: 'Matrícula escolar', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoriaAjena.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
+        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });

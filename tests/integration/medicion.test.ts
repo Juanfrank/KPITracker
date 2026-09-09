@@ -40,7 +40,7 @@ function indicadorBase(parcial: Partial<Indicador> = {}): Indicador {
     id: '', codigo: '', nombre: 'Indicador de prueba', definicion: 'Definición', formaCalculo: null,
     periodicidad: Periodicidad.Mensual, periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
     metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null, equipo: null,
-    unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, requiereValidacion: true, creadoEn: '', actualizadoEn: '',
+    unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, requiereValidacion: true, creadoEn: '', actualizadoEn: '',
     ...parcial
   };
 }
@@ -261,6 +261,38 @@ describe('ServicioMedicionCategoria (Batch Y)', () => {
     });
     const sinAcotar = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
     expect(sinAcotar.valorAgregado).toBe(125); // (50+200)/2, sin acotar
+  });
+
+  it('padre con usarResultadoPropioEnResumenes=true (default): cuenta el padre, excluye a sus hijos', async () => {
+    const { categoria, a, b } = await categoriaConDosIndicadores();
+    const padre = await app.manejadores['indicadores:guardar']({
+      indicador: indicadorBase({
+        nombre: 'Padre', categoria: categoria.id, esPadre: true, tipoAgregacionPadre: 'suma', indicadoresHijoIds: [a.id, b.id]
+      }),
+      valores: []
+    });
+    // A=10 + B=30 = 40; meta 100 → 40% de cumplimiento.
+    await app.manejadores['metas:guardar'](metaPuntual(padre.id, '2020-Mensual-01', 100));
+
+    const resultado = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
+    expect(resultado.valorAgregado).toBe(40); // solo el padre — A y B quedan excluidos
+    expect(resultado.indicadoresConsiderados).toBe(1);
+  });
+
+  it('padre con usarResultadoPropioEnResumenes=false: lo ignora y cuenta a sus hijos directamente', async () => {
+    const { categoria, a, b } = await categoriaConDosIndicadores();
+    const padre = await app.manejadores['indicadores:guardar']({
+      indicador: indicadorBase({
+        nombre: 'Padre', categoria: categoria.id, esPadre: true, tipoAgregacionPadre: 'suma',
+        indicadoresHijoIds: [a.id, b.id], usarResultadoPropioEnResumenes: false
+      }),
+      valores: []
+    });
+    await app.manejadores['metas:guardar'](metaPuntual(padre.id, '2020-Mensual-01', 100));
+
+    const resultado = await app.manejadores['medicionCategoria:calcular']({ categoriaId: categoria.id, periodoId: '2020-Mensual-01' });
+    expect(resultado.valorAgregado).toBe(20); // promedio de A(10%) y B(30%) — el padre queda fuera
+    expect(resultado.indicadoresConsiderados).toBe(2);
   });
 });
 

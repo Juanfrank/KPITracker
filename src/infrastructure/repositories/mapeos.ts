@@ -60,6 +60,8 @@ export const aIndicador = (f: Fila): Indicador => ({
   esPadre: b(f.es_padre),
   indicadoresHijoIds: json<string[]>(f.indicadores_hijo, []),
   tipoAgregacionPadre: sn(f.tipo_agregacion_padre) as Indicador['tipoAgregacionPadre'],
+  // Default "se usa el resumen del padre" (true) — ver docstring del campo.
+  usarResultadoPropioEnResumenes: f.usar_resultado_propio_en_resumenes == null ? true : b(f.usar_resultado_propio_en_resumenes),
   creadoEn: s(f.creado_en),
   actualizadoEn: s(f.actualizado_en)
 });
@@ -79,6 +81,7 @@ export const deIndicador = (i: Indicador): Fila => ({
   formula: i.formula ?? null, requiere_validacion: i.requiereValidacion ?? true,
   es_padre: i.esPadre ?? false, indicadores_hijo: JSON.stringify(i.indicadoresHijoIds ?? []),
   tipo_agregacion_padre: i.tipoAgregacionPadre ?? null,
+  usar_resultado_propio_en_resumenes: i.usarResultadoPropioEnResumenes ?? true,
   creado_en: i.creadoEn, actualizado_en: i.actualizadoEn
 });
 

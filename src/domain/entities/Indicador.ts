@@ -70,6 +70,24 @@ export interface Indicador {
    */
   tipoAgregacionPadre: TipoAgregacion | null;
   /**
+   * Solo relevante cuando `esPadre` es `true` — decide, para CUALQUIER
+   * resumen que combine varios indicadores en un mismo bucket (Medición por
+   * categoría, subtotal de categoría/equipo en Seguimiento), si ese resumen
+   * cuenta a ESTE indicador (su propio valor ya agregado de sus hijos) o a
+   * sus `indicadoresHijoIds` directamente — nunca ambos a la vez, eso
+   * duplicaría el conteo. Pedido explícito del usuario, default `true` ("se
+   * usa el resumen del padre"): al desactivarlo, esos resúmenes ignoran a
+   * este indicador padre y en su lugar cuentan a cada hijo individualmente
+   * (como si el padre no existiera para efectos de esos resúmenes). Sin
+   * efecto en Cortes de medición: agrega los valores de UN indicador a
+   * través de sus PROPIOS períodos, no los de varios indicadores entre sí,
+   * así que "contar a los hijos en su lugar" no tiene un sentido análogo
+   * ahí — ver la exclusión ya documentada de `esPadre`/`esCalculado` en
+   * `ServicioCortesMedicion`. Sin efecto tampoco cuando `esPadre` es
+   * `false` (se ignora).
+   */
+  usarResultadoPropioEnResumenes: boolean;
+  /**
    * Si es `false` (Batch U, U7), sus resultados nunca pasan por el flujo de
    * aprobación (Batch T5) — la UI de Recolección oculta la columna/los
    * botones de validación para este indicador, y sus resultados quedan

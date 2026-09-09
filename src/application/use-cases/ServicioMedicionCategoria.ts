@@ -76,6 +76,12 @@ export class ServicioMedicionCategoria extends ServicioBase {
    * La operación matemática se efectúa sobre el % de cumplimiento respecto de
    * la meta vigente de cada indicador (valor/meta*100), no sobre el valor
    * crudo — un indicador sin meta resoluble para el período queda fuera.
+   *
+   * Un indicador padre (`Indicador.usarResultadoPropioEnResumenes`, ver su
+   * docstring) participa con su PROPIO valor agregado (y sus hijos quedan
+   * fuera, estén o no en esta misma categoría) cuando la opción está
+   * activada (default), o queda fuera él mismo — contando a sus hijos
+   * normalmente — cuando está desactivada.
    */
   async calcular(categoriaId: string, periodoId: string): Promise<ResultadoMedicionCategoria> {
     const config = await this.obtener(categoriaId);
@@ -90,9 +96,23 @@ export class ServicioMedicionCategoria extends ServicioBase {
     const anio = Number(anioStr);
     const numero = Number(numeroStr);
 
+    // Padre/hijo (pedido explícito del usuario, ver docstring de
+    // `Indicador.usarResultadoPropioEnResumenes`): un padre con la opción activada cuenta con
+    // su PROPIO valor agregado (calculado más abajo) y sus hijos quedan fuera de este cálculo
+    // — sobre TODOS los indicadores, no solo los de esta categoría, porque un hijo puede vivir
+    // en una categoría distinta a la de su padre.
+    const hijosExcluidos = new Set<string>();
+    for (const i of indicadores) {
+      if (i.esPadre && i.usarResultadoPropioEnResumenes) {
+        for (const hijoId of i.indicadoresHijoIds) hijosExcluidos.add(hijoId);
+      }
+    }
+
     const deLaCategoria = indicadores.filter(
       (i: Indicador) =>
-        i.categoria === categoriaId && !i.esCalculado && !i.esPadre && `${i.periodicidad}` === periodicidadDelPeriodo &&
+        i.categoria === categoriaId && !i.esCalculado && !hijosExcluidos.has(i.id) &&
+        (!i.esPadre || i.usarResultadoPropioEnResumenes) &&
+        `${i.periodicidad}` === periodicidadDelPeriodo &&
         puedeVerIndicador(permisos, { equipoEfectivoId: equipoEfectivo(i, usuariosPorId), responsable: i.responsable })
     );
 
@@ -101,17 +121,23 @@ export class ServicioMedicionCategoria extends ServicioBase {
       const tratamiento = config.tratamientoIndicadores[indicador.id];
       if (tratamiento?.excluir) continue;
 
-      const resultadosIndicador = await this.resultadosRepo.obtenerPorIndicadorPeriodo(indicador.id, periodoId);
-      const general = resultadosIndicador.find((r) => r.claveDesagregacion === 'GENERAL')?.valor ?? null;
-
       let valor: number | null;
-      if (tratamiento?.agregacionPropia) {
-        const propias = resultadosIndicador
-          .filter((r) => r.claveDesagregacion !== 'GENERAL' && r.valor != null)
-          .map((r) => ({ valor: r.valor as number, tieneMeta: false }));
-        valor = propias.length > 0 ? agregar(tratamiento.agregacionPropia, propias) : general;
+      if (indicador.esPadre) {
+        // Sin filas propias en `resultados` (igual que un indicador calculado) — se sintetiza
+        // agregando el valor GENERAL de sus hijos, mismo criterio que ServicioSeguimiento/
+        // ServicioRecoleccion. `agregacionPropia` no aplica: un padre no tiene desagregaciones.
+        valor = await this.calcularValorIndicadorPadre(indicador, periodoId);
       } else {
-        valor = general;
+        const resultadosIndicador = await this.resultadosRepo.obtenerPorIndicadorPeriodo(indicador.id, periodoId);
+        const general = resultadosIndicador.find((r) => r.claveDesagregacion === 'GENERAL')?.valor ?? null;
+        if (tratamiento?.agregacionPropia) {
+          const propias = resultadosIndicador
+            .filter((r) => r.claveDesagregacion !== 'GENERAL' && r.valor != null)
+            .map((r) => ({ valor: r.valor as number, tieneMeta: false }));
+          valor = propias.length > 0 ? agregar(tratamiento.agregacionPropia, propias) : general;
+        } else {
+          valor = general;
+        }
       }
       if (valor == null) continue;
 
@@ -146,5 +172,23 @@ export class ServicioMedicionCategoria extends ServicioBase {
       valorAgregado: agregar(config.reglaGeneral, entradas),
       indicadoresConsiderados: entradas.length
     };
+  }
+
+  /**
+   * Agrega, para un período, los valores GENERAL de los hijos de un
+   * indicador padre — mismo criterio que `ServicioSeguimiento`/
+   * `ServicioRecoleccion.calcularValorIndicadorPadre` (un hijo sin valor
+   * aún, o ya borrado, simplemente no entra en la agregación).
+   */
+  private async calcularValorIndicadorPadre(indicador: Indicador, periodoId: string): Promise<number | null> {
+    const entradas: EntradaAgregable[] = [];
+    for (const hijoId of indicador.indicadoresHijoIds) {
+      const hijo = await this.indicadoresRepo.obtener(hijoId);
+      if (!hijo) continue;
+      const resultados = await this.resultadosRepo.obtenerPorIndicadorPeriodo(hijoId, periodoId);
+      const valor = resultados.find((r) => r.claveDesagregacion === 'GENERAL')?.valor ?? null;
+      if (valor != null) entradas.push({ valor, tieneMeta: false });
+    }
+    return agregar(indicador.tipoAgregacionPadre!, entradas);
   }
 }

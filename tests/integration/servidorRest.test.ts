@@ -102,7 +102,7 @@ async function crearLevantamiento(clienteAdmin: ReturnType<typeof clienteTrpc>, 
       periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
       metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null,
       categoria: ID_CATEGORIA_GENERAL, equipo: ID_EQUIPO_GENERAL,
-      unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, creadoEn: '', actualizadoEn: ''
+      unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
     } as never,
     valores: []
   }) as { id: string };

@@ -122,7 +122,9 @@ export class ServicioIndicadores extends ServicioBase {
       // Un indicador padre no tiene desagregaciones propias (agrega siempre el total de cada
       // hijo, ver docstring de `Indicador.tipoAgregacionPadre`) ni hijos duplicados.
       desagregaciones: input.indicador.esPadre ? [] : input.indicador.desagregaciones,
-      indicadoresHijoIds: input.indicador.esPadre ? [...new Set(input.indicador.indicadoresHijoIds)] : []
+      indicadoresHijoIds: input.indicador.esPadre ? [...new Set(input.indicador.indicadoresHijoIds)] : [],
+      // Irrelevante cuando no es padre — se normaliza al default para no persistir ruido.
+      usarResultadoPropioEnResumenes: input.indicador.esPadre ? input.indicador.usarResultadoPropioEnResumenes : true
     };
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
@@ -354,6 +356,7 @@ export class ServicioIndicadores extends ServicioBase {
           esPadre: false,
           indicadoresHijoIds: [],
           tipoAgregacionPadre: null,
+          usarResultadoPropioEnResumenes: true,
           requiereValidacion: true,
           creadoEn: ahora,
           actualizadoEn: ahora

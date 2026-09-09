@@ -514,12 +514,35 @@ type ConfiguracionMedicionNodo = ConfiguracionMedicionCategoria | ConfiguracionM
  * soporta acá — necesitaría los resultados de cada desagregación, que
  * Histórico no carga; limitación conocida, documentada, no silenciosa.
  */
+/**
+ * Ids a excluir de CUALQUIER subtotal (categoría, equipo, Total) para no
+ * duplicar el conteo entre un indicador padre y sus hijos — ver docstring
+ * de `Indicador.usarResultadoPropioEnResumenes`. Calculado una sola vez
+ * sobre TODAS las filas visibles (no solo las de un nodo): el padre y sus
+ * hijos pueden vivir en categorías/equipos distintos entre sí. La fila
+ * excluida NO desaparece de la tabla (sigue viéndose con su propio valor) —
+ * solo se omite de la suma/promedio del subtotal.
+ */
+function idsExcluidosDeResumen(filas: FilaHistorico[]): Set<string> {
+  const excluidos = new Set<string>();
+  for (const f of filas) {
+    if (!f.esPadre) continue;
+    if (f.usarResultadoPropioEnResumenes) {
+      for (const hijoId of f.indicadoresHijoIds) excluidos.add(hijoId);
+    } else {
+      excluidos.add(f.indicadorId);
+    }
+  }
+  return excluidos;
+}
+
 function entradasSubtotal(
   filas: FilaHistorico[], col: ColumnaGrillaHistorico, resultadosCorte: Map<string, number | null>,
-  config: ConfiguracionMedicionNodo | undefined
+  config: ConfiguracionMedicionNodo | undefined, excluidosDeResumen: Set<string>
 ): EntradaAgregable[] {
   const entradas: EntradaAgregable[] = [];
   for (const h of filas) {
+    if (excluidosDeResumen.has(h.indicadorId)) continue;
     const tratamiento = config?.tratamientoIndicadores[h.indicadorId];
     if (tratamiento?.excluir) continue;
     let valor: number | null;
@@ -585,15 +608,15 @@ function filasDelSubarbol(item: NodoConHijos<FilaHistorico>): FilaHistorico[] {
 function subtotalRecursivo(
   item: NodoConHijos<FilaHistorico>, col: ColumnaGrillaHistorico, resultadosCorte: Map<string, number | null>,
   medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>,
-  medicionEquipoPorId: Map<string, ConfiguracionMedicionEquipo>
+  medicionEquipoPorId: Map<string, ConfiguracionMedicionEquipo>, excluidosDeResumen: Set<string>
 ): number | null {
   const nodo = item.nodo;
   if (nodo.tipo === 'indicador') return null;
   const config = configDeNodo(nodo, medicionCategoriaPorId, medicionEquipoPorId);
-  const entradas = entradasSubtotal(nodo.filasDirectas, col, resultadosCorte, config);
+  const entradas = entradasSubtotal(nodo.filasDirectas, col, resultadosCorte, config, excluidosDeResumen);
   for (const hijo of item.hijos) {
     if (hijo.nodo.tipo !== nodo.tipo) continue;
-    const valorHijo = subtotalRecursivo(hijo, col, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId);
+    const valorHijo = subtotalRecursivo(hijo, col, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId, excluidosDeResumen);
     if (valorHijo != null) entradas.push({ valor: config?.acotarAl100 ? Math.min(valorHijo, 100) : valorHijo, tieneMeta: true });
   }
   const regla = config?.reglaGeneral ?? 'promedio';
@@ -612,10 +635,11 @@ function subtotalRecursivo(
  */
 function subtotalCorteFilaNivel(
   item: NodoConHijos<FilaHistorico>, col: Extract<ColumnaGrillaHistorico, { tipo: 'corte' }>,
-  resultadosCorte: Map<string, number | null>, config: ConfiguracionMedicionNodo | undefined
+  resultadosCorte: Map<string, number | null>, config: ConfiguracionMedicionNodo | undefined,
+  excluidosDeResumen: Set<string>
 ): number | null {
   if (item.nodo.tipo === 'indicador') return null;
-  const entradas = entradasSubtotal(filasDelSubarbol(item), col, resultadosCorte, config);
+  const entradas = entradasSubtotal(filasDelSubarbol(item), col, resultadosCorte, config, excluidosDeResumen);
   const regla = config?.reglaGeneral ?? 'promedio';
   return entradas.length > 0 ? agregar(regla, entradas) : null;
 }
@@ -624,14 +648,15 @@ function celdasSubtotal(
   item: NodoConHijos<FilaHistorico>, columnas: ColumnaGrillaHistorico[], resultadosCorte: Map<string, number | null>,
   medicionCategoriaPorId: Map<string, ConfiguracionMedicionCategoria>,
   medicionEquipoPorId: Map<string, ConfiguracionMedicionEquipo>, testIdNodo: string,
+  excluidosDeResumen: Set<string>,
   titulo = 'Subtotal — agrega los indicadores directos y, recursivamente, el subtotal de cada subcategoría/sub-equipo'
 ): React.JSX.Element[] {
   const nodoItem = item.nodo;
   const configPropio = nodoItem.tipo === 'indicador' ? undefined : configDeNodo(nodoItem, medicionCategoriaPorId, medicionEquipoPorId);
   return columnas.map((col) => {
     const agregado = col.tipo === 'corte'
-      ? subtotalCorteFilaNivel(item, col, resultadosCorte, configPropio)
-      : subtotalRecursivo(item, col, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId);
+      ? subtotalCorteFilaNivel(item, col, resultadosCorte, configPropio, excluidosDeResumen)
+      : subtotalRecursivo(item, col, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId, excluidosDeResumen);
     // Un promedio de valores con decimales arrastra ruido de punto flotante (p. ej.
     // 85.44999999999999) — se redondea a 2 decimales solo para MOSTRAR, sin tocar el cálculo.
     const valor = agregado == null ? null : Math.round(agregado * 100) / 100;
@@ -906,6 +931,10 @@ export function SeguimientoPage(): React.JSX.Element {
   );
   const idsVisibles = new Set(visibles.map((f) => f.indicadorId));
   const historicoVisible = (historico ?? []).filter((h) => idsVisibles.has(h.indicadorId));
+  // Padre/hijo (ver docstring de `idsExcluidosDeResumen`): calculado sobre TODO el histórico
+  // cargado, no solo `historicoVisible` — un padre o hijo oculto por un filtro sigue existiendo
+  // y su exclusión del subtotal del otro debe mantenerse aunque uno de los dos esté filtrado.
+  const excluidosDeResumen = idsExcluidosDeResumen(historico ?? []);
   // X4: orden por encabezado — SOLO para el render de la vista Lista de cada pestaña.
   // `visibles`/`historicoVisible` en sí quedan sin ordenar: los árboles (abajo) construyen
   // su propio orden jerárquico y no deben verse afectados por esto.
@@ -1682,7 +1711,8 @@ export function SeguimientoPage(): React.JSX.Element {
               <tr className="fila-totales" data-testid="historico-fila-totales">
                 <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(
-                  nodoTotalesLista, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId, 'totales', TITULO_TOTALES
+                  nodoTotalesLista, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId, medicionEquipoPorId, 'totales',
+                  excluidosDeResumen, TITULO_TOTALES
                 )}
               </tr>
             </tfoot>
@@ -1757,7 +1787,7 @@ export function SeguimientoPage(): React.JSX.Element {
                       </td>
                       {celdasSubtotal(
                         nodosConHijosHistorico.get(nodo.id)!, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId,
-                        medicionEquipoPorId, nodo.nombre
+                        medicionEquipoPorId, nodo.nombre, excluidosDeResumen
                       )}
                     </tr>
                   );
@@ -1792,7 +1822,7 @@ export function SeguimientoPage(): React.JSX.Element {
                 <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(
                   nodoTotalesArbolCategoria, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId,
-                  medicionEquipoPorId, 'totales', TITULO_TOTALES
+                  medicionEquipoPorId, 'totales', excluidosDeResumen, TITULO_TOTALES
                 )}
               </tr>
             </tfoot>
@@ -1877,7 +1907,7 @@ export function SeguimientoPage(): React.JSX.Element {
                     </td>
                     {celdasSubtotal(
                       nodosConHijosEquipo.get(nodo.id)!, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId,
-                      medicionEquipoPorId, `${nodo.tipo}-${nodo.nombre}`
+                      medicionEquipoPorId, `${nodo.tipo}-${nodo.nombre}`, excluidosDeResumen
                     )}
                   </tr>
                 );
@@ -1900,7 +1930,7 @@ export function SeguimientoPage(): React.JSX.Element {
                 <td colSpan={1 + columnasDescriptivasCount}><strong>Total</strong></td>
                 {celdasSubtotal(
                   nodoTotalesArbolEquipo, columnasGrillaHistorico, resultadosCorte, medicionCategoriaPorId,
-                  medicionEquipoPorId, 'totales', TITULO_TOTALES
+                  medicionEquipoPorId, 'totales', excluidosDeResumen, TITULO_TOTALES
                 )}
               </tr>
             </tfoot>

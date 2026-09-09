@@ -67,6 +67,7 @@ function indicadorVacio(): Indicador {
     esPadre: false,
     indicadoresHijoIds: [],
     tipoAgregacionPadre: null,
+    usarResultadoPropioEnResumenes: true,
     requiereValidacion: true,
     creadoEn: '',
     actualizadoEn: ''
@@ -578,6 +579,22 @@ export function IndicadoresPage(): React.JSX.Element {
                 </select>
                 <span className="texto-suave">Cómo combinar, en cada período, los valores de los indicadores hijo.</span>
               </Campo>
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={editando.usarResultadoPropioEnResumenes}
+                  onChange={(e) => setEditando({ ...editando, usarResultadoPropioEnResumenes: e.target.checked })}
+                  style={{ width: 'auto' }}
+                  data-testid="indicador-usar-resultado-propio-en-resumenes"
+                />
+                Usar el resultado propio de este indicador en resúmenes por categoría/equipo
+              </label>
+              <p className="texto-suave" style={{ margin: 0 }}>
+                {editando.usarResultadoPropioEnResumenes
+                  ? 'Esos resúmenes cuentan el valor ya agregado de este indicador padre (sus hijos NO se cuentan aparte, para no duplicar).'
+                  : 'Esos resúmenes ignoran a este indicador padre y cuentan a cada hijo directamente, como si el padre no existiera para ese fin.'}
+              </p>
 
               <h4 style={{ margin: '8px 0 0' }}>Indicadores hijo</h4>
               <p className="texto-suave" style={{ margin: 0 }}>

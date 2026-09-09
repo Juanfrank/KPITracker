@@ -29,8 +29,14 @@ import { permisosActuales } from './contextoUsuario';
  * Limitación conocida (documentada, no silenciosa): los indicadores
  * calculados (`esCalculado`) y los indicadores padre (`esPadre`) se excluyen
  * del cálculo — evaluarlos requeriría duplicar `EvaluadorFormulas`/la
- * agregación de hijos que hoy solo vive en `ServicioSeguimiento`; queda para
- * un batch posterior si hace falta.
+ * agregación de hijos ya duplicada en `ServicioSeguimiento`,
+ * `ServicioRecoleccion` y `ServicioMedicionCategoria`; queda para un batch
+ * posterior si hace falta. `Indicador.usarResultadoPropioEnResumenes` (ver su
+ * docstring) NO tiene efecto acá aunque esté activado: este servicio agrega
+ * los valores de UN indicador a través de sus PROPIOS períodos, no los de
+ * varios indicadores entre sí — "contar a los hijos en su lugar" no tiene un
+ * sentido análogo en ese eje, así que un indicador padre queda excluido
+ * siempre, sin importar el valor de esa opción.
  */
 export class ServicioCortesMedicion extends ServicioBase {
   private readonly generadorPeriodos = new GeneradorPeriodos();

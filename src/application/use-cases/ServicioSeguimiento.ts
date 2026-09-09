@@ -81,6 +81,15 @@ export interface FilaHistorico {
   /** Equipo EFECTIVO (directo si está seteado, si no indirecto vía el responsable) — ver `equipoEfectivo`. */
   equipoId: string | null;
   equipo: string | null;
+  /**
+   * Expuestos para que el renderer (subtotal de categoría/equipo en
+   * Seguimiento) pueda decidir, por sí mismo, qué filas excluir de una
+   * agregación para no duplicar el conteo entre un indicador padre y sus
+   * hijos — ver docstring de `Indicador.usarResultadoPropioEnResumenes`.
+   */
+  esPadre: boolean;
+  indicadoresHijoIds: string[];
+  usarResultadoPropioEnResumenes: boolean;
   puntos: PuntoHistorico[];
 }
 
@@ -388,6 +397,9 @@ export class ServicioSeguimiento extends ServicioBase {
         responsableId: indicador.responsable,
         responsable: indicador.responsable == null ? null : (nombreResponsable.get(indicador.responsable) ?? indicador.responsable),
         ...this.clasificacionDe(indicador, nombreCategoria, nombreEquipo, usuariosPorId),
+        esPadre: indicador.esPadre,
+        indicadoresHijoIds: indicador.indicadoresHijoIds,
+        usarResultadoPropioEnResumenes: indicador.usarResultadoPropioEnResumenes,
         puntos
       });
     }
