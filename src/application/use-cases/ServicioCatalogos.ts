@@ -24,11 +24,18 @@ import { referenciasDeAtributo, referenciasDeCategoria, referenciasDeEquipo, ref
 export interface MapeoImportacionIndicadores {
   codigo?: string;
   nombre: string;
-  definicion: string;
+  /** Opcional (ver `Indicador.definicion`) — antes era obligatorio en la importación. */
+  definicion?: string;
   periodicidad?: string;
   lineaBase?: string;
   metaGlobal?: string;
   unidadMedida?: string;
+  /** Nombre de Categoria/Equipo a asignar, buscado por coincidencia de `nombre` (sin distinguir mayúsculas);
+   * sin coincidencia, aplica el mismo respaldo "General" que la creación manual (ver `guardar()`). */
+  categoria?: string;
+  equipo?: string;
+  /** Atributo dinámico (id) -> columna del archivo — mismo mecanismo de parseo por TypeRegistry que usa el formulario manual. */
+  atributos?: Record<string, string>;
 }
 
 export interface ErrorFilaImportacion {
@@ -83,7 +90,9 @@ export class ServicioIndicadores extends ServicioBase {
     private readonly defaults: DefaultsClasificacion,
     private readonly usuariosRepo: IUsuarioRepository,
     /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
-    private readonly categoriasRepo: ICatalogoRepository<Categoria>
+    private readonly categoriasRepo: ICatalogoRepository<Categoria>,
+    /** Solo para resolver Categoria/Equipo por nombre en `importarExcel` — ver `MapeoImportacionIndicadores`. */
+    private readonly equiposRepo: ICatalogoRepository<Equipo>
   ) {
     super(ctx);
   }
@@ -128,7 +137,8 @@ export class ServicioIndicadores extends ServicioBase {
     };
     const errores: string[] = [];
     if (!indicador.nombre.trim()) errores.push('El nombre del indicador es obligatorio.');
-    if (!indicador.definicion.trim()) errores.push('La definición es obligatoria.');
+    // La definición es opcional (pedido explícito del usuario, backlog de brechas Excel -> KPITracker):
+    // antes era obligatoria; muchas fuentes de origen no tienen un texto metodológico separado del nombre.
     if (!indicador.periodicidad) errores.push('La periodicidad es obligatoria.');
     if (indicador.periodicidad === Periodicidad.Personalizada) {
       if (!indicador.periodicidadPersonalizadaId) {
@@ -327,6 +337,16 @@ export class ServicioIndicadores extends ServicioBase {
     const errores: ErrorFilaImportacion[] = [];
     let creados = 0;
 
+    // Resueltos una sola vez para toda la importación — buscar Categoria/Equipo por nombre y
+    // conocer el tipoDato de cada Atributo dinámico mapeado (pedido explícito del usuario:
+    // cerrar la brecha de que el importador no traía clasificación ni atributos).
+    const [categorias, equipos, atributosDef] = await Promise.all([
+      this.categoriasRepo.listar(), this.equiposRepo.listar(), this.atributosRepo.listar('Indicador')
+    ]);
+    const atributosPorId = new Map(atributosDef.map((a) => [a.id, a]));
+    const buscarPorNombre = <T extends { nombre: string }>(lista: T[], nombre: string): T | undefined =>
+      lista.find((x) => x.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
+
     for (let i = 0; i < filas.length; i++) {
       const fila = filas[i];
       const numeroFila = i + 2; // +1 por índice 0-based, +1 por la fila de encabezados.
@@ -341,9 +361,14 @@ export class ServicioIndicadores extends ServicioBase {
           : Periodicidad.Mensual;
         const lineaBaseTexto = mapeo.lineaBase ? (fila[mapeo.lineaBase] ?? '').trim() : '';
         const metaGlobalTexto = mapeo.metaGlobal ? (fila[mapeo.metaGlobal] ?? '').trim() : '';
+        // Sin coincidencia (o sin columna mapeada) -> null, que `guardar()` resuelve al mismo
+        // respaldo "General" que ya aplica a un indicador creado manualmente sin clasificar.
+        const categoriaTexto = mapeo.categoria ? (fila[mapeo.categoria] ?? '').trim() : '';
+        const equipoTexto = mapeo.equipo ? (fila[mapeo.equipo] ?? '').trim() : '';
+        const categoriaId = categoriaTexto ? (buscarPorNombre(categorias, categoriaTexto)?.id ?? null) : null;
+        const equipoId = equipoTexto ? (buscarPorNombre(equipos, equipoTexto)?.id ?? null) : null;
 
         if (!nombre) throw new ValidacionError(`Fila ${numeroFila}: falta el nombre.`);
-        if (!definicion) throw new ValidacionError(`Fila ${numeroFila}: falta la definición.`);
 
         const ahora = this.ctx.reloj.ahoraIso();
         const indicador: Indicador = {
@@ -360,8 +385,8 @@ export class ServicioIndicadores extends ServicioBase {
           desagregaciones: [],
           estado: 'Borrador',
           responsable: null,
-          categoria: null,
-          equipo: null,
+          categoria: categoriaId,
+          equipo: equipoId,
           unidadMedida: mapeo.unidadMedida ? (fila[mapeo.unidadMedida] ?? '').trim() || null : null,
           esCalculado: false,
           formula: null,
@@ -374,7 +399,31 @@ export class ServicioIndicadores extends ServicioBase {
           actualizadoEn: ahora
         };
 
-        await this.guardar({ indicador, valores: [] });
+        // Atributos dinámicos mapeados (id de Atributo -> columna): mismo parseo por TypeRegistry
+        // que usa el formulario manual (`construirValorEntidad` en IndicadoresPage), para que un
+        // valor de texto crudo del archivo caiga en la columna EAV correcta según el tipo del atributo.
+        const valores: ValorAtributoEntidad[] = [];
+        for (const [atributoId, columna] of Object.entries(mapeo.atributos ?? {})) {
+          const atributo = atributosPorId.get(atributoId);
+          const crudo = (fila[columna] ?? '').trim();
+          if (!atributo || !crudo) continue;
+          const descriptor = this.tipos.obtener(atributo.tipoDato);
+          const parseado = descriptor.parse(crudo);
+          const valor = parseado.ok ? parseado.valor : null;
+          const base: ValorAtributoEntidad = {
+            atributoId, entidadTipo: 'Indicador', entidadId: '',
+            valorTexto: null, valorNumero: null, valorFecha: null, valorBooleano: null
+          };
+          switch (descriptor.columnaEav) {
+            case 'numero': base.valorNumero = typeof valor === 'number' ? valor : null; break;
+            case 'fecha': base.valorFecha = typeof valor === 'string' ? valor : null; break;
+            case 'booleano': base.valorBooleano = typeof valor === 'boolean' ? valor : null; break;
+            default: base.valorTexto = valor == null ? null : Array.isArray(valor) ? valor.join('; ') : String(valor);
+          }
+          valores.push(base);
+        }
+
+        await this.guardar({ indicador, valores });
         creados++;
       } catch (err) {
         const mensaje = err instanceof ValidacionError ? err.detalles?.[0] ?? err.message : String(err);

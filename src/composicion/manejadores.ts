@@ -69,7 +69,8 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
   const indicadores = new ServicioIndicadores(
     ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos,
-    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.usuarios, infra.categorias
+    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.usuarios, infra.categorias,
+    infra.equipos
   );
   const atributos = new ServicioAtributos(ctx, infra.atributos, infra.reglas, infra.automatizaciones, infra.indicadores);
   const listas = new ServicioListas(

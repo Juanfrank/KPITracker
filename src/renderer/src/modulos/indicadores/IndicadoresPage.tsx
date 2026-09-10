@@ -420,8 +420,9 @@ export function IndicadoresPage(): React.JSX.Element {
               <input type="text" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} data-testid="indicador-nombre" autoFocus />
             </Campo>
           </div>
-          <Campo etiqueta="Definición" obligatorio>
+          <Campo etiqueta="Definición">
             <textarea rows={3} value={editando.definicion} onChange={(e) => setEditando({ ...editando, definicion: e.target.value })} data-testid="indicador-definicion" />
+            <span className="texto-suave">Opcional.</span>
           </Campo>
           <Campo etiqueta="Forma de cálculo">
             <textarea

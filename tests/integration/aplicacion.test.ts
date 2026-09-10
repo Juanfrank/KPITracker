@@ -902,6 +902,61 @@ describe('Composition root — importación de indicadores desde Excel', () => {
     expect(lista.some((i) => i.codigo === 'IND-102')).toBe(true);
     expect(lista.find((i) => i.codigo === 'IND-100')?.estado).toBe('Borrador');
   });
+
+  it('no requiere definición — una fila sin esa columna mapeada igual se crea', async () => {
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Sin definición' }],
+      mapeo: { nombre: 'Titulo' }
+    });
+    expect(resultado.creados).toBe(1);
+    expect(resultado.errores).toHaveLength(0);
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    expect(lista.find((i) => i.nombre === 'Sin definición')?.definicion).toBe('');
+  });
+
+  it('resuelve Categoría y Equipo por nombre; sin coincidencia cae al respaldo "General"', async () => {
+    const categoria = await app.manejadores['categorias:guardar']({
+      id: '', nombre: 'Finanzas', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const equipo = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Tesorería', descripcion: '', activo: true, eliminado: false, padreId: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [
+        { Titulo: 'Con clasificación', Cat: 'finanzas', Eq: 'TESORERÍA' }, // insensible a mayúsculas
+        { Titulo: 'Sin coincidencia', Cat: 'No existe', Eq: 'Tampoco existe' }
+      ],
+      mapeo: { nombre: 'Titulo', categoria: 'Cat', equipo: 'Eq' }
+    });
+    expect(resultado.creados).toBe(2);
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    const conClasificacion = lista.find((i) => i.nombre === 'Con clasificación');
+    expect(conClasificacion?.categoria).toBe(categoria.id);
+    expect(conClasificacion?.equipo).toBe(equipo.id);
+    const sinCoincidencia = lista.find((i) => i.nombre === 'Sin coincidencia');
+    expect(sinCoincidencia?.categoria).not.toBeNull(); // cayó al respaldo "General", no quedó sin categoría
+    expect(sinCoincidencia?.equipo).not.toBeNull();
+  });
+
+  it('mapea una columna del archivo a un atributo dinámico existente', async () => {
+    const atributo = await app.manejadores['atributos:guardar']({
+      id: '', entidad: 'Indicador', nombre: 'Pilar Estratégico', descripcion: '', grupo: '', orden: 1,
+      visible: true, editable: true, obligatorio: false, valorPorDefecto: null, tipoDato: 'ShortText' as never,
+      listaId: null, validaciones: [], condicionVisibilidad: null, condicionObligatorio: null, filtrable: true,
+      activo: true, eliminado: false, creadoEn: '', actualizadoEn: ''
+    });
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Con atributo', Pilar: '1. Justicia ágil' }],
+      mapeo: { nombre: 'Titulo', atributos: { [atributo.id]: 'Pilar' } }
+    });
+    expect(resultado.creados).toBe(1);
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    const creado = lista.find((i) => i.nombre === 'Con atributo')!;
+    const valores = await app.manejadores['atributos:valores']({ entidadTipo: 'Indicador', entidadId: creado.id });
+    expect(valores.find((v) => v.atributoId === atributo.id)?.valorTexto).toBe('1. Justicia ágil');
+  });
 });
 
 describe('Composition root — metas con periodicidad personalizada', () => {

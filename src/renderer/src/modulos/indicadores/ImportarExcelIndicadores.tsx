@@ -1,26 +1,35 @@
 import { useRef, useState } from 'react';
+import type { Atributo } from '@domain/index';
 import type { MapeoImportacionIndicadores, ResultadoImportacionIndicadores } from '@application/use-cases/ServicioCatalogos';
 import { invocar } from '../../api';
 import { subirArchivo } from '../../rest';
 import { Campo, PanelLateral } from '../../componentes/basicos';
 
-const CAMPOS_OBLIGATORIOS: (keyof MapeoImportacionIndicadores)[] = ['nombre', 'definicion'];
-const CAMPOS_OPCIONALES: (keyof MapeoImportacionIndicadores)[] = ['codigo', 'periodicidad', 'lineaBase', 'metaGlobal', 'unidadMedida'];
-const ETIQUETA_CAMPO: Record<keyof MapeoImportacionIndicadores, string> = {
+/** Campos de texto plano del mapeo — `atributos` (Record) se maneja aparte, ver `atributosMapeo`. */
+type CampoTexto = Exclude<keyof MapeoImportacionIndicadores, 'atributos'>;
+
+const CAMPOS_OBLIGATORIOS: CampoTexto[] = ['nombre'];
+const CAMPOS_OPCIONALES: CampoTexto[] = [
+  'codigo', 'definicion', 'periodicidad', 'lineaBase', 'metaGlobal', 'unidadMedida', 'categoria', 'equipo'
+];
+const ETIQUETA_CAMPO: Record<CampoTexto, string> = {
   codigo: 'Código',
   nombre: 'Nombre',
   definicion: 'Definición',
   periodicidad: 'Periodicidad',
   lineaBase: 'Línea base',
   metaGlobal: 'Meta global',
-  unidadMedida: 'Unidad de medida'
+  unidadMedida: 'Unidad de medida',
+  categoria: 'Categoría (por nombre)',
+  equipo: 'Equipo (por nombre)'
 };
 
 /**
  * Importación masiva de indicadores desde un archivo Excel/CSV: el usuario
- * elige el archivo, mapea columnas del archivo a campos de Indicador y
- * confirma. Cada fila se crea de forma independiente; los errores por fila
- * se muestran sin bloquear el resto.
+ * elige el archivo, mapea columnas del archivo a campos de Indicador
+ * (incluidos Categoría/Equipo por nombre y atributos dinámicos existentes)
+ * y confirma. Cada fila se crea de forma independiente; los errores por
+ * fila se muestran sin bloquear el resto.
  */
 export function ImportarExcelIndicadores({
   alCerrar, alTerminar
@@ -29,7 +38,9 @@ export function ImportarExcelIndicadores({
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const [columnas, setColumnas] = useState<string[]>([]);
   const [filas, setFilas] = useState<Record<string, string>[]>([]);
-  const [mapeo, setMapeo] = useState<Partial<MapeoImportacionIndicadores>>({});
+  const [mapeo, setMapeo] = useState<Partial<Record<CampoTexto, string>>>({});
+  const [atributos, setAtributos] = useState<Atributo[]>([]);
+  const [atributosMapeo, setAtributosMapeo] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacionIndicadores | null>(null);
@@ -39,10 +50,10 @@ export function ImportarExcelIndicadores({
     setError(null);
     setCargando(true);
     try {
-      const leido = await subirArchivo<{ columnas: string[]; filas: Record<string, string>[] }>(
-        '/api/importacion/hoja-calculo',
-        { archivo }
-      );
+      const [leido, listaAtributos] = await Promise.all([
+        subirArchivo<{ columnas: string[]; filas: Record<string, string>[] }>('/api/importacion/hoja-calculo', { archivo }),
+        invocar('atributos:listar', { entidad: 'Indicador' })
+      ]);
       if (leido.columnas.length === 0) {
         setError('El archivo no tiene columnas reconocibles en la primera fila.');
         return;
@@ -50,13 +61,20 @@ export function ImportarExcelIndicadores({
       setNombreArchivo(archivo.name);
       setColumnas(leido.columnas);
       setFilas(leido.filas);
-      // Auto-mapeo por coincidencia de nombre (insensible a mayúsculas).
-      const auto: Partial<MapeoImportacionIndicadores> = {};
+      setAtributos(listaAtributos.filter((a) => a.activo));
+      // Auto-mapeo por coincidencia de nombre (insensible a mayúsculas) — campos fijos y atributos.
+      const auto: Partial<Record<CampoTexto, string>> = {};
       for (const campo of [...CAMPOS_OBLIGATORIOS, ...CAMPOS_OPCIONALES]) {
         const coincidencia = leido.columnas.find((c) => c.toLowerCase() === ETIQUETA_CAMPO[campo].toLowerCase() || c.toLowerCase() === campo.toLowerCase());
         if (coincidencia) auto[campo] = coincidencia;
       }
       setMapeo(auto);
+      const autoAtributos: Record<string, string> = {};
+      for (const atributo of listaAtributos.filter((a) => a.activo)) {
+        const coincidencia = leido.columnas.find((c) => c.toLowerCase() === atributo.nombre.toLowerCase());
+        if (coincidencia) autoAtributos[atributo.id] = coincidencia;
+      }
+      setAtributosMapeo(autoAtributos);
       setPaso('mapeo');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer el archivo.');
@@ -66,14 +84,18 @@ export function ImportarExcelIndicadores({
   };
 
   const confirmarImportacion = async (): Promise<void> => {
-    if (!mapeo.nombre || !mapeo.definicion) {
-      setError('Debe mapear al menos Nombre y Definición.');
+    if (!mapeo.nombre) {
+      setError('Debe mapear al menos Nombre.');
       return;
     }
     setCargando(true);
     setError(null);
     try {
-      const res = await invocar('indicadores:importarExcel', { filas, mapeo: mapeo as MapeoImportacionIndicadores });
+      const atributosLimpio = Object.fromEntries(Object.entries(atributosMapeo).filter(([, col]) => col));
+      const res = await invocar('indicadores:importarExcel', {
+        filas,
+        mapeo: { ...mapeo, atributos: atributosLimpio } as MapeoImportacionIndicadores
+      });
       setResultado(res);
       setPaso('resultado');
     } catch (err) {
@@ -144,8 +166,37 @@ export function ImportarExcelIndicadores({
                 <option value="">— no mapear —</option>
                 {columnas.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
+              {campo === 'categoria' && (
+                <span className="texto-suave">Se busca por nombre exacto (sin distinguir mayúsculas); sin coincidencia, queda en "General".</span>
+              )}
+              {campo === 'equipo' && (
+                <span className="texto-suave">Igual criterio que Categoría — sin coincidencia, queda en el equipo "General".</span>
+              )}
             </Campo>
           ))}
+
+          {atributos.length > 0 && (
+            <>
+              <h4 style={{ margin: '8px 0 0' }}>Atributos adicionales</h4>
+              <p className="texto-suave" style={{ margin: 0 }}>
+                Columnas del archivo que no encajan en ningún campo fijo del indicador pueden mapearse a un atributo dinámico ya
+                configurado en el módulo Atributos — el valor se parsea según el tipo de dato de cada atributo.
+              </p>
+              {atributos.map((a) => (
+                <Campo key={a.id} etiqueta={a.nombre}>
+                  <select
+                    value={atributosMapeo[a.id] ?? ''}
+                    onChange={(e) => setAtributosMapeo({ ...atributosMapeo, [a.id]: e.target.value })}
+                    data-testid={`mapeo-atributo-${a.nombre}`}
+                  >
+                    <option value="">— no mapear —</option>
+                    {columnas.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </Campo>
+              ))}
+            </>
+          )}
+
           <p className="texto-suave">
             Los indicadores importados quedan en estado <strong>Borrador</strong> y sin desagregaciones; edítelos luego para
             completar la configuración.
