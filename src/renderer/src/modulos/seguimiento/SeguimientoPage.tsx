@@ -790,8 +790,11 @@ export function SeguimientoPage(): React.JSX.Element {
   const [ordenHistorico, setOrdenHistorico] = useState<OrdenColumna>(ORDEN_POR_DEFECTO);
   // Batch AW (pedido explícito del usuario): oculta Responsable/Línea base/Meta global en las 3
   // vistas de Histórico, dejando visibles solo las columnas de resultado — un único ícono en el
-  // encabezado de Categoría/Indicador alterna ambos sentidos.
-  const [columnasDescriptivasOcultas, setColumnasDescriptivasOcultas] = useState(false);
+  // encabezado de Categoría/Indicador alterna ambos sentidos. Ocultas por defecto (pedido
+  // explícito del usuario): más espacio para Equipo/Categoría/Indicador y para las columnas de
+  // período, que ahora se desplazan con scroll horizontal en vez de apretarse (ver
+  // `.tabla-con-periodos` en estilos.css).
+  const [columnasDescriptivasOcultas, setColumnasDescriptivasOcultas] = useState(true);
   const [colapsadasCategorias, setColapsadasCategorias] = useState<Set<string>>(new Set());
   const [colapsadasEquipo, setColapsadasEquipo] = useState<Set<string>>(new Set());
   const [filas, setFilas] = useState<FilaTablero[]>([]);
@@ -1720,7 +1723,7 @@ export function SeguimientoPage(): React.JSX.Element {
 
       {pestana === 'historico' && vistaHistorico === 'lista' && (
         <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
-          <table className="tabla" data-testid="tabla-historico">
+          <table className="tabla tabla-con-periodos" data-testid="tabla-historico">
             <thead>
               {hayGruposHistorico && (
                 <tr data-testid="fila-grupos-corte-historico">
@@ -1798,7 +1801,7 @@ export function SeguimientoPage(): React.JSX.Element {
 
       {pestana === 'historico' && vistaHistorico === 'arbol' && (
         <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
-          <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-arbol">
+          <table className="tabla tabla-seguimiento-arbol tabla-con-periodos" data-testid="tabla-historico-arbol">
             <thead>
               {hayGruposHistorico && (
                 <tr>
@@ -1923,7 +1926,7 @@ export function SeguimientoPage(): React.JSX.Element {
 
       {pestana === 'historico' && vistaHistorico === 'equipo' && (
         <div className={hayGruposHistorico ? 'tabla-envoltura evita-colapso-flex' : 'tabla-envoltura'}>
-          <table className="tabla tabla-seguimiento-arbol" data-testid="tabla-historico-equipo">
+          <table className="tabla tabla-seguimiento-arbol tabla-con-periodos" data-testid="tabla-historico-equipo">
             <thead>
               {hayGruposHistorico && (
                 <tr>

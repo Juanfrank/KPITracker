@@ -641,6 +641,20 @@ table.tabla tbody tr {
   position: static;
 }
 
+/* Pedido explícito del usuario: en Histórico las columnas de período (una por mes/período) no
+   deben apretujarse ni forzar el nombre del indicador a partirse en muchas líneas — la tabla
+   crece más allá del ancho de `.tabla-envoltura` y su `overflow: auto` aporta el scroll
+   horizontal, en vez de que el layout automático de la tabla reparta un ancho angosto a cada
+   columna para caber en el 100% del contenedor. */
+table.tabla-con-periodos {
+  width: auto;
+  min-width: 100%;
+}
+table.tabla-con-periodos th,
+table.tabla-con-periodos td {
+  white-space: nowrap;
+}
+
 /* Batch AN (pedido explícito del usuario): gridline vertical en todas las tablas — antes
    solo había separación horizontal (`border-bottom`). Sin borde en la última columna, para no
    duplicar el borde derecho de `.tabla-envoltura`. */
