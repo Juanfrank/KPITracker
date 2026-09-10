@@ -1,7 +1,13 @@
 import type { Knex } from 'knex';
-import {
-  ID_CATEGORIA_GENERAL, ID_EQUIPO_GENERAL, ID_ROL_COLABORADOR, ID_ROL_LIDER_EQUIPO, ID_ROL_USUARIO_ESTANDAR, ID_ROL_VISOR
-} from '@domain/index';
+import { ID_ROL_COLABORADOR, ID_ROL_LIDER_EQUIPO, ID_ROL_USUARIO_ESTANDAR, ID_ROL_VISOR } from '@domain/index';
+
+// Ids literales de la categoría/equipo "General" que este migration sembraba (retirados del
+// dominio: ver `20270101000000_eliminar_clasificacion_general.ts`, que deshace este seed y este
+// backfill para toda instalación, nueva o existente). Se dejan como literales SOLO acá, para que
+// esta migración histórica siga produciendo exactamente el mismo esquema/datos que produjo la
+// primera vez que corrió — nunca se reintroducen como constante del dominio.
+const ID_CATEGORIA_GENERAL = 'categoria-general';
+const ID_EQUIPO_GENERAL = 'equipo-general';
 
 /**
  * Batch T — clasificación obligatoria (T1/T2, sin cambios de esquema: las

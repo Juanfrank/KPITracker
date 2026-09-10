@@ -31,7 +31,7 @@ export interface MapeoImportacionIndicadores {
   metaGlobal?: string;
   unidadMedida?: string;
   /** Nombre de Categoria a asignar, buscado por coincidencia de `nombre` (sin distinguir mayúsculas);
-   * sin coincidencia, aplica el mismo respaldo "General" que la creación manual (ver `guardar()`). */
+   * sin coincidencia (o sin columna mapeada), el indicador queda sin categoría. */
   categoria?: string;
   /** Equipo de un solo nivel — mismo criterio que `categoria`. Ignorado si se mapea cualquiera de
    * `equipoNivel1`/`equipoNivel2`/`equipoNivel3` (ver esos campos), que tienen prioridad. */
@@ -73,22 +73,6 @@ export interface GuardarIndicadorInput {
 }
 
 /**
- * Ids de los catálogos "General" (categoría/equipo) creados al arrancar el
- * servidor (ver `asegurarCategoriaGeneral`/`asegurarEquipoGeneral` en
- * `composicionServidor.ts`) — Batch T vuelve obligatoria la clasificación de
- * un indicador; en vez de rechazar un payload sin categoría/equipo, se le
- * aplica este valor por defecto de forma transparente ("habrá una categoría
- * General... para todos los elementos no definidos", pedido explícito del
- * usuario). El renderer además preselecciona estos mismos ids al abrir el
- * formulario de un indicador nuevo, así que en el flujo normal esto nunca
- * hace falta — pero cubre también altas programáticas (importación Excel).
- */
-export interface DefaultsClasificacion {
-  categoriaGeneralId: string;
-  equipoGeneralId: string;
-}
-
-/**
  * CRUD de indicadores con validación de mínimos obligatorios, atributos
  * dinámicos (visibilidad/obligatoriedad declarativas) y reglas de negocio
  * `ValidacionCruzada`. La persistencia del indicador y de sus valores EAV
@@ -105,7 +89,6 @@ export class ServicioIndicadores extends ServicioBase {
     private readonly reglasRepo: IReglaRepository,
     private readonly periodicidadesRepo: IDefinicionPeriodicidadRepository,
     private readonly tipos: TypeRegistry,
-    private readonly defaults: DefaultsClasificacion,
     private readonly usuariosRepo: IUsuarioRepository,
     /** RBAC granular por categoría (ver docstring de `AmbitoPermiso` en `Permiso.ts`). */
     private readonly categoriasRepo: ICatalogoRepository<Categoria>,
@@ -137,11 +120,13 @@ export class ServicioIndicadores extends ServicioBase {
 
   async guardar(input: GuardarIndicadorInput): Promise<Indicador> {
     const { valores } = input;
-    // Batch T: clasificación obligatoria con respaldo "General" — ver docstring de DefaultsClasificacion.
+    // Categoría/Equipo son opcionales de verdad (retirado el respaldo automático "General" —
+    // pedido explícito del usuario: traía más confusión que beneficio, ver `Indicador.categoria`).
+    // Un indicador sin ninguno de los dos queda "sin clasificar", agrupado aparte en Seguimiento
+    // (ver `SIN_CATEGORIA_ID`/`SIN_EQUIPO_ID` en SeguimientoPage.tsx) en vez de forzarlo a un
+    // catálogo real llamado "General".
     const indicador: Indicador = {
       ...input.indicador,
-      categoria: input.indicador.categoria ?? this.defaults.categoriaGeneralId,
-      equipo: input.indicador.equipo || input.indicador.responsable ? input.indicador.equipo : this.defaults.equipoGeneralId,
       // Redondeo matemático real a 2 decimales (pedido explícito del usuario) — la meta
       // global y la línea base son valores de referencia, mismo tratamiento que una Meta.
       metaGlobal: input.indicador.metaGlobal == null ? null : redondear2(input.indicador.metaGlobal),
@@ -231,12 +216,6 @@ export class ServicioIndicadores extends ServicioBase {
     if (indicador.formaCalculo?.trim() && !signosAgrupacionBalanceados(indicador.formaCalculo)) {
       errores.push('La forma de cálculo tiene signos de agrupación (paréntesis, corchetes o llaves) sin cerrar o desbalanceados.');
     }
-    // Batch T: categoría y equipo/responsable pasan de opcionales a obligatorios — el renderer
-    // preselecciona "General" en ambos para un indicador nuevo (ver asegurarCategoriaGeneral/
-    // asegurarEquipoGeneral en composicionServidor.ts), así que en la práctica esto solo se
-    // dispara si alguien manda un payload manual sin clasificar.
-    if (!indicador.categoria) errores.push('La categoría es obligatoria.');
-    if (!indicador.equipo && !indicador.responsable) errores.push('Debe asignar un equipo o un responsable.');
     if (errores.length > 0) throw new ValidacionError('Indicador inválido.', errores);
 
     const anterior = await this.repo.obtener(indicador.id);
@@ -379,8 +358,8 @@ export class ServicioIndicadores extends ServicioBase {
           : Periodicidad.Mensual;
         const lineaBaseTexto = mapeo.lineaBase ? (fila[mapeo.lineaBase] ?? '').trim() : '';
         const metaGlobalTexto = mapeo.metaGlobal ? (fila[mapeo.metaGlobal] ?? '').trim() : '';
-        // Sin coincidencia (o sin columna mapeada) -> null, que `guardar()` resuelve al mismo
-        // respaldo "General" que ya aplica a un indicador creado manualmente sin clasificar.
+        // Sin coincidencia (o sin columna mapeada) -> null: el indicador queda sin categoría,
+        // igual que uno creado manualmente sin clasificar (ver docstring de `mapeo.categoria`).
         const categoriaTexto = mapeo.categoria ? (fila[mapeo.categoria] ?? '').trim() : '';
         const categoriaId = categoriaTexto ? (buscarPorNombre(categorias, categoriaTexto)?.id ?? null) : null;
         // Jerarquía de equipo (prioritaria sobre `equipo` plano si se mapeó algún nivel) — ver

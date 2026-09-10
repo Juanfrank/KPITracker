@@ -3,7 +3,7 @@ import { componerManejadores } from '@composicion/manejadores';
 import type { Aplicacion } from '@composicion/manejadores';
 import type { IClock, IIdGenerator, IPasswordHasher } from '@application/ports/index';
 import type { Usuario, Workspace } from '@domain/index';
-import { ID_EQUIPO_GENERAL, ID_ROL_GLOBAL_SUPER_ADMINISTRADOR, ID_WORKSPACE_DEFAULT } from '@domain/index';
+import { ID_ROL_GLOBAL_SUPER_ADMINISTRADOR, ID_WORKSPACE_DEFAULT } from '@domain/index';
 import { ProveedorPassword } from '@infrastructure/auth/ProveedorPassword';
 import { LimitadorIntentosLoginMemoria } from '@infrastructure/auth/LimitadorIntentosLoginMemoria';
 import { ServicioAutenticacion, HORAS_EXPIRACION_SESION } from '@application/use-cases/ServicioAutenticacion';
@@ -58,7 +58,7 @@ export async function componerAplicacionServidor(dataDir: string, appVersion?: s
   );
   const usuarios = new ServicioUsuarios(
     infra.usuarios, infra.ids, infra.reloj, hasher, infra.roles, infra.permisosExcepcionales, infra.permisosCategoria,
-    infra.equipos, infra.indicadores, infra.credencialesGeneradas, ID_EQUIPO_GENERAL,
+    infra.equipos, infra.indicadores, infra.credencialesGeneradas,
     infra.rolesGlobales, infra.workspaces
   );
   const permisos = new ServicioPermisos(

@@ -25,11 +25,6 @@ import { TarjetaRespaldo } from './TarjetaRespaldo';
 /** Usuario asignable como responsable de un indicador (Batch U: unificado con el antiguo catálogo Responsable). */
 type UsuarioAsignable = Awaited<ReturnType<typeof trpcClient.usuarios.listar.query>>[number];
 
-/** Id del equipo raíz "General" (Batch T) dentro de una lista ya cargada — el respaldo cuando no se elige equipo. */
-function equipoGeneralId(equipos: Equipo[]): string | null {
-  return equipos.find((e) => e.nombre === 'General' && e.padreId === null)?.id ?? null;
-}
-
 function categoriaVacia(): Categoria {
   return {
     id: '', nombre: '', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
@@ -1517,10 +1512,10 @@ function usuarioNuevoVacio(): { nombreUsuario: string; nombreCompleto: string; c
  * Batch U unifica Usuario con el antiguo catálogo Responsable: un usuario
  * ES la persona asignable como responsable de un indicador — por eso esta
  * sección absorbe lo que antes vivía en `SeccionResponsables` (correo,
- * equipo obligatorio con respaldo "General", borrado lógico bloqueado por
- * referencias) junto con lo que ya tenía desde Batch T (rol general, rol de
- * equipo, permisos excepcionales). El vínculo `responsableId` desaparece
- * por completo: ya no hace falta, la identidad es la misma.
+ * equipo opcional, borrado lógico bloqueado por referencias) junto con lo
+ * que ya tenía desde Batch T (rol general, rol de equipo, permisos
+ * excepcionales). El vínculo `responsableId` desaparece por completo: ya no
+ * hace falta, la identidad es la misma.
  */
 function SeccionUsuarios(): React.JSX.Element {
   const { usuario: yo, verComo } = useAuth();
@@ -1925,16 +1920,17 @@ function SeccionUsuarios(): React.JSX.Element {
           )}
           <Campo etiqueta="Equipo">
             <select
-              value={editando.equipoId ?? equipoGeneralId(equipos) ?? ''}
+              value={editando.equipoId ?? ''}
               onChange={(e) => setEditando({ ...editando, equipoId: e.target.value || null })}
               data-testid="usuario-equipo"
             >
+              <option value="">— sin equipo —</option>
               {ordenarJerarquia(equipos.filter((eq) => !eq.eliminado)).map((eq) => (
                 <option key={eq.id} value={eq.id}>{'—'.repeat(eq.nivel)} {eq.nombre}</option>
               ))}
             </select>
             <span className="texto-suave">
-              Determina el vínculo indirecto de los indicadores asignados a este usuario como responsable, además de su equipo de RBAC. Por defecto, "General".
+              Opcional. Determina el vínculo indirecto de los indicadores asignados a este usuario como responsable, además de su equipo de RBAC.
             </span>
           </Campo>
           {editando.equipoId && (

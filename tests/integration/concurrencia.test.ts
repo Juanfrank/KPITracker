@@ -89,14 +89,12 @@ afterEach(async () => {
 
 describe('recoleccion.guardarCelda — bloqueo optimista (concurrencia)', () => {
   async function prepararIndicador(admin: Awaited<ReturnType<typeof clienteAdmin>>) {
-    const equipoGeneral = (await admin.equipos.listar.query()).find((e) => e.nombre === 'General')!;
-    const categoriaGeneral = (await admin.categorias.listar.query()).find((c) => c.nombre === 'General')!;
     const indicador = await admin.indicadores.guardar.mutate({
       indicador: {
         id: '', codigo: 'CONC-1', nombre: 'Indicador de prueba de concurrencia', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
-        metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoriaGeneral.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
+        metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: null,
+        equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });

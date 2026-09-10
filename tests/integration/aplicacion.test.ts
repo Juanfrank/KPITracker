@@ -144,11 +144,9 @@ describe('Composition root — catálogos', () => {
     const categoria = await app.manejadores['categorias:guardar']({
       id: '', nombre: 'Estratégico', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null, creadoEn: '', actualizadoEn: ''
     });
-    // +1: la categoría raíz "General" (Batch T) ya existe desde el arranque — ver la migración
-    // 20260901000000_roles_permisos.ts.
-    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(2);
-    await app.manejadores['categorias:eliminar']({ id: categoria.id });
     expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(1);
+    await app.manejadores['categorias:eliminar']({ id: categoria.id });
+    expect(await app.manejadores['categorias:listar'](undefined)).toHaveLength(0);
   });
 
   // Batch U: Responsable se unificó dentro de Usuario — ya no hay canal IPC 'responsables:*',
@@ -242,8 +240,7 @@ describe('Composition root — equipos jerárquicos (Batch R)', () => {
       id: '', nombre: 'Sub-dirección', descripcion: '', activo: true, eliminado: false, padreId: raiz.id, creadoEn: '', actualizadoEn: ''
     });
     expect(hijo.padreId).toBe(raiz.id);
-    // +1: el equipo raíz "General" (Batch T) ya existe desde el arranque.
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(3);
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
   });
 
   it('rechaza asignar como padre a un equipo que generaría un ciclo', async () => {
@@ -753,8 +750,7 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
 
     const config = await app.manejadores['config:obtener'](undefined);
     expect(config.nombreInstitucion).toBe('Institución v2');
-    // El equipo raíz "General" (Batch T) ya existe desde el arranque, independiente de la importación.
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(1);
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(0);
   });
 
   it('exporta e importa equipos como parte de la configuración portable (round-trip)', async () => {
@@ -769,12 +765,11 @@ describe('Composition root — configuración portable v1/v2 → v3', () => {
     const { json } = await app.manejadores['portable:exportar'](undefined);
     const archivo = JSON.parse(json) as { schemaVersion: number; equipos: Array<{ nombre: string }> };
     expect(archivo.schemaVersion).toBe(5);
-    // "General" (Batch T) viaja junto con los dos equipos creados en este test.
-    expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'General', 'Sub-dirección']);
+    expect(archivo.equipos.map((e) => e.nombre).sort()).toEqual(['Dirección', 'Sub-dirección']);
 
     // Reimportar sobre la misma app (upsert por id) no debe duplicar los equipos.
     await app.manejadores['portable:importar']({ json });
-    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(3);
+    expect(await app.manejadores['equipos:listar'](undefined)).toHaveLength(2);
   });
 });
 
@@ -914,7 +909,7 @@ describe('Composition root — importación de indicadores desde Excel', () => {
     expect(lista.find((i) => i.nombre === 'Sin definición')?.definicion).toBe('');
   });
 
-  it('resuelve Categoría y Equipo por nombre; sin coincidencia cae al respaldo "General"', async () => {
+  it('resuelve Categoría y Equipo por nombre; sin coincidencia queda sin clasificar', async () => {
     const categoria = await app.manejadores['categorias:guardar']({
       id: '', nombre: 'Finanzas', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
       creadoEn: '', actualizadoEn: ''
@@ -936,8 +931,8 @@ describe('Composition root — importación de indicadores desde Excel', () => {
     expect(conClasificacion?.categoria).toBe(categoria.id);
     expect(conClasificacion?.equipo).toBe(equipo.id);
     const sinCoincidencia = lista.find((i) => i.nombre === 'Sin coincidencia');
-    expect(sinCoincidencia?.categoria).not.toBeNull(); // cayó al respaldo "General", no quedó sin categoría
-    expect(sinCoincidencia?.equipo).not.toBeNull();
+    expect(sinCoincidencia?.categoria).toBeNull(); // sin respaldo a "General": queda sin clasificar
+    expect(sinCoincidencia?.equipo).toBeNull();
   });
 
   it('jerarquía de equipo: crea la cadena completa (raíz > intermedio > hoja) cuando ningún nivel existe', async () => {

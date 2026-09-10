@@ -21,17 +21,6 @@ export interface Categoria {
   actualizadoEn: string;
 }
 
-/**
- * Ids fijos (no generados) de la categoría/equipo "General" — el respaldo al
- * que Batch T recurre cuando un indicador se guarda sin clasificar (ver
- * `ServicioIndicadores.guardar`). Sembrados con este mismo id literal por la
- * migración `20260901000000_roles_permisos.ts`, para que el código de
- * aplicación pueda referenciarlos sin tener que buscarlos por nombre (frágil
- * ante un renombrado) ni pasarlos como configuración.
- */
-export const ID_CATEGORIA_GENERAL = 'categoria-general';
-export const ID_EQUIPO_GENERAL = 'equipo-general';
-
 /** Equipo organizacional — jerárquico (equipo → sub-equipo, cualquier profundidad) vía `padreId`. */
 export interface Equipo {
   readonly id: string;

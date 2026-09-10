@@ -16,6 +16,7 @@ import * as permisosCategoria from './20261201000000_permisos_categoria';
 import * as medicionEquipo from './20261210000000_medicion_equipo';
 import * as indicadorPadre from './20261220000000_indicador_padre';
 import * as indicadorPadreResumen from './20261225000000_indicador_padre_resumen';
+import * as eliminarClasificacionGeneral from './20270101000000_eliminar_clasificacion_general';
 
 interface ModuloMigracion {
   up(knex: Knex): Promise<void>;
@@ -39,7 +40,8 @@ const MIGRACIONES: Array<{ nombre: string; modulo: ModuloMigracion }> = [
   { nombre: '20261201000000_permisos_categoria', modulo: permisosCategoria },
   { nombre: '20261210000000_medicion_equipo', modulo: medicionEquipo },
   { nombre: '20261220000000_indicador_padre', modulo: indicadorPadre },
-  { nombre: '20261225000000_indicador_padre_resumen', modulo: indicadorPadreResumen }
+  { nombre: '20261225000000_indicador_padre_resumen', modulo: indicadorPadreResumen },
+  { nombre: '20270101000000_eliminar_clasificacion_general', modulo: eliminarClasificacionGeneral }
 ];
 
 /**

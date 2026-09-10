@@ -36,14 +36,6 @@ function rutaEquipo(equipo: Equipo, porId: Map<string, Equipo>): string {
   return partes.join(' > ');
 }
 
-/** Id de la categoría/equipo raíz "General" (Batch T) dentro de una lista ya cargada — respaldo obligatorio de un indicador sin clasificar. */
-function categoriaGeneralId(categorias: Categoria[]): string | null {
-  return categorias.find((c) => c.nombre === 'General' && c.padreId === null)?.id ?? null;
-}
-function equipoGeneralId(equipos: Equipo[]): string | null {
-  return equipos.find((e) => e.nombre === 'General' && e.padreId === null)?.id ?? null;
-}
-
 function indicadorVacio(): Indicador {
   return {
     id: '',
@@ -303,11 +295,7 @@ export function IndicadoresPage(): React.JSX.Element {
             </button>
             <button
               className="boton primario"
-              onClick={() => void abrirEditor({
-                ...indicadorVacio(),
-                categoria: categoriaGeneralId(categorias),
-                equipo: equipoGeneralId(equipos)
-              })}
+              onClick={() => void abrirEditor(indicadorVacio())}
               data-testid="nuevo-indicador"
             >
               <Icono nombre="mas" /> Nuevo indicador
@@ -511,7 +499,7 @@ export function IndicadoresPage(): React.JSX.Element {
             </Campo>
           )}
           <div className="fila-form c2">
-            <Campo etiqueta="Responsable / Equipo" obligatorio>
+            <Campo etiqueta="Responsable / Equipo">
               <SelectorBuscable
                 grupos={gruposResponsable}
                 valor={editando.equipo ? `equipo:${editando.equipo}` : editando.responsable ? `responsable:${editando.responsable}` : ''}
@@ -523,26 +511,26 @@ export function IndicadoresPage(): React.JSX.Element {
                   } else if (valor.startsWith('responsable:')) {
                     setEditando({ ...editando, responsable: valor.slice('responsable:'.length), equipo: null });
                   } else {
-                    setEditando({ ...editando, equipo: equipoGeneralId(equipos), responsable: null });
+                    setEditando({ ...editando, equipo: null, responsable: null });
                   }
                 }}
                 testId="indicador-responsable"
               />
               <span className="texto-suave">
-                Elija un equipo completo (vínculo directo) o un responsable puntual (vínculo indirecto vía su equipo).
+                Opcional. Un equipo completo (vínculo directo) o un responsable puntual (vínculo indirecto vía su
+                equipo) — sin ninguno, el indicador queda sin equipo asignado.
               </span>
             </Campo>
-            <Campo etiqueta="Categoría" obligatorio>
+            <Campo etiqueta="Categoría">
               <SelectorBuscable
                 grupos={gruposCategoria}
-                valor={editando.categoria ?? categoriaGeneralId(categorias) ?? ''}
-                etiquetaSeleccionada={
-                  categorias.find((c) => c.id === (editando.categoria ?? categoriaGeneralId(categorias)))?.nombre ?? ''
-                }
+                valor={editando.categoria ?? ''}
+                etiquetaSeleccionada={categorias.find((c) => c.id === editando.categoria)?.nombre ?? ''}
                 placeholder="Buscar categoría…"
                 alSeleccionar={(valor) => setEditando({ ...editando, categoria: valor || null })}
                 testId="indicador-categoria"
               />
+              <span className="texto-suave">Opcional.</span>
             </Campo>
           </div>
 

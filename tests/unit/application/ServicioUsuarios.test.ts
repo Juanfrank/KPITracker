@@ -137,7 +137,7 @@ function construir() {
   const workspaces = new WorkspaceRepositoryMemoria();
   const servicio = new ServicioUsuarios(
     repo, new GeneradorUuid(), new RelojSistema(), hasher, roles, permisosExcepcionales, permisosCategoria,
-    equipos, indicadores, credenciales, EQUIPO_GENERAL_ID, rolesGlobales, workspaces
+    equipos, indicadores, credenciales, rolesGlobales, workspaces
   );
   return { servicio, repo, roles, equipos, indicadores, credenciales, rolesGlobales, workspaces };
 }
@@ -237,12 +237,12 @@ describe('ServicioUsuarios', () => {
     await expect(servicio.establecerAdministrador(segundo.id, false)).resolves.toBeUndefined();
   });
 
-  it('establecerEquipo() usa el equipo General por defecto si no se especifica ninguno', async () => {
+  it('establecerEquipo() acepta null — queda sin equipo asignado (sin respaldo a "General")', async () => {
     const { servicio } = construir();
     const creado = await servicio.crear({ nombreUsuario: 'mgomez', nombreCompleto: 'María', password: 'contrasenaSegura1' });
     await servicio.establecerEquipo(creado.id, null, null);
     const lista = await servicio.listar();
-    expect(lista.find((u) => u.id === creado.id)?.equipoId).toBe(EQUIPO_GENERAL_ID);
+    expect(lista.find((u) => u.id === creado.id)?.equipoId).toBeNull();
   });
 
   it('establecerEquipo() rechaza un equipo inexistente', async () => {

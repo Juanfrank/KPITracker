@@ -358,14 +358,12 @@ describe('RBAC granular por categoría (permisos por usuario+categoría, ver Amb
       id: '', nombre: 'Educación', descripcion: '', activo: true, eliminado: false, padreId: null, prefijo: null,
       creadoEn: '', actualizadoEn: ''
     });
-    const equipoGeneral = (await admin.equipos.listar.query()).find((e) => e.nombre === 'General')!;
-
     const indicadorEnSubcategoria = await admin.indicadores.guardar.mutate({
       indicador: {
         id: '', codigo: 'VAC-1', nombre: 'Cobertura de vacunación', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: subcategoria.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
+        equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });
@@ -374,7 +372,7 @@ describe('RBAC granular por categoría (permisos por usuario+categoría, ver Amb
         id: '', codigo: 'EDU-1', nombre: 'Matrícula escolar', definicion: 'def', formaCalculo: null,
         periodicidad: 'Mensual', periodicidadPersonalizadaId: null, lineaBase: null, lineaBasePeriodoId: null,
         metaGlobal: null, desagregaciones: [], estado: 'Activo', responsable: null, categoria: categoriaAjena.id,
-        equipo: equipoGeneral.id, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
+        equipo: null, unidadMedida: null, esCalculado: false, formula: null, esPadre: false, indicadoresHijoIds: [], tipoAgregacionPadre: null, usarResultadoPropioEnResumenes: true, creadoEn: '', actualizadoEn: ''
       },
       valores: []
     });

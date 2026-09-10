@@ -1,7 +1,7 @@
 import type { Infraestructura } from '@infrastructure/bootstrap';
 import type { ContextoAplicacion } from '@application/use-cases/base';
 import type { CanalesIpc, CanalLocal, NombreCanal } from '@shared/ipc';
-import { ID_CATEGORIA_GENERAL, ID_EQUIPO_GENERAL, crearRegistroReglasFechaLimite, crearRegistroTiposBase } from '@domain/index';
+import { crearRegistroReglasFechaLimite, crearRegistroTiposBase } from '@domain/index';
 import { ServicioConfiguracion } from '@application/use-cases/ServicioConfiguracion';
 import {
   ServicioAtributos, ServicioCategorias, ServicioEquipos, ServicioIndicadores, ServicioListas, ServicioMetas,
@@ -69,8 +69,7 @@ export function componerManejadores(infra: Infraestructura): Pick<Aplicacion, 'm
   const configuracion = new ServicioConfiguracion(ctx, infra.configuracion, reglasFechaLimite);
   const indicadores = new ServicioIndicadores(
     ctx, infra.indicadores, infra.atributos, infra.reglas, infra.periodicidades, tipos,
-    { categoriaGeneralId: ID_CATEGORIA_GENERAL, equipoGeneralId: ID_EQUIPO_GENERAL }, infra.usuarios, infra.categorias,
-    infra.equipos
+    infra.usuarios, infra.categorias, infra.equipos
   );
   const atributos = new ServicioAtributos(ctx, infra.atributos, infra.reglas, infra.automatizaciones, infra.indicadores);
   const listas = new ServicioListas(

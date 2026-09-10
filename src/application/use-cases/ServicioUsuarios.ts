@@ -50,7 +50,6 @@ export class ServicioUsuarios {
     private readonly equiposRepo: IEquipoRepository,
     private readonly indicadoresRepo: IIndicadorRepository,
     private readonly credencialesRepo: ICredencialGeneradaRepository,
-    private readonly equipoGeneralId: string,
     /** Batch AX (fundación SaaS): valida `rolGlobalId` en `establecerRolGlobal`. */
     private readonly rolesGlobalesRepo: IRolGlobalRepository,
     /** Batch AX: valida `workspaceId` en `cambiarWorkspaceActual`. */
@@ -211,17 +210,16 @@ export class ServicioUsuarios {
 
   /**
    * Batch U: `equipoId` es el mismo campo que antes vivía en `Responsable`
-   * (indirectamente "responsable" de sus indicadores asignados) — por eso,
-   * a diferencia de antes, `equipoId` NO puede quedar en null: sin equipo
-   * explícito, cae al equipo "General" (mismo respaldo que ya usa T1 para
-   * indicadores/responsables sin clasificar). El gating de líder de equipo
+   * (indirectamente "responsable" de sus indicadores asignados). `null` es
+   * válido — sin equipo asignado (retirado el respaldo automático al equipo
+   * "General", pedido explícito del usuario). El gating de líder de equipo
    * que antes vivía en `ServicioResponsables.guardar` se mueve aquí tal
    * cual.
    */
   async establecerEquipo(id: string, equipoIdSolicitado: string | null, rolEquipoId: string | null): Promise<void> {
     const usuario = await this.obtenerOFallar(id);
-    const equipoId = equipoIdSolicitado || this.equipoGeneralId;
-    if (!(await this.equiposRepo.obtener(equipoId))) {
+    const equipoId = equipoIdSolicitado;
+    if (equipoId && !(await this.equiposRepo.obtener(equipoId))) {
       throw new ValidacionError('El equipo seleccionado no existe.');
     }
     if (rolEquipoId) {
