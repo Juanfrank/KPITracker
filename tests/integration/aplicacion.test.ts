@@ -940,6 +940,77 @@ describe('Composition root — importación de indicadores desde Excel', () => {
     expect(sinCoincidencia?.equipo).not.toBeNull();
   });
 
+  it('jerarquía de equipo: crea la cadena completa (raíz > intermedio > hoja) cuando ningún nivel existe', async () => {
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Con jerarquía', Dir: 'Contraloría General', Area: 'Auditoría', Ger: 'Gerencia de Auditoría' }],
+      mapeo: { nombre: 'Titulo', equipoNivel1: 'Dir', equipoNivel2: 'Area', equipoNivel3: 'Ger' }
+    });
+    expect(resultado.creados).toBe(1);
+    const equipos = await app.manejadores['equipos:listar'](undefined);
+    const raiz = equipos.find((e) => e.nombre === 'Contraloría General');
+    const intermedio = equipos.find((e) => e.nombre === 'Auditoría');
+    const hoja = equipos.find((e) => e.nombre === 'Gerencia de Auditoría');
+    expect(raiz?.padreId).toBeNull();
+    expect(intermedio?.padreId).toBe(raiz?.id);
+    expect(hoja?.padreId).toBe(intermedio?.id);
+
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    expect(lista.find((i) => i.nombre === 'Con jerarquía')?.equipo).toBe(hoja?.id);
+  });
+
+  it('jerarquía de equipo: reutiliza equipos ya existentes por nombre+padre en vez de duplicarlos', async () => {
+    const raizExistente = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Dirección X', descripcion: '', activo: true, eliminado: false, padreId: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const hojaExistente = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'gerencia y', descripcion: '', activo: true, eliminado: false, padreId: raizExistente.id, // insensible a mayúsculas
+      creadoEn: '', actualizadoEn: ''
+    });
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Reutiliza', Dir: 'Dirección X', Ger: 'Gerencia Y' }],
+      mapeo: { nombre: 'Titulo', equipoNivel1: 'Dir', equipoNivel3: 'Ger' }
+    });
+    expect(resultado.creados).toBe(1);
+    const equipos = await app.manejadores['equipos:listar'](undefined);
+    // No se duplicó ni la raíz ni la hoja — mismo id que ya existía.
+    expect(equipos.filter((e) => e.nombre.toLowerCase() === 'dirección x')).toHaveLength(1);
+    expect(equipos.filter((e) => e.nombre.toLowerCase() === 'gerencia y')).toHaveLength(1);
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    expect(lista.find((i) => i.nombre === 'Reutiliza')?.equipo).toBe(hojaExistente.id);
+  });
+
+  it('jerarquía de equipo: colapsa niveles consecutivos con el mismo nombre en vez de crear un hijo homónimo', async () => {
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Sin área propia', Dir: 'Contraloría', Area: 'Contraloría', Ger: 'Gerencia Z' }],
+      mapeo: { nombre: 'Titulo', equipoNivel1: 'Dir', equipoNivel2: 'Area', equipoNivel3: 'Ger' }
+    });
+    expect(resultado.creados).toBe(1);
+    const equipos = await app.manejadores['equipos:listar'](undefined);
+    // Un solo "Contraloría" (raíz), no una raíz con un hijo homónimo.
+    expect(equipos.filter((e) => e.nombre === 'Contraloría')).toHaveLength(1);
+    const raiz = equipos.find((e) => e.nombre === 'Contraloría');
+    const hoja = equipos.find((e) => e.nombre === 'Gerencia Z');
+    expect(hoja?.padreId).toBe(raiz?.id);
+  });
+
+  it('jerarquía de equipo mapeada tiene prioridad sobre el campo "equipo" plano', async () => {
+    const equipoPlano = await app.manejadores['equipos:guardar']({
+      id: '', nombre: 'Equipo plano', descripcion: '', activo: true, eliminado: false, padreId: null,
+      creadoEn: '', actualizadoEn: ''
+    });
+    const resultado = await app.manejadores['indicadores:importarExcel']({
+      filas: [{ Titulo: 'Ambos mapeados', Eq: 'Equipo plano', Ger: 'Gerencia Prioritaria' }],
+      mapeo: { nombre: 'Titulo', equipo: 'Eq', equipoNivel3: 'Ger' }
+    });
+    expect(resultado.creados).toBe(1);
+    const lista = await app.manejadores['indicadores:listar'](undefined);
+    const creado = lista.find((i) => i.nombre === 'Ambos mapeados');
+    expect(creado?.equipo).not.toBe(equipoPlano.id);
+    const equipos = await app.manejadores['equipos:listar'](undefined);
+    expect(creado?.equipo).toBe(equipos.find((e) => e.nombre === 'Gerencia Prioritaria')?.id);
+  });
+
   it('mapea una columna del archivo a un atributo dinámico existente', async () => {
     const atributo = await app.manejadores['atributos:guardar']({
       id: '', entidad: 'Indicador', nombre: 'Pilar Estratégico', descripcion: '', grupo: '', orden: 1,

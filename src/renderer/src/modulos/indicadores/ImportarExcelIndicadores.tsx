@@ -10,7 +10,8 @@ type CampoTexto = Exclude<keyof MapeoImportacionIndicadores, 'atributos'>;
 
 const CAMPOS_OBLIGATORIOS: CampoTexto[] = ['nombre'];
 const CAMPOS_OPCIONALES: CampoTexto[] = [
-  'codigo', 'definicion', 'periodicidad', 'lineaBase', 'metaGlobal', 'unidadMedida', 'categoria', 'equipo'
+  'codigo', 'definicion', 'periodicidad', 'lineaBase', 'metaGlobal', 'unidadMedida', 'categoria', 'equipo',
+  'equipoNivel1', 'equipoNivel2', 'equipoNivel3'
 ];
 const ETIQUETA_CAMPO: Record<CampoTexto, string> = {
   codigo: 'Código',
@@ -21,7 +22,10 @@ const ETIQUETA_CAMPO: Record<CampoTexto, string> = {
   metaGlobal: 'Meta global',
   unidadMedida: 'Unidad de medida',
   categoria: 'Categoría (por nombre)',
-  equipo: 'Equipo (por nombre)'
+  equipo: 'Equipo (por nombre, un solo nivel)',
+  equipoNivel1: 'Equipo — nivel 1 (raíz)',
+  equipoNivel2: 'Equipo — nivel 2',
+  equipoNivel3: 'Equipo — nivel 3 (hoja, asignado al indicador)'
 };
 
 /**
@@ -170,7 +174,18 @@ export function ImportarExcelIndicadores({
                 <span className="texto-suave">Se busca por nombre exacto (sin distinguir mayúsculas); sin coincidencia, queda en "General".</span>
               )}
               {campo === 'equipo' && (
-                <span className="texto-suave">Igual criterio que Categoría — sin coincidencia, queda en el equipo "General".</span>
+                <span className="texto-suave">
+                  Igual criterio que Categoría — sin coincidencia, queda en el equipo "General". Ignorado si mapea
+                  cualquiera de los 3 niveles de abajo.
+                </span>
+              )}
+              {campo === 'equipoNivel1' && (
+                <span className="texto-suave">
+                  Para un equipo con jerarquía (p. ej. Dirección General → Área → Gerencia): mapee 1 a 3 niveles, de
+                  raíz a hoja. A diferencia de Equipo/Categoría, cada nivel que falte se <strong>crea</strong>{' '}
+                  automáticamente con el padre correcto — una segunda importación reutiliza la misma cadena en vez de
+                  duplicarla. El nivel más profundo mapeado es el que queda asignado al indicador.
+                </span>
               )}
             </Campo>
           ))}

@@ -30,10 +30,28 @@ export interface MapeoImportacionIndicadores {
   lineaBase?: string;
   metaGlobal?: string;
   unidadMedida?: string;
-  /** Nombre de Categoria/Equipo a asignar, buscado por coincidencia de `nombre` (sin distinguir mayúsculas);
+  /** Nombre de Categoria a asignar, buscado por coincidencia de `nombre` (sin distinguir mayúsculas);
    * sin coincidencia, aplica el mismo respaldo "General" que la creación manual (ver `guardar()`). */
   categoria?: string;
+  /** Equipo de un solo nivel — mismo criterio que `categoria`. Ignorado si se mapea cualquiera de
+   * `equipoNivel1`/`equipoNivel2`/`equipoNivel3` (ver esos campos), que tienen prioridad. */
   equipo?: string;
+  /**
+   * Jerarquía de equipo de hasta 3 niveles (de raíz a hoja — p. ej. Dirección General > Área >
+   * Gerencia), pedido explícito del usuario tras notar que el importador solo soportaba un
+   * equipo plano. A diferencia de `equipo` (que solo busca, nunca crea), estos 3 niveles buscan
+   * O CREAN cada Equipo que falte por `nombre` + padre exacto — así una importación repetida
+   * reutiliza la misma cadena en vez de duplicarla. El nivel hoja (el más profundo mapeado) es
+   * el que se asigna al indicador; los niveles intermedios existen solo para anidar el árbol de
+   * Seguimiento. Nombres consecutivos iguales (insensible a mayúsculas, p. ej. cuando una fila no
+   * tiene "Área" propia y repite el nombre de su "Dirección General") se colapsan en un solo nivel
+   * en vez de crear un equipo con un hijo homónimo. Basta con mapear 1 de los 3 (nivel único) o
+   * los 3 (jerarquía completa); dejar un nivel intermedio sin mapear también es válido, simplemente
+   * ese nivel no existe para esa fila.
+   */
+  equipoNivel1?: string;
+  equipoNivel2?: string;
+  equipoNivel3?: string;
   /** Atributo dinámico (id) -> columna del archivo — mismo mecanismo de parseo por TypeRegistry que usa el formulario manual. */
   atributos?: Record<string, string>;
 }
@@ -364,9 +382,20 @@ export class ServicioIndicadores extends ServicioBase {
         // Sin coincidencia (o sin columna mapeada) -> null, que `guardar()` resuelve al mismo
         // respaldo "General" que ya aplica a un indicador creado manualmente sin clasificar.
         const categoriaTexto = mapeo.categoria ? (fila[mapeo.categoria] ?? '').trim() : '';
-        const equipoTexto = mapeo.equipo ? (fila[mapeo.equipo] ?? '').trim() : '';
         const categoriaId = categoriaTexto ? (buscarPorNombre(categorias, categoriaTexto)?.id ?? null) : null;
-        const equipoId = equipoTexto ? (buscarPorNombre(equipos, equipoTexto)?.id ?? null) : null;
+        // Jerarquía de equipo (prioritaria sobre `equipo` plano si se mapeó algún nivel) — ver
+        // docstring de `equipoNivel1/2/3` en `MapeoImportacionIndicadores`.
+        const columnasJerarquia = [mapeo.equipoNivel1, mapeo.equipoNivel2, mapeo.equipoNivel3].filter(
+          (c): c is string => Boolean(c)
+        );
+        let equipoId: string | null;
+        if (columnasJerarquia.length > 0) {
+          const cadena = this.cadenaJerarquiaSinRepetidos(columnasJerarquia.map((c) => (fila[c] ?? '').trim()));
+          equipoId = cadena.length > 0 ? await this.resolverOCrearEquipoJerarquia(cadena, equipos) : null;
+        } else {
+          const equipoTexto = mapeo.equipo ? (fila[mapeo.equipo] ?? '').trim() : '';
+          equipoId = equipoTexto ? (buscarPorNombre(equipos, equipoTexto)?.id ?? null) : null;
+        }
 
         if (!nombre) throw new ValidacionError(`Fila ${numeroFila}: falta el nombre.`);
 
@@ -432,6 +461,46 @@ export class ServicioIndicadores extends ServicioBase {
     }
 
     return { creados, errores };
+  }
+
+  /** Colapsa nombres vacíos y repeticiones consecutivas (insensible a mayúsculas) de la cadena de niveles crudos de una fila — ver docstring de `equipoNivel1/2/3`. */
+  private cadenaJerarquiaSinRepetidos(nombresCrudos: string[]): string[] {
+    const cadena: string[] = [];
+    for (const nombre of nombresCrudos) {
+      if (!nombre) continue;
+      const ultimo = cadena[cadena.length - 1];
+      if (ultimo && ultimo.toLowerCase() === nombre.toLowerCase()) continue;
+      cadena.push(nombre);
+    }
+    return cadena;
+  }
+
+  /**
+   * Busca, de raíz a hoja, cada Equipo de la cadena por `nombre` + padre exacto; crea los que
+   * falten (mutando `equipos` in-place para que las filas siguientes de la MISMA importación
+   * reutilicen lo recién creado en vez de duplicarlo). Devuelve el id del último nivel (hoja),
+   * que es el que se asigna al indicador.
+   */
+  private async resolverOCrearEquipoJerarquia(cadena: string[], equipos: Equipo[]): Promise<string> {
+    let padreId: string | null = null;
+    let equipoId = '';
+    for (const nombre of cadena) {
+      let equipo = equipos.find(
+        (e) => e.nombre.trim().toLowerCase() === nombre.toLowerCase() && (e.padreId ?? null) === padreId
+      );
+      if (!equipo) {
+        const ahora = this.ctx.reloj.ahoraIso();
+        equipo = {
+          id: this.ctx.ids.nuevoId(), nombre, descripcion: '', activo: true, eliminado: false, padreId,
+          creadoEn: ahora, actualizadoEn: ahora
+        };
+        await this.equiposRepo.guardar(equipo);
+        equipos.push(equipo);
+      }
+      padreId = equipo.id;
+      equipoId = equipo.id;
+    }
+    return equipoId;
   }
 }
 
